@@ -1,0 +1,1594 @@
+﻿#pragma kernel initialize
+#pragma kernel field_update
+#pragma kernel collision
+#pragma kernel streaming
+#pragma kernel zou_he_bc
+#pragma kernel visualize
+#pragma kernel calculate_macro
+
+#define THREADS_NUM 8
+
+#define FLUID   0
+#define WALL    1   // outer walls & Adiabatic obstacles
+#define HEATSRC 2   // isothermal obstacles
+#define RACK    3   // rack obstacles
+
+#define ADIABATIC  0
+#define ISOTHERMAL 1
+
+// =========================================================================
+// D3Q19 Fluid Model Constants
+// =========================================================================
+#define Q_f 19
+// Directions for the D3Q19 lattice
+static const int3 ei_f[Q_f] = 
+{
+    int3(0,  0,  0), 
+    int3(1,  0,  0), int3(-1,  0,  0), 
+    int3(0,  1,  0), int3( 0, -1,  0), 
+    int3(0,  0,  1), int3( 0,  0, -1), 
+    int3(1,  1,  0), int3(-1, -1,  0), 
+    int3(1,  0,  1), int3(-1,  0, -1), 
+    int3(0,  1,  1), int3( 0, -1, -1),
+    int3(1, -1,  0), int3(-1,  1,  0),
+    int3(1,  0, -1), int3(-1,  0,  1), 
+    int3(0,  1, -1), int3( 0, -1,  1), 
+};
+
+// Weights for the D3Q19 lattice
+static const float z_f = 1.0 / 3.0; // zero direction (the center)
+static const float s_f = 1.0 / 18.0; // only a single direction
+static const float l_f = 1.0 / 36.0; // double directions
+static const float w_f[Q_f] = 
+{
+    z_f,                    // 1 center
+    s_f, s_f, s_f, 
+    s_f, s_f, s_f,          // 6 faces
+    l_f, l_f, l_f, l_f, 
+    l_f, l_f, l_f, l_f, 
+    l_f, l_f, l_f, l_f      // 12 deges
+};
+
+// Inverse directions for the D3Q19 lattice (for bounce-back)
+static const uint inv_f[Q_f] = 
+{
+     0,  2,  1,  4,
+     3,  6,  5,  8,
+     7, 10,  9, 12,
+    11, 14, 13, 16,
+    15, 18, 17
+};
+
+
+// =========================================================================
+// D3Q7 Thermal Model Constants
+// =========================================================================
+#define Q_T 7
+
+// Directions for the D3Q7 lattice
+static const int3 ei_T[Q_T] = 
+{
+    int3(0, 0, 0), 
+    int3(1, 0, 0), int3(-1,  0,  0), 
+    int3(0, 1, 0), int3( 0, -1,  0), 
+    int3(0, 0, 1), int3( 0,  0, -1),         
+};
+
+// Weights for the D3Q7 lattice
+static const float s_T = 1.0 / 4.0;
+static const float l_T = 1.0 / 8.0;
+static const float w_T[Q_T] =
+{
+    s_T, 
+    l_T, l_T, l_T, l_T, l_T, l_T
+};
+
+// Inverse directions for the D3Q7 lattice (for bounce-back)
+static const uint inv_T[Q_T] = { 0, 2, 1, 4, 3, 6, 5 };
+
+// Total distributions in the merged buffer
+#define Q_total (Q_f + Q_T)
+
+// =========================================================================
+// Types and uniforms
+// =========================================================================
+
+// Must match the C# struct layout
+struct HeatSourceData
+{
+    uint thermalBoundaryType;
+    uint3 min;      // a min thread index
+    uint3 max;      // a max thread index
+    float T_init;   // first temperature of this heat source
+    float padding;  // just to fill the bytes, you don't have to focus on this.
+};
+
+struct RackData
+{
+    uint3 min;
+    uint3 max;
+    uint open_axis; // 0: X, 1: Z (two faces along this axis are OPEN)
+    uint shell; // thickness of sealed shell (cells)
+    float3 invK; // inverse permeability (1/Kx,1/Ky,1/Kz) in lattice units
+    float betaF; // Forchheimer coefficient
+    float phi; // volumetric heat source (K per time step)
+    float qdot; // porosity (optional, can be 1)
+    float padding; // align to 16 bytes
+};
+
+struct ACSourceData
+{
+    uint3  min;        // a min thread index
+    uint3  max;        // a max thread index
+    float2 padding;    // just to fill the bytes, you don't have to focus on this.
+};
+
+struct ZHInletPatchData 
+{
+    uint3 min;         // inclusive
+    uint3 max;         // inclusive
+    int   plane_index; // index along normal axis
+    int   normal_axis; // 0:X, 1:Y, 2:Z
+    int   normal_sign; // -1 or +1 (n points fluid -> wall)
+    float3 u_target;   // lattice velocity
+    float T_init;      // target temperature
+};
+
+struct ZHOutletPatchData 
+{
+    uint3 min;         // inclusive
+    uint3 max;         // inclusive
+    int   plane_index; // index along normal axis
+    int   normal_axis; // 0:X, 1:Y, 2:Z
+    int   normal_sign; // -1 or +1
+    float rho_target;  // target density
+
+    float target_normal_speed;   // lattice normal speed target
+    float normal_velocity_blend; // 0=infer from interior, 1=use target
+    float rho_anchor;            // 0=interior rho, 1=rho_target
+    float padding0;
+};
+
+// Uniforms for the LBM simulation
+uint  nx, ny, nz;      // Each dimension size of the simulation grid
+float tau_f, tau_T;    // Relaxation times for fluid and thermal
+float beta, gravity_y; // Boussinesq parameters
+float T_cold, T_ref;   // Default cold temperature and reference temperature
+
+int heat_source_count; // Indicates how many heat sources
+int rack_count;        // Indicates how many rack
+int ac_source_count;   // Indicates how many AC sources
+int zh_inlet_count;    // Indicates how many ZH inlet patches
+int zh_outlet_count;   // Indicates how many ZH outlet patches 
+
+// Smagorinsky parameters
+int turbulence_model; // 0: None, 1: Smagorinsky, 2: WALE
+float C_sgs;          // Smagorinsky: Cs, WALE: Cw
+float Pr_t;           // Turbulent Prandtl number
+
+float s_relax_min; // Optional lower clamp for relaxation rates (e.g., 1e-6)
+float s_relax_max; // Optional upper clamp for relaxation rates (e.g., 1.98)
+
+static const float cs2 = 1.0 / 3.0; // speed of sound squared in lattice units (D3Q19)
+///
+
+static const float s_nu = 1.0 / tau_f; // Shear relaxation parameter (s_nu = 1.0 / tau_f)
+static const float s_alpha = 1.0 / tau_T; // Flux relaxation parameters (s_alpha = 1.0 / tau_T)
+
+// Distribution buffers are split into 5 groups to keep each GraphicsBuffer under 2GB.
+// In any single kernel, only one side (f_out_*) is bound as UAV, while the input side (f_in_*) is bound as SRV.
+// This keeps the per-kernel UAV count at or below the D3D11.0 limit of 8.
+StructuredBuffer<float>    f_in_0;
+StructuredBuffer<float>    f_in_1;
+StructuredBuffer<float>    f_in_2;
+StructuredBuffer<float>    f_in_3;
+StructuredBuffer<float>    f_in_4;
+RWStructuredBuffer<float>  f_out_0;
+RWStructuredBuffer<float>  f_out_1;
+RWStructuredBuffer<float>  f_out_2;
+RWStructuredBuffer<float>  f_out_3;
+RWStructuredBuffer<float>  f_out_4;
+RWStructuredBuffer<float4> velocity_rho; // Indicates velocity and density of each cell
+RWStructuredBuffer<float>  temperature;  // Indicates temperature of each cell
+RWStructuredBuffer<uint>   field;        // Indicates cell type (FLUID, WALL, HEATSRC)
+RWStructuredBuffer<uint>   debug_thermal_clamp_counters;
+RWStructuredBuffer<float4> debug_outlet_bc_state;
+
+StructuredBuffer<HeatSourceData>    heat_sources;   // Indicates heat sources
+StructuredBuffer<RackData>          racks;          // Indicates racks
+StructuredBuffer<ACSourceData>      ac_sources;     // Indicates AC sources
+StructuredBuffer<ZHInletPatchData>  zh_inlets;      // Indicates ZH inlet patches
+StructuredBuffer<ZHOutletPatchData> zh_outlets;     // Indicates ZH outlet patches
+
+RWTexture3D<float4> velocity_texture;   // Texture for visualizing the velocity field
+RWTexture3D<float>  thermal_texture;    // Texture for visualizing the thermal field
+
+
+
+// =========================================================================
+// MRT Matrices and Relaxation Vectors 
+// =========================================================================
+
+// D3Q19 MRT Transformation Matrix M_f
+static const float M_f[Q_f][Q_f] = {
+    {  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1},  // rho
+    {-30,-11,-11,-11,-11,-11,-11,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8},  // e
+    { 12, -4, -4, -4, -4, -4, -4,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1,  1},  // eta
+    {  0,  1, -1,  0,  0,  0,  0,  1, -1,  1, -1,  0,  0,  1, -1,  1, -1,  0,  0},  // j_x
+    {  0, -4,  4,  0,  0,  0,  0,  1, -1,  1, -1,  0,  0,  1, -1,  1, -1,  0,  0},  // q_x
+    {  0,  0,  0,  1, -1,  0,  0,  1, -1,  0,  0,  1, -1, -1,  1,  0,  0,  1, -1},  // j_y
+    {  0,  0,  0, -4,  4,  0,  0,  1, -1,  0,  0,  1, -1, -1,  1,  0,  0,  1, -1},  // q_y
+    {  0,  0,  0,  0,  0,  1, -1,  0,  0,  1, -1,  1, -1,  0,  0, -1,  1, -1,  1},  // j_z
+    {  0,  0,  0,  0,  0, -4,  4,  0,  0,  1, -1,  1, -1,  0,  0, -1,  1, -1,  1},  // q_z
+    {  0,  2,  2, -1, -1, -1, -1,  1,  1,  1,  1, -2, -2,  1,  1,  1,  1, -2, -2},  // p_xx
+    {  0, -4, -4,  2,  2,  2,  2,  1,  1,  1,  1, -2, -2,  1,  1,  1,  1, -2, -2},  // pi_xx
+    {  0,  0,  0,  1,  1, -1, -1,  1,  1, -1, -1,  0,  0,  1,  1, -1, -1,  0,  0},  // p_ww
+    {  0,  0,  0, -2, -2,  2,  2,  1,  1, -1, -1,  0,  0,  1,  1, -1, -1,  0,  0},  // pi_ww
+    {  0,  0,  0,  0,  0,  0,  0,  1,  1,  0,  0,  0,  0, -1, -1,  0,  0,  0,  0},  // p_xy
+    {  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  0,  0,  0,  0, -1, -1},  // p_yz
+    {  0,  0,  0,  0,  0,  0,  0,  0,  0,  1,  1,  0,  0,  0,  0, -1, -1,  0,  0},  // p_xz
+    {  0,  0,  0,  0,  0,  0,  0,  1, -1, -1,  1,  0,  0,  1, -1, -1,  1,  0,  0},  // m_x
+    {  0,  0,  0,  0,  0,  0,  0, -1,  1,  0,  0,  1, -1,  1, -1,  0,  0,  1, -1},  // m_y
+    {  0,  0,  0,  0,  0,  0,  0,  0,  0,  1, -1, -1,  1,  0,  0, -1,  1,  1, -1},  // m_z
+};
+
+// D3Q19 MRT Inverse Transformation Matrix (M_f)^(-1)
+static const float invM_f[Q_f][Q_f] = {
+    { 1.0/19.0,   -5.0/399.0,  1.0/21.0,       0.0,       0.0,       0.0,       0.0,       0.0,       0.0,       0.0,       0.0,       0.0,       0.0,      0.0,      0.0,      0.0,      0.0,      0.0,      0.0, },
+    { 1.0/19.0, -11.0/2394.0, -1.0/63.0,  1.0/10.0, -1.0/10.0,       0.0,       0.0,       0.0,       0.0,  1.0/18.0, -1.0/18.0,       0.0,       0.0,      0.0,      0.0,      0.0,      0.0,      0.0,      0.0, },
+    { 1.0/19.0, -11.0/2394.0, -1.0/63.0, -1.0/10.0,  1.0/10.0,       0.0,       0.0,       0.0,       0.0,  1.0/18.0, -1.0/18.0,       0.0,       0.0,      0.0,      0.0,      0.0,      0.0,      0.0,      0.0, },
+    { 1.0/19.0, -11.0/2394.0, -1.0/63.0,       0.0,       0.0,  1.0/10.0, -1.0/10.0,       0.0,       0.0, -1.0/36.0,  1.0/36.0,  1.0/12.0, -1.0/12.0,      0.0,      0.0,      0.0,      0.0,      0.0,      0.0, },
+    { 1.0/19.0, -11.0/2394.0, -1.0/63.0,       0.0,       0.0, -1.0/10.0,  1.0/10.0,       0.0,       0.0, -1.0/36.0,  1.0/36.0,  1.0/12.0, -1.0/12.0,      0.0,      0.0,      0.0,      0.0,      0.0,      0.0, },
+    { 1.0/19.0, -11.0/2394.0, -1.0/63.0,       0.0,       0.0,       0.0,       0.0,  1.0/10.0, -1.0/10.0, -1.0/36.0,  1.0/36.0, -1.0/12.0,  1.0/12.0,      0.0,      0.0,      0.0,      0.0,      0.0,      0.0, },
+    { 1.0/19.0, -11.0/2394.0, -1.0/63.0,       0.0,       0.0,       0.0,       0.0, -1.0/10.0,  1.0/10.0, -1.0/36.0,  1.0/36.0, -1.0/12.0,  1.0/12.0,      0.0,      0.0,      0.0,      0.0,      0.0,      0.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0,  1.0/10.0,  1.0/40.0,  1.0/10.0,  1.0/40.0,       0.0,       0.0,  1.0/36.0,  1.0/72.0,  1.0/12.0,  1.0/24.0,  1.0/4.0,      0.0,      0.0,  1.0/8.0, -1.0/8.0,      0.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0, -1.0/10.0, -1.0/40.0, -1.0/10.0, -1.0/40.0,       0.0,       0.0,  1.0/36.0,  1.0/72.0,  1.0/12.0,  1.0/24.0,  1.0/4.0,      0.0,      0.0, -1.0/8.0,  1.0/8.0,      0.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0,  1.0/10.0,  1.0/40.0,       0.0,       0.0,  1.0/10.0,  1.0/40.0,  1.0/36.0,  1.0/72.0, -1.0/12.0, -1.0/24.0,      0.0,      0.0,  1.0/4.0, -1.0/8.0,      0.0,  1.0/8.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0, -1.0/10.0, -1.0/40.0,       0.0,       0.0, -1.0/10.0, -1.0/40.0,  1.0/36.0,  1.0/72.0, -1.0/12.0, -1.0/24.0,      0.0,      0.0,  1.0/4.0,  1.0/8.0,      0.0, -1.0/8.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0,       0.0,       0.0,  1.0/10.0,  1.0/40.0,  1.0/10.0,  1.0/40.0, -1.0/18.0, -1.0/36.0,       0.0,       0.0,      0.0,  1.0/4.0,      0.0,      0.0,  1.0/8.0, -1.0/8.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0,       0.0,       0.0, -1.0/10.0, -1.0/40.0, -1.0/10.0, -1.0/40.0, -1.0/18.0, -1.0/36.0,       0.0,       0.0,      0.0,  1.0/4.0,      0.0,      0.0, -1.0/8.0,  1.0/8.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0,  1.0/10.0,  1.0/40.0, -1.0/10.0, -1.0/40.0,       0.0,       0.0,  1.0/36.0,  1.0/72.0,  1.0/12.0,  1.0/24.0, -1.0/4.0,      0.0,      0.0,  1.0/8.0,  1.0/8.0,      0.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0, -1.0/10.0, -1.0/40.0,  1.0/10.0,  1.0/40.0,       0.0,       0.0,  1.0/36.0,  1.0/72.0,  1.0/12.0,  1.0/24.0, -1.0/4.0,      0.0,      0.0, -1.0/8.0, -1.0/8.0,      0.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0,  1.0/10.0,  1.0/40.0,       0.0,       0.0, -1.0/10.0, -1.0/40.0,  1.0/36.0,  1.0/72.0, -1.0/12.0, -1.0/24.0,      0.0,      0.0, -1.0/4.0, -1.0/8.0,      0.0, -1.0/8.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0, -1.0/10.0, -1.0/40.0,       0.0,       0.0,  1.0/10.0,  1.0/40.0,  1.0/36.0,  1.0/72.0, -1.0/12.0, -1.0/24.0,      0.0,      0.0, -1.0/4.0,  1.0/8.0,      0.0,  1.0/8.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0,       0.0,       0.0,  1.0/10.0,  1.0/40.0, -1.0/10.0, -1.0/40.0, -1.0/18.0, -1.0/36.0,       0.0,       0.0,      0.0, -1.0/4.0,      0.0,      0.0,  1.0/8.0,  1.0/8.0, },
+    { 1.0/19.0,   4.0/1197.0, 1.0/252.0,       0.0,       0.0, -1.0/10.0, -1.0/40.0,  1.0/10.0,  1.0/40.0, -1.0/18.0, -1.0/36.0,       0.0,       0.0,      0.0, -1.0/4.0,      0.0,      0.0, -1.0/8.0, -1.0/8.0, },
+};
+
+// D3Q19 Relaxation Vector
+static const float S_f[Q_f] = {
+    0,      // rho (conserved)
+    1.19,
+    1.4,
+    0,      // j_x (conserved)
+    1.2,
+    0,      // j_y (conserved)
+    1.2,
+    0,      // j_z (conserved)
+    1.2,
+    s_nu,                       // 9
+    1.4,
+    s_nu,                       // 11
+    1.4,
+    s_nu,                       // 13
+    s_nu,                       // 14
+    s_nu,                       // 15
+    1.98,
+    1.98,
+    1.98,
+};
+
+// ===== D3Q7 MRT matrices (Liu & He 2016) =====
+static const float M_T[Q_T][Q_T] =
+{
+    { 1,  1,  1,  1,  1,  1,  1 },
+    { 0,  1, -1,  0,  0,  0,  0 },
+    { 0,  0,  0,  1, -1,  0,  0 },
+    { 0,  0,  0,  0,  0,  1, -1 },
+    { 0,  1,  1,  1,  1,  1,  1 },
+    { 0,  1,  1, -1, -1,  0,  0 },
+    { 0,  0,  0,  1,  1, -1, -1 }
+};
+
+// invM_T = N^{-1}
+static const float invM_T[Q_T][Q_T] =
+{
+    { 1.0,  0.0,  0.0,  0.0,       -1.0,        0.0,        0.0 },
+    { 0.0,  0.5,  0.0,  0.0,  1.0 / 6.0,  1.0 / 3.0,  1.0 / 6.0 },
+    { 0.0, -0.5,  0.0,  0.0,  1.0 / 6.0,  1.0 / 3.0,  1.0 / 6.0 },
+    { 0.0,  0.0,  0.5,  0.0,  1.0 / 6.0, -1.0 / 6.0,  1.0 / 6.0 },
+    { 0.0,  0.0, -0.5,  0.0,  1.0 / 6.0, -1.0 / 6.0,  1.0 / 6.0 },
+    { 0.0,  0.0,  0.0,  0.5,  1.0 / 6.0, -1.0 / 6.0, -1.0 / 3.0 },
+    { 0.0,  0.0,  0.0, -0.5,  1.0 / 6.0, -1.0 / 6.0, -1.0 / 3.0 }
+};
+
+static const float S_T[Q_T] =
+{
+    0, // rho (conserved)
+    s_alpha, // Function of the thermal diffusivity: S_a = 1/t_a = 1/(4*a + 1/2)
+    s_alpha, // Function of the thermal diffusivity: S_a = 1/t_a = 1/(4*a + 1/2)
+    s_alpha, // Function of the thermal diffusivity: S_a = 1/t_a = 1/(4*a + 1/2)
+    1.2, //1.9,
+    1.2, //1.9,
+    1.2, //1.9
+};
+
+
+// =========================================================================
+// Helper Functions
+// =========================================================================
+
+// Get the index in the 1D buffer from 3D coordinates
+inline uint get_index(uint3 id)
+{
+    return id.x + id.y * nx + id.z * nx * ny;
+}
+
+static const uint DIST_GROUP_COUNT = 5;
+
+inline uint cell_count()
+{
+    return nx * ny * nz;
+}
+
+inline uint dist_group(uint dir)
+{
+    return (dir < 6) ? 0 : (dir < 11) ? 1 : (dir < 16) ? 2 : (dir < 21) ? 3 : 4;
+}
+
+inline uint dist_group_start_of(uint g)
+{
+    return (g == 0) ? 0 : (g == 1) ? 6 : (g == 2) ? 11 : (g == 3) ? 16 : 21;
+}
+
+inline uint dist_lane(uint dir)
+{
+    uint g = dist_group(dir);
+    return dir - dist_group_start_of(g);
+}
+
+inline uint dist_index(uint dir, uint cell_idx)
+{
+    return dist_lane(dir) * cell_count() + cell_idx;
+}
+
+inline float load_in_dist(uint dir, uint cell_idx)
+{
+    uint di = dist_index(dir, cell_idx);
+    uint g = dist_group(dir);
+    switch (g)
+    {
+        case 0: return f_in_0[di];
+        case 1: return f_in_1[di];
+        case 2: return f_in_2[di];
+        case 3: return f_in_3[di];
+        default: return f_in_4[di];
+    }
+}
+
+inline float load_out_dist(uint dir, uint cell_idx)
+{
+    uint di = dist_index(dir, cell_idx);
+    uint g = dist_group(dir);
+    switch (g)
+    {
+        case 0: return f_out_0[di];
+        case 1: return f_out_1[di];
+        case 2: return f_out_2[di];
+        case 3: return f_out_3[di];
+        default: return f_out_4[di];
+    }
+}
+
+inline void store_out_dist(uint dir, uint cell_idx, float value)
+{
+    uint di = dist_index(dir, cell_idx);
+    uint g = dist_group(dir);
+    switch (g)
+    {
+        case 0: f_out_0[di] = value; break;
+        case 1: f_out_1[di] = value; break;
+        case 2: f_out_2[di] = value; break;
+        case 3: f_out_3[di] = value; break;
+        default: f_out_4[di] = value; break;
+    }
+}
+
+inline int3 zh_normal(int axis, int sign)
+{
+    return (axis == 0) ? int3(sign, 0, 0) : (axis == 1) ? int3(0, sign, 0) : int3(0, 0, sign);
+}
+
+inline float3 axis_unit_from_normal(int axis, int sign)
+{
+    return (axis == 0) ? float3((float)sign, 0.0, 0.0) :
+           (axis == 1) ? float3(0.0, (float)sign, 0.0) :
+                         float3(0.0, 0.0, (float)sign);
+}
+
+inline int3 clamp_interior_pos(int3 p)
+{
+    return int3(
+        min(max(p.x, 1), (int)nx - 2),
+        min(max(p.y, 1), (int)ny - 2),
+        min(max(p.z, 1), (int)nz - 2)
+    );
+}
+
+inline float f_eq_i(int i, float rho, float3 u) // equalibrium distribution function for fluid
+{
+    float e_dot_u = dot((float3)ei_f[i], u);
+    float u_sq = dot(u, u);
+    return rho * w_f[i] * (1.0 + 3.0 * e_dot_u + 4.5 * e_dot_u * e_dot_u - 1.5 * u_sq);
+}
+
+inline float g_eq_i(int i, float T, float3 u)  // equalibrium distribution function for thermal
+{
+    float e_dot_u = dot((float3)ei_T[i], u);
+    return T * w_T[i] * (1.0 + 4.0 * e_dot_u);
+}
+
+inline uint clamp_coord_int(int v, uint maxExclusive)
+{
+    return (uint)min(max(v, 1), (int)maxExclusive - 2);
+}
+
+inline float3 load_velocity_at_clamped(int3 p)
+{
+    uint3 c = uint3(
+        clamp_coord_int(p.x, nx),
+        clamp_coord_int(p.y, ny),
+        clamp_coord_int(p.z, nz));
+
+    return velocity_rho[get_index(c)].xyz;
+}
+
+inline float compute_wale_nu_t(uint3 id)
+{
+    int3 p = int3(id);
+
+    float3 ux_p = load_velocity_at_clamped(p + int3(1, 0, 0));
+    float3 ux_m = load_velocity_at_clamped(p + int3(-1, 0, 0));
+    float3 uy_p = load_velocity_at_clamped(p + int3(0, 1, 0));
+    float3 uy_m = load_velocity_at_clamped(p + int3(0, -1, 0));
+    float3 uz_p = load_velocity_at_clamped(p + int3(0, 0, 1));
+    float3 uz_m = load_velocity_at_clamped(p + int3(0, 0, -1));
+
+    // g_ij = d u_i / d x_j
+    float g11 = 0.5 * (ux_p.x - ux_m.x);
+    float g12 = 0.5 * (uy_p.x - uy_m.x);
+    float g13 = 0.5 * (uz_p.x - uz_m.x);
+
+    float g21 = 0.5 * (ux_p.y - ux_m.y);
+    float g22 = 0.5 * (uy_p.y - uy_m.y);
+    float g23 = 0.5 * (uz_p.y - uz_m.y);
+
+    float g31 = 0.5 * (ux_p.z - ux_m.z);
+    float g32 = 0.5 * (uy_p.z - uy_m.z);
+    float g33 = 0.5 * (uz_p.z - uz_m.z);
+
+    // S_ij = 0.5 (g_ij + g_ji)
+    float S11 = g11;
+    float S22 = g22;
+    float S33 = g33;
+    float S12 = 0.5 * (g12 + g21);
+    float S13 = 0.5 * (g13 + g31);
+    float S23 = 0.5 * (g23 + g32);
+
+    float SijSij =
+        S11 * S11 + S22 * S22 + S33 * S33 +
+        2.0 * (S12 * S12 + S13 * S13 + S23 * S23);
+
+    // G^2 = g * g
+    float G11 = g11*g11 + g12*g21 + g13*g31;
+    float G12 = g11*g12 + g12*g22 + g13*g32;
+    float G13 = g11*g13 + g12*g23 + g13*g33;
+
+    float G21 = g21*g11 + g22*g21 + g23*g31;
+    float G22 = g21*g12 + g22*g22 + g23*g32;
+    float G23 = g21*g13 + g22*g23 + g23*g33;
+
+    float G31 = g31*g11 + g32*g21 + g33*g31;
+    float G32 = g31*g12 + g32*g22 + g33*g32;
+    float G33 = g31*g13 + g32*g23 + g33*g33;
+
+    float trG2 = (G11 + G22 + G33) / 3.0;
+
+    // Sd_ij
+    float Sd11 = G11 - trG2;
+    float Sd22 = G22 - trG2;
+    float Sd33 = G33 - trG2;
+    float Sd12 = 0.5 * (G12 + G21);
+    float Sd13 = 0.5 * (G13 + G31);
+    float Sd23 = 0.5 * (G23 + G32);
+
+    float SdijSdij =
+        Sd11 * Sd11 + Sd22 * Sd22 + Sd33 * Sd33 +
+        2.0 * (Sd12 * Sd12 + Sd13 * Sd13 + Sd23 * Sd23);
+
+    float eps_w = 1e-20;
+    float numerator = pow(max(SdijSdij, 0.0), 1.5);
+    float denominator =
+        pow(max(SijSij, 0.0), 2.5) +
+        pow(max(SdijSdij, 0.0), 1.25) +
+        eps_w;
+
+    float delta2 = 1.0; // lattice cell size = 1
+    float Cw2 = C_sgs * C_sgs;
+
+    return Cw2 * delta2 * numerator / denominator;
+}
+
+inline int dot_e_n_idx(int i, int3 n) // dot product of the direction vector and the normal vector
+{
+    return dot(ei_f[i], n);
+}
+
+// =========================================================================
+// Kernel Functions
+// =========================================================================
+
+[numthreads(THREADS_NUM, THREADS_NUM, THREADS_NUM)]
+void initialize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= nx || id.y >= ny || id.z >= nz)
+    {
+        return; // Out of bounds
+    }
+
+    uint idx = get_index(id); // Get the index for the current thread
+
+    // Initialize each field & Assign cell type of each cell
+    velocity_rho[idx] = float4(0.0, 0.0, 0.0, 1.0);
+    temperature[idx] = T_ref;
+    field[idx] = FLUID;
+    
+    if (id.x == 0 || id.x == nx - 1 || 
+        id.y == 0 || id.y == ny - 1 || 
+        id.z == 0 || id.z == nz - 1) // inner room
+    {
+        field[idx] = WALL;
+    }
+    
+
+    // initialize heat sources
+    if (heat_source_count > 0)
+    {
+        for (int i = 0; i < heat_source_count; ++i)
+        {
+            HeatSourceData hs = heat_sources[i];
+            if (all(id >= hs.min) && all(id <= hs.max))
+            {
+                uint bc = hs.thermalBoundaryType;
+                velocity_rho[idx] = float4(0.0, 0.0, 0.0, 1.0);
+                
+                if (bc == ADIABATIC)
+                {
+                    field[idx] = WALL;
+                }
+                else if (bc == ISOTHERMAL)
+                {
+                    field[idx] = HEATSRC;
+                    temperature[idx] = hs.T_init;
+                }
+                break;
+            }
+        }
+    }
+    
+    if (rack_count > 0)
+    {
+        for (int i = 0; i < rack_count; ++i)
+        {
+            RackData rack = racks[i];
+            
+            if (all(id >= rack.min) && all(id <= rack.max))
+            {
+                field[idx] = RACK;
+                
+                bool openX = (rack.open_axis == 0);
+                bool openZ = (rack.open_axis == 1);
+                
+                bool shellX = (id.x - rack.min.x) < rack.shell || (rack.max.x - id.x) < rack.shell;
+                bool shellY = (id.y - rack.min.y) < rack.shell || (rack.max.y - id.y) < rack.shell;
+                bool shellZ = (id.z - rack.min.z) < rack.shell || (rack.max.z - id.z) < rack.shell;
+                
+                bool isShell = (openX && shellZ) || (openZ && shellX) || shellY; // one side always opened
+                
+                if (isShell) field[idx] = WALL;
+                break;
+            }
+        }
+    }
+    
+    // initialize AC sources
+    if (ac_source_count > 0)
+    {
+        for (int i = 0; i < ac_source_count; ++i)
+        {
+            ACSourceData acs = ac_sources[i];
+            if (all(id >= acs.min) && all(id <= acs.max))
+            {
+                field[idx] = WALL; // AC Sources are a wall from now on!
+                break;
+            }
+        }
+    }
+    
+    // initialize ZH inlet and outlet patches
+    if (zh_inlet_count > 0)
+    {
+        for (int i = 0; i < zh_inlet_count; ++i)
+        {
+            ZHInletPatchData ip = zh_inlets[i];
+            if (all(id >= ip.min) && all(id <= ip.max))
+            {
+                field[idx] = FLUID;
+                velocity_rho[idx] = float4(ip.u_target, 1.0);
+                temperature[idx] = ip.T_init;
+                break;
+            }
+        }
+    }
+    if (zh_outlet_count > 0)
+    {
+        for (int i = 0; i < zh_outlet_count; ++i)
+        {
+            ZHOutletPatchData op = zh_outlets[i];
+            if (all(id >= op.min) && all(id <= op.max))
+            {
+                field[idx] = FLUID;
+                velocity_rho[idx] = float4(0.0, 0.0, 0.0, op.rho_target);
+                // temperature[idx] = T_ref;
+                break;
+            }
+        }
+    }
+
+    // Initialize the distribution functions into the output side.
+    [unroll]
+    for (uint i = 0; i < Q_f; ++i)
+    {
+        store_out_dist(i, idx, w_f[i]);
+    }
+
+    [unroll]
+    for (uint iT = 0; iT < Q_T; ++iT)
+    {
+        store_out_dist(iT + Q_f, idx, w_T[iT] * temperature[idx]);
+    }
+}
+
+// ===================================================
+// Field Update: update field in run time
+// ===================================================
+
+[numthreads(THREADS_NUM, THREADS_NUM, THREADS_NUM)]
+void field_update(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= nx || id.y >= ny || id.z >= nz)
+    {
+        return; // Out of bounds
+    }
+
+    uint idx = get_index(id); // Get the index for the current thread
+    
+    field[idx] = FLUID; // reset to FLUID first
+    
+    if (id.x == 0 || id.x == nx - 1 ||
+        id.y == 0 || id.y == ny - 1 ||
+        id.z == 0 || id.z == nz - 1)
+    {
+        field[idx] = WALL;
+    }
+            
+    // update heat sources
+    if (heat_source_count > 0)
+    {
+        for (int i = 0; i < heat_source_count; ++i)
+        {
+            HeatSourceData hs = heat_sources[i];
+            
+            if (all(id >= hs.min) && all(id <= hs.max))
+            {
+                uint bc = hs.thermalBoundaryType;
+                
+                if (bc == ADIABATIC)
+                {
+                    field[idx] = WALL;
+                }
+                else if (bc == ISOTHERMAL)
+                {
+                    field[idx] = HEATSRC;
+                    temperature[idx] = hs.T_init;
+                }
+                break;
+            }
+        }
+    }
+    
+    if (rack_count > 0)
+    {
+        for (int i = 0; i < rack_count; ++i)
+        {
+            RackData rack = racks[i];
+            
+            if (all(id >= rack.min) && all(id <= rack.max))
+            {
+                field[idx] = RACK;
+                
+                bool openX = (rack.open_axis == 0);
+                bool openZ = (rack.open_axis == 1);
+                
+                bool shellX = (id.x - rack.min.x) < rack.shell || (rack.max.x - id.x) < rack.shell;
+                bool shellY = (id.y - rack.min.y) < rack.shell || (rack.max.y - id.y) < rack.shell;
+                bool shellZ = (id.z - rack.min.z) < rack.shell || (rack.max.z - id.z) < rack.shell;
+                
+                bool isShell = (!openX && shellX) || (!openZ && shellZ) || shellY; // one side always opened
+                
+                if (isShell)
+                    field[idx] = WALL;
+                
+                break;
+            }
+        }
+    }
+    
+    // AC sources
+    if (ac_source_count > 0)
+    {
+        for (int i = 0; i < ac_source_count; ++i)
+        {
+            ACSourceData acs = ac_sources[i];
+            if (all(id >= acs.min) && all(id <= acs.max))
+            {
+                field[idx] = WALL; // AC Sources are a wall from now on!
+                break;
+            }
+        }
+    }
+    
+    // initialize ZH inlet and outlet patches
+    if (zh_inlet_count > 0)
+    {
+        for (int i = 0; i < zh_inlet_count; ++i)
+        {
+            ZHInletPatchData ip = zh_inlets[i];
+            if (all(id >= ip.min) && all(id <= ip.max))
+            {
+                field[idx] = FLUID;
+                // velocity_rho[idx] = float4(ip.u_target, 1.0);
+                temperature[idx] = ip.T_init;
+                break;
+            }
+        }
+    }
+    
+    if (zh_outlet_count > 0)
+    {
+        for (int i = 0; i < zh_outlet_count; ++i)
+        {
+            ZHOutletPatchData op = zh_outlets[i];
+            if (all(id >= op.min) && all(id <= op.max))
+            {
+                field[idx] = FLUID;
+                // velocity_rho[idx] = float4(0.0, 0.0, 0.0, op.rho_target);
+                // temperature[idx] = T_ref;
+                break;
+            }
+        }
+    }
+}
+
+// ===================================================
+// collision
+// ===================================================
+
+[numthreads(THREADS_NUM, THREADS_NUM, THREADS_NUM)]
+void collision(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= nx || id.y >= ny || id.z >= nz)
+    {
+        return; // Out of bounds
+    }
+
+    uint idx = get_index(id);
+    uint flag = field[idx];     // Get the field type (FLUID, WALL, HEATSRC)
+
+    float4 ur  = velocity_rho[idx];
+    float3 u   = ur.xyz;                // Get cell's velocity vector
+    float  rho = ur.w;                  // Get cell's density
+    float  T   = temperature[idx];      // Get cell's temperature
+
+    // iterators
+    uint i = 0, j = 0, k = 0, ii = 0;
+        
+    // ------------------------------------------------------------------------
+    // Fluid collision (D3Q19, MRT)
+    // ------------------------------------------------------------------------
+    if (flag == FLUID || flag == RACK)
+    {
+        // Turbulence Model //////////////////////////
+        float s_nu_eff = s_nu;
+        float s_alpha_eff = s_alpha;
+        float nu_t = 0.0;
+        float nu_eff = cs2 * (tau_f - 0.5);
+
+        if (turbulence_model == 1) // Smagorinsky
+        {
+            float df[Q_f];
+
+            [unroll]
+            for (ii = 0; ii < Q_f; ii++)
+            {
+                df[ii] = load_in_dist(ii, idx) - f_eq_i(ii, rho, u);
+            }
+
+            float P_xx = 0.0, P_yy = 0.0, P_zz = 0.0;
+            float P_xy = 0.0, P_yz = 0.0, P_xz = 0.0;
+
+            [unroll]
+            for (ii = 0; ii < Q_f; ii++)
+            {
+                float3 ei = (float3)ei_f[ii];
+                float df_i = df[ii];
+
+                P_xx += ei.x * ei.x * df_i;
+                P_yy += ei.y * ei.y * df_i;
+                P_zz += ei.z * ei.z * df_i;
+                P_xy += ei.x * ei.y * df_i;
+                P_yz += ei.y * ei.z * df_i;
+                P_xz += ei.z * ei.x * df_i;
+            }
+
+            float sumPi =
+                2.0 * (P_xy * P_xy + P_yz * P_yz + P_xz * P_xz) +
+                (P_xx * P_xx + P_yy * P_yy + P_zz * P_zz);
+
+            float Pi_norm = sqrt(max(sumPi, 0.0));
+
+            float s_nu_base = 1.0 / tau_f;
+            float inv_2rho_cs2 = 1.0 / max((2.0 * rho * cs2), 1e-6);
+            float S_mag = s_nu_base * inv_2rho_cs2 * Pi_norm;
+
+            nu_t = (C_sgs * C_sgs) * S_mag;
+        }
+        else if (turbulence_model == 2) // WALE
+        {
+            nu_t = compute_wale_nu_t(id);
+        }
+
+        nu_eff += nu_t;
+
+        float tau_eff = nu_eff / cs2 + 0.5;
+        s_nu_eff = clamp(1.0 / max(tau_eff, 1e-6), s_relax_min, s_relax_max);
+
+        if (Pr_t > 0.0)
+        {
+            float alpha0 = (tau_T - 0.5) * 0.25;
+            float alpha_eff = alpha0 + (nu_t / Pr_t);
+            float tauT_eff = 0.5 + 4.0 * alpha_eff;
+            s_alpha_eff = clamp(1.0 / max(tauT_eff, 1e-6), s_relax_min, s_relax_max);
+        }
+        
+        float S_sgm[Q_f];
+        [unroll] for (ii = 0; ii < Q_f; ii++) S_sgm[ii] = S_f[ii];
+        S_sgm[9]  = s_nu_eff;
+        S_sgm[11] = s_nu_eff;
+        S_sgm[13] = s_nu_eff;
+        S_sgm[14] = s_nu_eff;
+        S_sgm[15] = s_nu_eff;
+        
+        ////////////////////////////////////////////////////////////
+
+        float3 gvec = float3(0.0, -gravity_y, 0.0);
+        float3 F = rho * beta * (T - T_ref) * gvec; // Buoyancy force term
+        
+        float3 rack_invK = float3(0.0, 0.0, 0.0);
+        float rack_betaF = 0.0;
+        float rack_qdot = 0.0;
+        // float rack_phi = 1.0;
+
+        if (flag == RACK)
+        {
+            // fetch porous parameters for this cell
+            for (int r = 0; r < rack_count; ++r)
+            {
+                RackData rack = racks[r];
+                if (all(id >= rack.min) && all(id <= rack.max))
+                {
+                    rack_invK = rack.invK;
+                    rack_betaF = rack.betaF;
+                    rack_qdot = rack.qdot;
+                    // rack_phi = max(rack.phi, 1e-3);
+                    break;
+                }
+            }
+
+            // Darcy–Forchheimer drag
+            // float nu = (tau_f - 0.5) / 3.0;
+            // float3 F_darcy = -rho * nu * (rack_invK * u);
+            float nu_eff_local = cs2 * (tau_f - 0.5) + nu_t; // = ν0 + ν_t
+            float3 F_darcy = -rho * nu_eff_local * (rack_invK * u);
+            float umag = length(u);
+            float3 F_forch = -rho * rack_betaF * umag * u;
+            F += (F_darcy + F_forch);
+        }
+        /////////////////////////////////////////
+        
+        float  u_sq  = dot(u, u); // Calculate the square of the velocity
+
+        
+        // MRT Collision Model 
+        float m_eq[Q_f], tmp_f1[Q_f], tmp_f2[Q_f];
+
+        // temp1 = f_prev
+        [unroll]
+        for (i = 0; i < Q_f; ++i) 
+        {
+            tmp_f1[i] = load_in_dist(i, idx); 
+        }
+
+        // temp2 = m = M_f @ f_prev
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            float s = 0.0;
+            for (j = 0; j < Q_f; ++j)
+                s += M_f[i][j] * tmp_f1[j]; 
+            
+            tmp_f2[i] = s;
+        }
+        
+        // Calculate the equilibrium distribution of moments (m_eq)
+        m_eq[0]  = rho;                                                 // rho
+        m_eq[1]  = rho * (-11.0 + 19.0 * u_sq);                         // e
+        m_eq[2]  = rho * (3.0 - 5.5 * u_sq);                            // eta
+        m_eq[3]  = rho * u.x;                                           // j_x
+        m_eq[4]  = rho * (-2.0 / 3.0 * u.x);                            // q_x
+        m_eq[5]  = rho * u.y;                                           // j_y
+        m_eq[6]  = rho * (-2.0 / 3.0 * u.y);                            // q_y
+        m_eq[7]  = rho * u.z;                                           // j_z
+        m_eq[8]  = rho * (-2.0 / 3.0 * u.z);                            // q_z
+        m_eq[9]  = rho * (2.0 * u.x * u.x - (u.y * u.y + u.z * u.z));   // p_xx
+        m_eq[10] = rho * (-u.x * u.x + 0.5 * (u.y * u.y + u.z * u.z));  // pi_xx
+        m_eq[11] = rho * (u.y * u.y - u.z * u.z);                       // p_ww
+        m_eq[12] = rho * 0.5 * (u.z * u.z - u.y * u.y);                 // phi_ww
+        m_eq[13] = rho * u.x * u.y;                                     // p_xy
+        m_eq[14] = rho * u.y * u.z;                                     // p_yz
+        m_eq[15] = rho * u.x * u.z;                                     // p_xz
+        m_eq[16] = 0;                                                   // m_x
+        m_eq[17] = 0;                                                   // m_y
+        m_eq[18] = 0;                                                   // m_z
+        
+        // temp1 = temp2 - m_eq = m - m_eq
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            tmp_f1[i] = tmp_f2[i] - m_eq[i]; // temp1 = m - m_eq
+        }
+
+        // temp2 = S_f @ temp1 = S_f @ (m - m_eq)
+        [unroll]
+        for (i = 0; i < Q_f; ++i) 
+        {
+            // tmp_f2[i] = S_f[i] * tmp_f1[i]; // S_f is a diagonal matrix.
+            tmp_f2[i] = S_sgm[i] * tmp_f1[i]; // S_f is a diagonal matrix.
+        }
+
+        // temp1 = invM_f @ temp2 = invM_f @ S_f @ (m - m_eq)
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            float s = 0.0;
+            for (j = 0; j < Q_f; ++j)
+                s += invM_f[i][j] * tmp_f2[j]; 
+            
+            tmp_f1[i] = s;
+        }
+
+        // --- Guo forcing term (MRT) for buoyancy: invM @ (I - 0.5 S) @ (M @ R) ---
+        
+        // R_i = w_i * [((e_i - u)/cs^2) + ((e_i * u)/cs^4) e_i ] * F
+        // cs^2 = 1/3 -> 1/cs^2 = 3, 1/cs^4 = 9
+        float R[Q_f];
+        
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            
+            R[i] = w_f[i] * dot((((float3) ei_f[i] - u) * 3.0 + ((float3) ei_f[i]) * (dot((float3) ei_f[i], u) * 9.0)), F);
+        }
+        
+        // tmp_f2 = R_hat = M_f @ R
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            float s = 0.0;
+            for (j = 0; j < Q_f; ++j)
+                s += M_f[i][j] * R[j];
+            
+            tmp_f2[i] = s; 
+        }
+        
+        // (I - 0.5 S_f) @ R_hat
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            // tmp_f2[i] = (1.0 - 0.5 * S_f[i]) * tmp_f2[i]; 
+            tmp_f2[i] = (1.0 - 0.5 * S_sgm[i]) * tmp_f2[i]; 
+        }
+        
+        // recycle m_eq: forcing in velocity space
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            float s = 0.0;
+            for (j = 0; j < Q_f; ++j)
+                s += invM_f[i][j] * tmp_f2[j];
+            
+            m_eq[i] = s; 
+        }
+        
+        // Final step: f_new = f_prev - tmp_f1 + m_eq = f - collision + forcing
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            uint f_idx = i; // logical direction index
+            store_out_dist(i, idx, load_in_dist(i, idx) - tmp_f1[i] + R[i]);
+        }
+        ///////////////////////////////////////////////////////////////////////
+
+        // ------------------------------------------------------------------------
+        // Temperature collision (D3Q7, MRT)
+        // ------------------------------------------------------------------------
+        
+        float S_T_sgm[Q_T];
+        [unroll] for (i = 0; i < Q_T; i++) S_T_sgm[i] = S_T[i];    
+        S_T_sgm[1] = s_alpha_eff;
+        S_T_sgm[2] = s_alpha_eff;
+        S_T_sgm[3] = s_alpha_eff;
+        
+        // MRT Collision Model (NEW):
+        float m_eq_T[Q_T], tmp_T1[Q_T], tmp_T2[Q_T];
+        
+        [unroll]
+        for (i = 0; i < Q_T; ++i)
+        {
+            tmp_T1[i] = load_in_dist(Q_f + i, idx);
+        }
+        
+        [unroll]
+        for (i = 0; i < Q_T; ++i) 
+        {
+            float s = 0.0;
+            for (j = 0; j < Q_T; ++j) 
+                s += M_T[i][j] * tmp_T1[j];
+            
+            tmp_T2[i] = s;
+        }
+        
+        const float varpi = 6.0f * l_T;
+        const float sigma = 1.0f;
+        m_eq_T[0] = sigma * T;
+        m_eq_T[1] = T * u.x;
+        m_eq_T[2] = T * u.y;
+        m_eq_T[3] = T * u.z;
+        m_eq_T[4] = varpi * sigma * T;
+        m_eq_T[5] = 0.0;
+        m_eq_T[6] = 0.0;
+        
+        // m' = m - S_T (m - m_eq)
+        [unroll]
+        for (i = 0; i < Q_T; ++i)
+        {
+            // tmp_T1[i] = tmp_T2[i] - S_T[i] * (tmp_T2[i] - m_eq_T[i]);
+            tmp_T1[i] = tmp_T2[i] - S_T_sgm[i] * (tmp_T2[i] - m_eq_T[i]);
+        }
+
+        // g' = invM_T @ m'
+        [unroll]
+        for (i = 0; i < Q_T; ++i)
+        {
+            float s = 0.0;
+            for (j = 0; j < Q_T; ++j)
+                s += invM_T[i][j] * tmp_T1[j];
+            tmp_T2[i] = s;
+        }
+
+        // add volumetric heat source in porous rack
+        if (flag == RACK)
+        {
+            [unroll]
+            for (i = 0; i < Q_T; ++i)
+            {
+                tmp_T2[i] += w_T[i] * rack_qdot; // qdot is per unit volume
+            }
+        }
+        
+        // write back
+        [unroll]
+        for (i = 0; i < Q_T; ++i)
+        {
+            store_out_dist(i + Q_f, idx, tmp_T2[i]);
+        }
+    }
+    // In Heat sources, the temperature distribution should be always in an equilibrium state!
+    else if (flag == HEATSRC)
+    {
+        // [unroll] 
+        // for (i = 0; i < Q_T; ++i)
+        // {
+        //     uint g_idx = i + Q_f; // logical direction index
+        //     f_prev[g_idx] = w_T[i] * T;
+        // }
+        
+        // keep fluid quiescent and temperature at equilibrium
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            store_out_dist(i, idx, w_f[i]); // rho=1, u=0
+        }
+        
+        [unroll]
+        for (i = 0; i < Q_T; ++i)
+        {
+            store_out_dist(i + Q_f, idx, w_T[i] * T);
+        }
+    }
+    // Optionally, we can also reset the wall distributions to equilibrium state to reduce numerical errors.
+    // else if (flag == WALL)
+    // {
+    //     [unroll]
+    //     for (i = 0; i < Q_f; ++i)
+    //     {
+    //         f_prev[get_f_index_soa(i, idx)] = w_f[i];
+    //     }
+    // }
+}
+
+[numthreads(THREADS_NUM, THREADS_NUM, THREADS_NUM)]
+void streaming(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= nx || id.y >= ny || id.z >= nz)
+    {
+        return; // Out of bounds
+    }
+
+    uint idx = get_index(id);
+    uint flag = field[idx]; // Get the field type (FLUID, WALL, HEATSRC)
+    
+    // iterators
+    uint i = 0, j = 0;
+    
+    // Only stream the fluid (pull-in) + apply half-way BB on walls
+    // The Lattice Boltzmann Method (2017) by H. Kusumaatmaja, (Chapter 5.3.3)
+    if (flag == FLUID || flag == RACK)
+    {
+        // --------------------------------------------------------------------
+        // Fluid streaming (D3Q19)
+        // --------------------------------------------------------------------
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            uint f_idx = i; // logical direction index
+            uint3 neighbor = uint3(id - ei_f[i]); // Pull-in method
+
+            // If the neighbor is outside the grid, we consider the neighbor as solid and apply bounce-back
+            if (!(0 <= neighbor.x && neighbor.x < nx && 
+                  0 <= neighbor.y && neighbor.y < ny && 
+                  0 <= neighbor.z && neighbor.z < nz))
+            {
+                store_out_dist(i, idx, load_in_dist(inv_f[i], idx));
+                continue;
+            }
+
+            uint neighbor_idx   = get_index(neighbor);
+            uint neighbor_flag  = field[neighbor_idx];
+
+            if (neighbor_flag == WALL || neighbor_flag == HEATSRC)
+            {
+                // Half-way BB (No momentum added as it is a resting wall)
+                store_out_dist(i, idx, load_in_dist(inv_f[i], idx));
+            }
+            else if (neighbor_flag == FLUID || neighbor_flag == RACK)
+            {
+                // Normal streaming
+                store_out_dist(i, idx, load_in_dist(i, neighbor_idx));
+            }
+            // how about RACK?
+        }
+
+        // --------------------------------------------------------------------
+        // Thermal streaming (D3Q7)
+        // --------------------------------------------------------------------
+        [unroll]
+        for (i = 0; i < Q_T; ++i)
+        {
+            uint g_idx = i + Q_f; // logical direction index
+            uint3 neighbor = uint3(id - ei_T[i]); // Pull-in method
+
+            // If the neighbor is outside the grid, we consider the neighbor as solid and apply bounce-back
+            if (!(0 <= neighbor.x && neighbor.x < nx && 
+                  0 <= neighbor.y && neighbor.y < ny && 
+                  0 <= neighbor.z && neighbor.z < nz))
+            {
+                store_out_dist(i + Q_f, idx, load_in_dist(Q_f + inv_T[i], idx));
+                continue;
+            }
+
+            uint neighbor_idx   = get_index(neighbor);
+            uint neighbor_flag  = field[neighbor_idx];
+
+            // Half-way BB (No momentum added as it is a resting wall)
+            if (neighbor_flag == WALL)
+            {
+                store_out_dist(i + Q_f, idx, load_in_dist(Q_f + inv_T[i], idx));
+            }
+            else if (neighbor_flag == FLUID || neighbor_flag == HEATSRC || neighbor_flag == RACK)
+            {
+                // Normal streaming
+                store_out_dist(i + Q_f, idx, load_in_dist(i + Q_f, neighbor_idx));
+            }
+        }
+    }
+    // No streaming for walls and heat sources
+    else if (flag == WALL || flag == HEATSRC)
+    {
+        // [unroll]
+        // for (uint i = 0; i < Q_total; ++i)
+        // {
+        //     uint f_idx = i; // logical direction index
+        //     f_cur[f_idx] = f_prev[f_idx];
+        // }
+        
+        // non-fluid cells: keep distributions unchanged
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            store_out_dist(i, idx, load_out_dist(i, idx));
+        }
+        
+        [unroll]
+        for (i = 0; i < Q_T; ++i)
+        {
+            store_out_dist(Q_f + i, idx, load_in_dist(Q_f + i, idx));
+        }
+    }
+}
+
+[numthreads(THREADS_NUM, THREADS_NUM, THREADS_NUM)]
+void zou_he_bc(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= nx || id.y >= ny || id.z >= nz)
+    {
+        return; // Out of bounds
+    }
+    
+    if (zh_inlet_count == 0 && zh_outlet_count == 0) 
+    {
+        return; // Early return unless there are INLET or OUTLET cells.
+    }
+
+    uint idx = get_index(id);
+    bool processed = false;
+
+    // =====================================================================
+    // 1. Inlet BC (Velocity & Fixed Temperature) - NEBB
+    // =====================================================================
+
+    // n (Normal vector) : The direction from FLUID to WALL
+    if (zh_inlet_count > 0)
+    {
+        for (int p_idx = 0; p_idx < zh_inlet_count; ++p_idx)
+        {
+            ZHInletPatchData ip = zh_inlets[p_idx];
+
+            if (all(id >= ip.min) && all(id <= ip.max))
+            {
+                int3 n = zh_normal(ip.normal_axis, ip.normal_sign);
+                float3 u_target = ip.u_target;
+                float T_target = ip.T_init;
+
+                // --- Fluid (D3Q19) ---
+
+                // Calculate unknown sums (e_i.n >= 0)
+                float sum_parallel = 0.0; // K_P (e_i.n = 0)
+                float sum_leaving = 0.0;  // K_L (e_i.n > 0)
+
+                uint i = 0;
+
+                [unroll]
+                for (i = 0; i < Q_f; ++i)
+                {
+                    int e_dot_n = dot_e_n_idx(i, n);
+                    uint f_idx = i; // logical direction index
+                    float f_i = load_out_dist(i, idx); // Use streamed distributions after streaming
+
+                    if (e_dot_n == 0) // Calculate K_P
+                    {
+                        sum_parallel += f_i;
+                    }
+                    else if (e_dot_n > 0) // Calculate K_L
+                    {
+                        sum_leaving += f_i;
+                    }
+                }
+
+                // Calculate density (rho)
+                // Zou-He BC formulation : rho = (K_P + 2*K_L) / (1 + u_n) (u_n = dot(u, n))
+                float u_n = dot(u_target, (float3)n);
+                float rho = 1.0;
+
+                if (abs(1.0 + u_n) > 1e-6) // Sanity Check
+                {
+                    rho = (sum_parallel + 2.0 * sum_leaving) / (1.0 + u_n);
+                }
+                if (rho <= 0.0) // Sanity Check
+                {
+                    rho = 1.0;
+                }
+
+                // Calculate unknown sum (e_i.n < 0) - NEBB
+                [unroll]
+                for (i = 0; i < Q_f; ++i)
+                {
+                    if (dot_e_n_idx(i, n) < 0)
+                    {
+                        uint f_idx = i; // logical direction index
+
+                        float f_inv_i = load_out_dist(inv_f[i], idx);
+                        float e_dot_u = dot((float3)ei_f[i], u_target);
+
+                        // Zou-He NEBB closure : f_i = f_inv_i + 6.0 * rho * w_i * (e_i.u)
+                        float f_new = f_inv_i + 6.0 * rho * w_f[i] * e_dot_u;
+
+                        if (f_new < 0.0)
+                        {
+                            InterlockedAdd(debug_thermal_clamp_counters[2], 1);
+                        }
+
+                        store_out_dist(i, idx, max(0.0, f_new));
+                    }
+                }
+
+                // --- Thermal (D3Q7) ---
+
+                // Redistribute unknown distribution (Fixed Temperature)
+                [unroll]
+                for (i = 0; i < Q_T; ++i)
+                {
+                    int e_dot_n_T = dot(ei_T[i], n);
+
+                    if (e_dot_n_T < 0)
+                    {
+                        uint g_idx = i + Q_f; // logical direction index
+
+                        float g_inv_i = load_out_dist(inv_T[i] + Q_f, idx);
+                        float e_dot_u = dot((float3)ei_T[i], u_target);
+
+                        // Thermal Zou-He NEBB closure : g_i = g_inv_i + 8.0 * T * w_i * (e_i.u)
+                        store_out_dist(i + Q_f, idx, g_inv_i + 8.0 * T_target * w_T[i] * e_dot_u);
+                    }
+                }
+
+                /// artifact correction for g0
+                float sum_except0 = 0.0;
+                [unroll]
+                for (i = 1; i < Q_T; ++i)
+                {
+                    sum_except0 += load_out_dist(i + Q_f, idx);
+                }
+                
+                float g0_new = T_target - sum_except0;
+                if (g0_new < 0.0)
+                {
+                    InterlockedAdd(debug_thermal_clamp_counters[0], 1);
+                }
+                store_out_dist(Q_f + 0, idx, max(0.0, g0_new));
+                
+                processed = true;
+                break;
+            }
+        }
+    }
+
+    // =====================================================================
+    // 2. Outlet BC (Mass-Flux Corrected Outlet + Weak Pressure Anchor)
+    // =====================================================================
+    if (!processed && zh_outlet_count > 0)
+    {
+        for (int p_idx = 0; p_idx < zh_outlet_count; ++p_idx)
+        {
+            ZHOutletPatchData op = zh_outlets[p_idx];
+
+            if (all(id >= op.min) && all(id <= op.max))
+            {
+                int3 n = zh_normal(op.normal_axis, op.normal_sign);
+                float3 n_f = axis_unit_from_normal(op.normal_axis, op.normal_sign);
+
+                int3 innerPos = clamp_interior_pos(int3(id) - n);
+                uint nb = get_index((uint3)innerPos);
+
+                // -----------------------------------------------------------------
+                // Step 1: On-the-fly calculate neighbor macro variables
+                // -----------------------------------------------------------------
+                float rho_nb = 0.0;
+                float3 u_nb = float3(0.0, 0.0, 0.0);
+                float T_nb = 0.0;
+                uint i = 0;
+
+                // --- Fluid (D3Q19) ---
+                [unroll]
+                for (i = 0; i < Q_f; ++i)
+                {
+                    float f_k = load_out_dist(i, nb);
+                    rho_nb += f_k;
+                    u_nb += f_k * float3(ei_f[i]);
+                }
+
+                if (rho_nb > 1e-6)
+                {
+                    u_nb /= rho_nb;
+                }
+                else
+                {
+                    rho_nb = 1.0;
+                    u_nb = float3(0.0, 0.0, 0.0);
+                }
+
+                // --- Thermal (D3Q7) ---
+                [unroll]
+                for (i = 0; i < Q_T; ++i)
+                {
+                    T_nb += load_out_dist(i + Q_f, nb);
+                }
+
+                // -----------------------------------------------------------------
+                // Step 2: Build corrected outlet macro state
+                // -----------------------------------------------------------------
+                float un_nb = dot(u_nb, n_f);
+                float3 u_tangent = u_nb - un_nb * n_f;
+
+                float blend = saturate(op.normal_velocity_blend);
+                float rho_anchor = saturate(op.rho_anchor);
+                float target_un = max(op.target_normal_speed, 0.0);
+
+                float un_eff = lerp(un_nb, target_un, blend);
+                float3 u_eff = u_tangent + un_eff * n_f;
+
+                float rho_eff = lerp(rho_nb, op.rho_target, rho_anchor);
+                rho_eff = max(rho_eff, 1e-6);
+
+                float T_target = T_nb;
+
+                if (p_idx == 0 &&
+                    id.x == op.min.x &&
+                    id.y == op.min.y &&
+                    id.z == op.min.z)
+                {
+                    debug_outlet_bc_state[0] = float4(un_nb, target_un, blend, un_eff);
+                    debug_outlet_bc_state[1] = float4(rho_nb, op.rho_target, rho_anchor, rho_eff);
+                    debug_outlet_bc_state[2] = float4(u_nb.x, u_nb.y, u_nb.z, T_nb);
+                    debug_outlet_bc_state[3] = float4(u_eff.x, u_eff.y, u_eff.z, 0.0);
+                }
+
+                // -----------------------------------------------------------------
+                // Step 3: Fluid outlet NEE using corrected macro state
+                // -----------------------------------------------------------------
+                [unroll]
+                for (i = 0; i < Q_f; ++i)
+                {
+                    float f_eq_b = f_eq_i(i, rho_eff, u_eff);
+                    float f_eq_nb = f_eq_i(i, rho_nb, u_nb);
+                    float f_i_nb = load_out_dist(i, nb);
+                    float f_i_b = f_eq_b + (f_i_nb - f_eq_nb);
+
+                    if (f_i_b < 0.0)
+                    {
+                        InterlockedAdd(debug_thermal_clamp_counters[3], 1);
+                    }
+
+                    store_out_dist(i, idx, max(0.0, f_i_b));
+                }
+
+                // -----------------------------------------------------------------
+                // Step 4: Thermal outlet NEE using corrected outlet velocity
+                // -----------------------------------------------------------------
+                [unroll]
+                for (i = 0; i < Q_T; ++i)
+                {
+                    float g_eq_b = g_eq_i(i, T_target, u_eff);
+                    float g_eq_nb = g_eq_i(i, T_nb, u_nb);
+                    float g_i_nb = load_out_dist(i + Q_f, nb);
+                    float g_i_b = g_eq_b + (g_i_nb - g_eq_nb);
+
+                    if (g_i_b < 0.0)
+                    {
+                        InterlockedAdd(debug_thermal_clamp_counters[1], 1);
+                    }
+
+                    store_out_dist(i + Q_f, idx, max(0.0, g_i_b));
+                }
+
+                processed = true;
+                break;
+            }
+        }
+    }
+}
+
+[numthreads(THREADS_NUM, THREADS_NUM, THREADS_NUM)]
+void calculate_macro(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= nx || id.y >= ny || id.z >= nz)
+    {
+        return; // Out of bounds
+    }
+
+    uint idx = get_index(id);
+    uint flag = field[idx]; // Get the field type (FLUID, WALL, HEATSRC)
+
+    float  rho = 0.0;
+    float3 u   = float3(0.0, 0.0, 0.0);
+
+    // iterators
+    uint i = 0;
+    
+    // Calculate fluid macroscopic variables
+    if (flag == FLUID || flag == RACK)
+    {
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            float fi = load_in_dist(i, idx);
+            rho += fi;
+            u   += fi * float3(ei_f[i]);
+        }
+
+        // Normalize momentum
+        if (rho > 1e-6) u /= rho; 
+    }
+    // In walls and heat sources, they only have 0 velocity.
+    else if (flag == WALL || flag == HEATSRC)
+    {
+        rho = 1.0; // make the density simple in the WALL
+        u   = float3(0.0, 0.0, 0.0);
+    }
+        
+    velocity_rho[idx] = float4(u, rho);
+
+    
+    // Calculate temperature macroscopic variables
+    float T = 0.0;
+    
+    if (flag == FLUID || flag == RACK)
+    {
+        [unroll]
+        for (i = 0; i < Q_T; ++i) 
+        {
+            T += load_in_dist(i + Q_f, idx);
+        }
+    }
+    // In heat sources, they always maintain their init temperature!
+    else 
+    {
+        T = temperature[idx];
+    }
+
+    temperature[idx] = T;
+}
+
+[numthreads(THREADS_NUM, THREADS_NUM, THREADS_NUM)]
+void visualize(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= nx || id.y >= ny || id.z >= nz)
+    {
+        return; // Out of bounds
+    }
+
+    uint idx = get_index(id);
+    velocity_texture[id] = float4(velocity_rho[idx].xyz, 1.0);
+    thermal_texture[id] = temperature[idx];
+}
+
