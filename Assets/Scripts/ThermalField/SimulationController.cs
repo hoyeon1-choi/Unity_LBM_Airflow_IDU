@@ -5,60 +5,54 @@ using System.Collections;
 using Unity.Collections;
 using UnityEngine.Rendering;
 
+public enum SolverEasePreset
+{
+    FastPreview,
+    Balanced,
+    HighFidelity,
+    Custom
+}
+
+public enum SimulationHealthStatus
+{
+    OK,
+    Warning,
+    Invalid
+}
+
 public class SimulationController : Singleton<SimulationController>
 {
-    [Header("Domain Settings")]
+    [Header("User Setup")]
+    [Tooltip("Main run switch. Invalid readiness status will prevent stepping even if this is enabled.")]
+    [SerializeField] private bool runSimulation = true;
+
+    [Header("Domain / Resolution")]
     [SerializeField] private GameObject domain;
-
-    [Header("Simulation Parameters")]
     [SerializeField] private ComputeShader lbmComputeShader;
+    [Tooltip("Physical lattice cell size in meters. Smaller values increase resolution and memory cost.")]
+    [SerializeField] private float dxPhys = 0.01f;
 
-    [Header("Scene Cache (Auto)")]
-    private SimulationSceneCache sceneCache;
-    [SerializeField, ReadOnly] private bool sceneCacheReady = false;
-    [SerializeField, ReadOnly] private string sceneCacheStatus = "Not initialized";
+    [Header("Solver Preset")]
+    [SerializeField] private SolverEasePreset solverPreset = SolverEasePreset.Balanced;
 
-    [Header("Reference Maximum Physical Velocity")]
+    [Header("Physical Properties")]
     [Tooltip("Reference maximum physical velocity for scaling (m/s). " +
              "The maximum speed of AC Sources can not exceed this value")]
     [Range(1.0f, 10.0f), SerializeField] private float U_ref = 10.0f;
+    [Tooltip("Target Kinetic Viscosity [m^2/s] (air ≈ 1.5e-5)")]
+    [SerializeField] private float nuPhysTarget = 1.5e-5f;
+    [Tooltip("Target Prandtl Number (air ≈ 0.71)")]
+    [SerializeField] private float prandtlTarget = 0.71f;
+    [SerializeField] private float beta = 0.05f;
+    [SerializeField] private float gravity_y = -9.81f;
 
-    [Header("Physical Cell Size")]
-    [SerializeField] private float dxPhys = 0.01f;
-
-    [Header("Temperature Mapping (LBM <-> degC)")]
+    [Header("Temperature Setup")]
     [SerializeField] private float tempPhysMinDegC = 0.0f;
     [SerializeField] private float tempPhysMaxDegC = 40.0f;
     [Tooltip("Reference temperature used for initialization and buoyancy [degC].")]
     [SerializeField] private float referenceTemperatureDegCInput = 20.0f;
 
-    [Header("Stability / Scaling")]
-    [Tooltip("Mach number upper bound (0.10~0.30 recommended). targetWindSpeedLat = maxMach * csLat")]
-    [Range(0.10f, 0.30f), SerializeField] private float maxMach = 0.25f;
-
-    [Header("Tau Clamping (for stability)")]
-    [Range(0.53f, 1.0f), SerializeField] private float tauMin = 0.56f;
-    [Range(1.0f, 4.0f), SerializeField] private float tauMax = 4.00f;
-
-    [Header("Buoyancy Settings")]
-    [SerializeField] private float beta = 0.05f;
-    [SerializeField] private float gravity_y = -9.81f;
-
-    [Header("Turbulence Model")]
-    [SerializeField] private TurbulenceModel turbulenceModel = TurbulenceModel.Smagorinsky;
-    [Tooltip("Smagorinsky: Cs, WALE: Cw")]
-    [SerializeField] private float turbulenceModelConstant = 0.03f;
-    [Tooltip("Turbulent Prandtl number")]
-    [SerializeField] private float turbulentPrandtl = 0.7f;
-
-    [Header("Wall Function")]
-    [SerializeField] private bool wallFunctionEnabled = false;
-    [Tooltip("Target Kinetic Viscosity [m^2/s] (air ≈ 1.5e-5)")]
-    [SerializeField] private float nuPhysTarget = 1.5e-5f;
-    [Tooltip("Target Prandtl Number (air ≈ 0.71)")]
-    [SerializeField] private float prandtlTarget = 0.71f;
-
-    [Header("Adaptive Outlet rho Feedback")]
+    [Header("Boundary Auto Sync")]
     [SerializeField] private bool enableAdaptiveOutletRhoFeedback = true;
 
     [Tooltip("rho correction gain from density error: offset = gain * (1 - avgDensity)")]
@@ -113,8 +107,12 @@ public class SimulationController : Singleton<SimulationController>
     [Tooltip("Approximate VRAM budget in GB used only for warnings. 0 = auto detect from SystemInfo.")]
     [SerializeField] private float manualVramBudgetGB = 0.0f;
 
-    [Header("Runtime Controls")]
-    [SerializeField] private bool runSimulation = true;
+    [Header("Scene Cache (Auto)")]
+    private SimulationSceneCache sceneCache;
+    [SerializeField, ReadOnly] private bool sceneCacheReady = false;
+    [SerializeField, ReadOnly] private string sceneCacheStatus = "Not initialized";
+
+    [Header("Debug / Logging")]
     [SerializeField] private bool autoLogSummaryOnStart = true;
     [SerializeField] private bool autoLogSummaryOnSceneRefresh = false;
 
@@ -172,6 +170,34 @@ public class SimulationController : Singleton<SimulationController>
     [Header("Read-Only (Summary)")]
     [TextArea(10, 30)]
     [SerializeField, ReadOnly] private string latestSummary;
+    [TextArea(3, 8)]
+    [SerializeField, ReadOnly] private string caseSummary;
+    [TextArea(3, 8)]
+    [SerializeField, ReadOnly] private string boundarySummary;
+    [TextArea(3, 8)]
+    [SerializeField, ReadOnly] private string solverSummary;
+    [TextArea(3, 8)]
+    [SerializeField, ReadOnly] private string stabilitySummary;
+    [TextArea(3, 8)]
+    [SerializeField, ReadOnly] private string recommendationSummary;
+    [TextArea(3, 8)]
+    [SerializeField, ReadOnly] private string readinessSummary;
+    [SerializeField, ReadOnly] private SimulationHealthStatus stabilityStatus = SimulationHealthStatus.Warning;
+    [SerializeField, ReadOnly] private SimulationHealthStatus readinessStatus = SimulationHealthStatus.Warning;
+
+    [Header("Advanced LBM Parameters")]
+    [Tooltip("Lattice Mach number limit for LBM stability. Lower is usually more stable but slower.")]
+    [Range(0.10f, 0.30f), SerializeField] private float maxMach = 0.25f;
+    [Range(0.53f, 1.0f), SerializeField] private float tauMin = 0.56f;
+    [Range(1.0f, 4.0f), SerializeField] private float tauMax = 4.00f;
+
+    [Header("Advanced Solver Models")]
+    [SerializeField] private TurbulenceModel turbulenceModel = TurbulenceModel.Smagorinsky;
+    [Tooltip("Smagorinsky: Cs, WALE: Cw")]
+    [SerializeField] private float turbulenceModelConstant = 0.03f;
+    [Tooltip("Turbulent Prandtl number")]
+    [SerializeField] private float turbulentPrandtl = 0.7f;
+    [SerializeField] private bool wallFunctionEnabled = false;
 
     [Header("Read-Only (Estimated GPU Memory)")]
     [SerializeField, ReadOnly] private float estimatedDistributionBuffersMB = 0.0f;
@@ -241,6 +267,18 @@ public class SimulationController : Singleton<SimulationController>
     public float TempPhysMinDegC => tempPhysMinDegC;
     public float TempPhysMaxDegC => tempPhysMaxDegC;
     public bool IsSimulationRunning => runSimulation;
+    public SolverEasePreset SolverPreset => solverPreset;
+    public string SolverPresetName => solverPreset.ToString();
+    public SimulationHealthStatus StabilityStatus => stabilityStatus;
+    public SimulationHealthStatus ReadinessStatus => readinessStatus;
+    public string StabilityStatusText => stabilitySummary;
+    public string ReadinessStatusText => readinessSummary;
+    public float MachNumber => machNumber;
+    public float ReynoldsNumber => reynoldsNumberPhys;
+    public float PrandtlNumber => prandtlNumber;
+    public float TauF => tau_f;
+    public float TauT => tau_T;
+    public float MaxMachLimit => maxMach;
     public string CollisionModelName => "MRT";
     public string TurbulenceModelName => turbulenceModel.ToString();
     public float TurbulenceModelConstant => turbulenceModelConstant;
@@ -283,6 +321,13 @@ public class SimulationController : Singleton<SimulationController>
         None = 0,
         Smagorinsky = 1,
         WALE = 2
+    }
+
+    public void SetSimulationRunning(bool running)
+    {
+        runSimulation = running;
+        if (running)
+            targetTimeReached = false;
     }
 
     protected override void Awake()
@@ -405,6 +450,9 @@ public class SimulationController : Singleton<SimulationController>
         if (!runSimulation || _lbmSolver == null)
             return;
 
+        if (readinessStatus == SimulationHealthStatus.Invalid)
+            return;
+
         float nextSimulatedTimeSeconds = (stepCount + 1) * dtPhys;
 
         if (useTargetSimulationTime && nextSimulatedTimeSeconds > targetSimulationTimeSeconds)
@@ -513,6 +561,57 @@ public class SimulationController : Singleton<SimulationController>
         RefreshSummaryIfNeeded();
         CheckAndLogTimeConsistency(true);
         Debug.Log(latestSummary);
+    }
+
+    [ContextMenu("Apply Solver Preset")]
+    public void ApplySolverPreset()
+    {
+        switch (solverPreset)
+        {
+            case SolverEasePreset.FastPreview:
+                dxPhys = Mathf.Max(dxPhys, 0.05f);
+                maxMach = 0.25f;
+                logGrossVsEffectiveOutletArea = false;
+                logOutletRootCause = false;
+                break;
+
+            case SolverEasePreset.Balanced:
+                dxPhys = Mathf.Clamp(dxPhys, 0.01f, 0.05f);
+                maxMach = 0.20f;
+                logGrossVsEffectiveOutletArea = true;
+                logOutletRootCause = false;
+                break;
+
+            case SolverEasePreset.HighFidelity:
+                dxPhys = Mathf.Min(dxPhys, 0.01f);
+                maxMach = 0.15f;
+                logGrossVsEffectiveOutletArea = true;
+                logOutletRootCause = true;
+                break;
+
+            case SolverEasePreset.Custom:
+            default:
+                break;
+        }
+
+        scalingDirty = true;
+        solverRebuildRequired = true;
+        MarkSummaryDirty();
+        RefreshSummaryIfNeeded();
+    }
+
+    [ContextMenu("Check Run Readiness")]
+    public void PrintRunReadiness()
+    {
+        CheckRunReadiness();
+        RefreshSummaryIfNeeded();
+
+        if (readinessStatus == SimulationHealthStatus.Invalid)
+            Debug.LogError(readinessSummary);
+        else if (readinessStatus == SimulationHealthStatus.Warning)
+            Debug.LogWarning(readinessSummary);
+        else
+            Debug.Log(readinessSummary);
     }
 
     [ContextMenu("Print Simulation Summary")]
@@ -758,12 +857,243 @@ public class SimulationController : Singleton<SimulationController>
         MarkSummaryDirty();
     }
 
+    public SimulationHealthStatus CheckRunReadiness()
+    {
+        if (sceneCache == null)
+            sceneCache = GetComponent<SimulationSceneCache>();
+
+        if (sceneCache != null &&
+            (sceneCache.IsDirty || sceneCache.ZouHeBoxes == null || sceneCache.ZouHeBoxes.Length == 0))
+        {
+            sceneCache.ForceRefresh();
+            UpdateSceneCacheStatus();
+        }
+
+        var errors = new StringBuilder();
+        var warnings = new StringBuilder();
+
+        if (domain == null)
+            AppendReadinessLine(errors, "Domain object is missing.");
+
+        if (lbmComputeShader == null)
+            AppendReadinessLine(errors, "LBM compute shader is missing.");
+
+        if (dxPhys <= 0.0f)
+            AppendReadinessLine(errors, "dxPhys must be greater than zero.");
+
+        if (tempPhysMaxDegC <= tempPhysMinDegC)
+            AppendReadinessLine(errors, "Temperature max must be greater than temperature min.");
+
+        if (dtPhys <= 0.0f)
+            AppendReadinessLine(errors, "dtPhys is not positive. Check dxPhys and reference velocity.");
+
+        if (nx <= 1 || ny <= 1 || nz <= 1)
+            AppendReadinessLine(errors, $"Grid resolution is too small: {nx} x {ny} x {nz}.");
+
+        if (GetCellCount64() <= 0)
+            AppendReadinessLine(errors, "Total cell count is invalid.");
+
+        if (!estimatedSingleBufferSafe)
+            AppendReadinessLine(errors, "A single distribution buffer exceeds the Unity GraphicsBuffer limit.");
+
+        if (tau_f < 0.53f || tau_T < 0.53f)
+            AppendReadinessLine(errors, $"Relaxation time is invalid: tau_f={tau_f:F4}, tau_T={tau_T:F4}.");
+
+        if (machNumber > 0.30f)
+            AppendReadinessLine(errors, $"Mach number is too high for this setup: Ma={machNumber:F4}.");
+        else if (machNumber > 0.15f)
+            AppendReadinessLine(warnings, $"Mach number is high: Ma={machNumber:F4}. Lower maxMach for better stability.");
+
+        if (tau_f < 0.55f || tau_T < 0.55f)
+            AppendReadinessLine(warnings, $"tau is close to the lower stability limit: tau_f={tau_f:F4}, tau_T={tau_T:F4}.");
+
+        if (estimatedTotalGpuMemoryMB > 0.0f)
+        {
+            float vramBudgetGB = manualVramBudgetGB > 0f
+                ? manualVramBudgetGB
+                : SystemInfo.graphicsMemorySize / 1024f;
+            float warnBudgetMB = Mathf.Max(vramBudgetGB, 0.0f) * 1024.0f * Mathf.Clamp(vramWarningRatio, 0.1f, 1.0f);
+            if (warnBudgetMB > 0.0f && estimatedTotalGpuMemoryMB > warnBudgetMB)
+                AppendReadinessLine(warnings, $"Estimated GPU memory is high: {estimatedTotalGpuMemoryMB:F1} MiB.");
+        }
+
+        int inletCount = 0;
+        int outletCount = 0;
+        bool hasBadPatch = false;
+        if (sceneCache != null && sceneCache.ZouHeBoxes != null)
+        {
+            foreach (var box in sceneCache.ZouHeBoxes)
+            {
+                if (box == null || !box.Power)
+                    continue;
+
+                if (box.PatchKind == LBMZouHeBox.Kind.Inlet)
+                    inletCount++;
+                else
+                    outletCount++;
+
+                if (box.PatchCellCount == 0)
+                    hasBadPatch = true;
+            }
+        }
+
+        if (inletCount == 0)
+            AppendReadinessLine(errors, "At least one inlet boundary is required.");
+
+        if (outletCount == 0)
+            AppendReadinessLine(errors, "At least one outlet boundary is required.");
+
+        if (hasBadPatch)
+            AppendReadinessLine(errors, "One or more boundary patches have zero cells.");
+
+        if (resultSampler == null)
+            AppendReadinessLine(warnings, "ResultSampler is missing. Results and CSV may not update.");
+
+        if (FindFirstObjectByType<SimulationMetricsFileLogger>() == null)
+            AppendReadinessLine(warnings, "SimulationMetricsFileLogger is missing. CSV output is disabled.");
+
+        readinessStatus = errors.Length > 0
+            ? SimulationHealthStatus.Invalid
+            : (warnings.Length > 0 ? SimulationHealthStatus.Warning : SimulationHealthStatus.OK);
+
+        readinessSummary =
+            $"=== Run Readiness ===\n" +
+            $"Status : {readinessStatus}\n" +
+            $"Inlets : {inletCount}, Outlets : {outletCount}\n" +
+            $"Errors :\n{(errors.Length > 0 ? errors.ToString() : "  None\n")}" +
+            $"Warnings :\n{(warnings.Length > 0 ? warnings.ToString() : "  None\n")}";
+
+        return readinessStatus;
+    }
+
+    private void UpdatePowerFlowSummaries()
+    {
+        UpdateStabilitySummary();
+        CheckRunReadiness();
+
+        long cellCount = GetCellCount64();
+        caseSummary =
+            "=== Case Summary ===\n" +
+            $"Preset          : {solverPreset}\n" +
+            $"Domain [m]      : {lx:F3} x {ly:F3} x {lz:F3}\n" +
+            $"Cell size [m]   : {dxPhys:F5}\n" +
+            $"Grid            : {nx} x {ny} x {nz} ({cellCount:N0} cells)\n" +
+            $"Estimated memory: {estimatedTotalGpuMemoryMB:F1} MiB\n" +
+            $"Simulation time : {simulatedTimeSeconds:F3} s";
+
+        solverSummary =
+            "=== Solver Summary ===\n" +
+            $"dtPhys [s]      : {dtPhys:E6}\n" +
+            $"maxMach limit   : {maxMach:F3}\n" +
+            $"Mach            : {machNumber:F4}\n" +
+            $"tau_f / tau_T   : {tau_f:F4} / {tau_T:F4}\n" +
+            $"nu / alpha phys : {nuPhys:E4} / {alphaPhys:E4}\n" +
+            $"Re / Pr         : {reynoldsNumberPhys:E4} / {prandtlNumber:F4}\n" +
+            $"Collision       : MRT, {turbulenceModel}";
+
+        boundarySummary = BuildBoundarySummaryText();
+        recommendationSummary = BuildRecommendationSummary();
+    }
+
+    private void UpdateStabilitySummary()
+    {
+        bool invalid =
+            dxPhys <= 0.0f ||
+            dtPhys <= 0.0f ||
+            tau_f < 0.53f ||
+            tau_T < 0.53f ||
+            machNumber > 0.30f;
+
+        bool warning =
+            machNumber > 0.15f ||
+            tau_f < 0.55f ||
+            tau_T < 0.55f ||
+            !estimatedSingleBufferSafe;
+
+        stabilityStatus = invalid
+            ? SimulationHealthStatus.Invalid
+            : (warning ? SimulationHealthStatus.Warning : SimulationHealthStatus.OK);
+
+        stabilitySummary =
+            "=== Stability Summary ===\n" +
+            $"Status          : {stabilityStatus}\n" +
+            $"Mach            : {machNumber:F4} (recommended <= 0.15)\n" +
+            $"tau_f / tau_T   : {tau_f:F4} / {tau_T:F4} (recommended >= 0.55)\n" +
+            $"Pr              : {prandtlNumber:F4}\n" +
+            $"Buffer safe     : {estimatedSingleBufferSafe}";
+    }
+
+    private string BuildBoundarySummaryText()
+    {
+        var sb = new StringBuilder(2048);
+        sb.AppendLine("=== Boundary Summary ===");
+
+        if (sceneCache == null || sceneCache.ZouHeBoxes == null || sceneCache.ZouHeBoxes.Length == 0)
+        {
+            sb.AppendLine("No Zou-He inlet/outlet boxes found.");
+            return sb.ToString();
+        }
+
+        int inletCount = 0;
+        int outletCount = 0;
+        float inletFlowAbs = 0.0f;
+        float outletArea = 0.0f;
+
+        foreach (var box in sceneCache.ZouHeBoxes)
+        {
+            if (box == null || !box.Power)
+                continue;
+
+            if (box.PatchKind == LBMZouHeBox.Kind.Inlet)
+            {
+                inletCount++;
+                inletFlowAbs += Mathf.Abs(box.GetFlowRatePhys(dxPhys));
+            }
+            else
+            {
+                outletCount++;
+                outletArea += box.PatchAreaPhys(dxPhys);
+            }
+
+            sb.AppendLine(box.GetSummaryText(dxPhys));
+        }
+
+        sb.Insert(0,
+            $"Inlets={inletCount}, Outlets={outletCount}, InletFlow={inletFlowAbs:F4} m3/s ({inletFlowAbs * 60.0f:F2} CMM), OutletArea={outletArea:F4} m2\n");
+
+        return sb.ToString();
+    }
+
+    private string BuildRecommendationSummary()
+    {
+        if (readinessStatus == SimulationHealthStatus.Invalid)
+            return "=== Recommendation ===\nFix Invalid readiness items before running.";
+
+        if (!estimatedSingleBufferSafe || estimatedTotalGpuMemoryMB > 4096.0f)
+            return "=== Recommendation ===\nUse FastPreview or increase dxPhys to reduce memory.";
+
+        if (machNumber > 0.15f)
+            return "=== Recommendation ===\nReduce maxMach or characteristic velocity for better LBM stability.";
+
+        if (readinessStatus == SimulationHealthStatus.Warning || stabilityStatus == SimulationHealthStatus.Warning)
+            return "=== Recommendation ===\nReady with warnings. Review stability and boundary summaries.";
+
+        return "=== Recommendation ===\nReady to run.";
+    }
+
+    private static void AppendReadinessLine(StringBuilder sb, string message)
+    {
+        sb.Append("  - ");
+        sb.AppendLine(message);
+    }
+
     private void RefreshSummaryIfNeeded()
     {
         if (!summaryDirty)
             return;
 
         var zhBoxes = (sceneCache != null) ? sceneCache.ZouHeBoxes : null;
+        UpdatePowerFlowSummaries();
 
         latestSummary = SimulationDiagnostics.BuildSimulationSummary(
             new Vector3(lx, ly, lz),
@@ -787,6 +1117,15 @@ public class SimulationController : Singleton<SimulationController>
             wallFunctionEnabled,
             zhBoxes
         );
+
+        latestSummary =
+            caseSummary +
+            "\n\n" + boundarySummary +
+            "\n\n" + solverSummary +
+            "\n\n" + stabilitySummary +
+            "\n\n" + readinessSummary +
+            "\n\n" + recommendationSummary +
+            "\n\n" + latestSummary;
 
         latestSummary +=
             $"\n\n=== Temperature Mapping ===\n" +
@@ -829,6 +1168,12 @@ public class SimulationController : Singleton<SimulationController>
         if (sceneCache == null)
         {
             Debug.LogError("SimulationController: sceneCache is missing.");
+            return;
+        }
+
+        if (CheckRunReadiness() == SimulationHealthStatus.Invalid)
+        {
+            Debug.LogError("[SimulationController] Solver rebuild blocked by invalid readiness.\n" + readinessSummary);
             return;
         }
 

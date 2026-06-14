@@ -50,31 +50,31 @@ public class TemperatureGraphPresenter : MonoBehaviour
     private void Start()
     {
         if (titleText != null)
-            titleText.text = "Averaged Room Temperature";
+            titleText.text = "Room / Inlet / Outlet Temperature";
 
         if (inletLegendText != null)
         {
-            inletLegendText.text = "Inlet Temperature";
+            inletLegendText.text = "Inlet";
             inletLegendText.color = Color.blue;
         }
 
         if (outletLegendText != null)
         {
-            outletLegendText.text = "Outlet Temperature";
+            outletLegendText.text = "Outlet";
             outletLegendText.color = Color.red;
         }
 
         if (avgLegendText != null)
         {
-            avgLegendText.text = "Averaged Room Temperature";
+            avgLegendText.text = "Room Avg";
             avgLegendText.color = Color.black;
         }
 
         if (xAxisTitleText != null)
-            xAxisTitleText.text = "Actual Time (sec)";
+            xAxisTitleText.text = "Simulation Time (s)";
 
         if (yAxisTitleText != null)
-            yAxisTitleText.text = "Actual Temperature (°C)";
+            yAxisTitleText.text = "Temperature (degC)";
 
         ResetGraphSamplingSchedule();
         UpdateAxisLabels();
@@ -171,9 +171,9 @@ public class TemperatureGraphPresenter : MonoBehaviour
 
         currentValuesText.text =
             $"t = {timeSec:F1} s\n" +
-            $"Inlet : {inlet:F2} °C\n" +
-            $"Outlet: {outlet:F2} °C\n" +
-            $"Avg   : {avg:F2} °C";
+            $"Inlet   : {inlet:F2} degC\n" +
+            $"Outlet  : {outlet:F2} degC\n" +
+            $"Room Avg: {avg:F2} degC";
     }
 
     [ContextMenu("Clear Graph")]

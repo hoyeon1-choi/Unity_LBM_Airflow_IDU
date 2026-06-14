@@ -6,6 +6,8 @@ using UnityEngine.Rendering;
 
 public class SimulationResultSampler : MonoBehaviour
 {
+    private const float CsLat = 0.5773502691896258f;
+
     public enum ReadbackMode
     {
         FullMetrics = 0,
@@ -19,6 +21,9 @@ public class SimulationResultSampler : MonoBehaviour
     [SerializeField] private bool enableSampling = true;
     [SerializeField] private float sampleIntervalSeconds = 2.0f;
     [SerializeField] private bool logMetricsToConsole = false;
+    [Tooltip("Keep this enabled for user-facing result metrics. It upgrades old scenes saved as TemperatureOnly to FullMetrics so flow and density diagnostics are available.")]
+    [SerializeField] private bool requireFlowDiagnostics = true;
+    [Tooltip("FullMetrics reads velocity/rho for flow, Mach, density and mass residual. TemperatureOnly is faster but only valid for temperature graph/result values.")]
     [SerializeField] private ReadbackMode readbackMode = ReadbackMode.FullMetrics;
 
     [Header("Read-Only Metrics")]
@@ -28,6 +33,7 @@ public class SimulationResultSampler : MonoBehaviour
 
     [Header("Readback Debug")]
     [SerializeField, ReadOnly] private string activeReadbackMode = "";
+    [SerializeField, ReadOnly] private string readbackModeStatus = "";
 
     private Coroutine _samplingRoutine;
     private bool _requestInFlight = false;
@@ -36,6 +42,8 @@ public class SimulationResultSampler : MonoBehaviour
 
     private void Awake()
     {
+        NormalizeReadbackMode();
+
         if (simulationController == null)
             simulationController = FindFirstObjectByType<SimulationController>();
 
@@ -45,11 +53,19 @@ public class SimulationResultSampler : MonoBehaviour
 
     private void OnEnable()
     {
+        NormalizeReadbackMode();
         ResetSamplingSchedule();
 
         if (_samplingRoutine == null)
             _samplingRoutine = StartCoroutine(SamplingLoop());
     }
+
+#if UNITY_EDITOR
+    private void OnValidate()
+    {
+        NormalizeReadbackMode();
+    }
+#endif
 
     private void OnDisable()
     {
@@ -86,6 +102,24 @@ public class SimulationResultSampler : MonoBehaviour
         TryRequestSampling(force: true);
     }
 
+    [ContextMenu("Use Full Metrics Readback")]
+    public void UseFullMetricsReadback()
+    {
+        requireFlowDiagnostics = true;
+        readbackMode = ReadbackMode.FullMetrics;
+        UpdateReadbackModeStatus();
+        ResetSamplingSchedule();
+    }
+
+    [ContextMenu("Use Temperature Only Readback")]
+    public void UseTemperatureOnlyReadback()
+    {
+        requireFlowDiagnostics = false;
+        readbackMode = ReadbackMode.TemperatureOnly;
+        UpdateReadbackModeStatus();
+        ResetSamplingSchedule();
+    }
+
     private void TryRequestSamplingBySimulatedTime()
     {
         if (simulationController == null)
@@ -107,6 +141,7 @@ public class SimulationResultSampler : MonoBehaviour
 
     private bool TryRequestSampling(bool force = false)
     {
+        NormalizeReadbackMode();
         activeReadbackMode = readbackMode.ToString();
 
         if (_requestInFlight)
@@ -137,6 +172,7 @@ public class SimulationResultSampler : MonoBehaviour
         if (readbackMode == ReadbackMode.FullMetrics && solver.VelocityRhoBuffer == null)
         {
             latestMetrics.statusMessage = "VelocityRhoBuffer is not ready.";
+            readbackModeStatus = "FullMetrics requested, but VelocityRhoBuffer is not ready.";
             return false;
         }
 
@@ -165,6 +201,23 @@ public class SimulationResultSampler : MonoBehaviour
         }
 
         return true;
+    }
+
+    private void NormalizeReadbackMode()
+    {
+        if (requireFlowDiagnostics && readbackMode == ReadbackMode.TemperatureOnly)
+            readbackMode = ReadbackMode.FullMetrics;
+
+        UpdateReadbackModeStatus();
+    }
+
+    private void UpdateReadbackModeStatus()
+    {
+        activeReadbackMode = readbackMode.ToString();
+
+        readbackModeStatus = readbackMode == ReadbackMode.FullMetrics
+            ? "FullMetrics: temperature, velocity, density, flow, Mach and mass residual are sampled."
+            : "TemperatureOnly: flow, velocity, density, Mach and mass residual are unavailable.";
     }
 
     private IEnumerator RequestFullMetricsCoroutine(
@@ -324,6 +377,8 @@ public class SimulationResultSampler : MonoBehaviour
             return;
         }
 
+        PopulateCaseContext();
+
         uint nx = simulationController.Nx;
         uint ny = simulationController.Ny;
         uint nz = simulationController.Nz;
@@ -407,7 +462,10 @@ public class SimulationResultSampler : MonoBehaviour
             latestMetrics.avgDensity = avgRho;
             latestMetrics.densityStdDev = Mathf.Sqrt(rhoVar);
             latestMetrics.massResidualNormalized = Mathf.Abs(avgRho - 1.0f);
+            latestMetrics.hasValidDensityDiagnostic = true;
+#pragma warning disable 0618
             latestMetrics.averageKineticEnergyLat = (float)(kineticSum / roomCount);
+#pragma warning restore 0618
             latestMetrics.maxSpeedLat = maxSpeedLat;
 
             latestMetrics.avgRoomTemperatureDegC =
@@ -425,6 +483,11 @@ public class SimulationResultSampler : MonoBehaviour
                 latestMetrics.roomTemperatureStdDevRaw * tempScaleDegC;
 
             latestMetrics.maxSpeedPhys = LatticeSpeedToPhysical(maxSpeedLat);
+            latestMetrics.maxMach = maxSpeedLat / CsLat;
+            latestMetrics.hasValidVelocityDiagnostic = true;
+#pragma warning disable 0618
+            latestMetrics.machMax = latestMetrics.maxMach;
+#pragma warning restore 0618
         }
 
         LBMZouHeBox[] boxes = FindObjectsByType<LBMZouHeBox>(FindObjectsSortMode.InstanceID);
@@ -528,6 +591,7 @@ public class SimulationResultSampler : MonoBehaviour
             latestMetrics.inletAverageNormalSpeedPhys = (float)(inletNormalSpeedPhysSum / inletCount);
             latestMetrics.inletFlowRatePhysSigned = (float)inletFlowRateSignedSum;
             latestMetrics.inletFlowRatePhysAbs = Mathf.Abs(latestMetrics.inletFlowRatePhysSigned);
+            latestMetrics.inletFlowRateCMM = latestMetrics.inletFlowRatePhysAbs * 60.0f;
         }
 
         latestMetrics.hasValidOutletAverage = outletCount > 0;
@@ -544,6 +608,7 @@ public class SimulationResultSampler : MonoBehaviour
             latestMetrics.outletAverageNormalSpeedPhys = (float)(outletNormalSpeedPhysSum / outletCount);
             latestMetrics.outletFlowRatePhysSigned = (float)outletFlowRateSignedSum;
             latestMetrics.outletFlowRatePhysAbs = Mathf.Abs(latestMetrics.outletFlowRatePhysSigned);
+            latestMetrics.outletFlowRateCMM = latestMetrics.outletFlowRatePhysAbs * 60.0f;
 
             float outletVarRaw = (float)math.max(
                 0.0,
@@ -587,6 +652,11 @@ public class SimulationResultSampler : MonoBehaviour
                 latestMetrics.netFlowRatePhysSigned / denom;
         }
 
+        latestMetrics.massConservationStatus = BuildMassConservationStatus(
+            latestMetrics.hasValidFlowDiagnostic,
+            latestMetrics.massResidualNormalized,
+            latestMetrics.relativeFlowImbalance);
+
         if (clampData.Length >= 4)
         {
             latestMetrics.thermalInletClampCount = clampData[0];
@@ -611,6 +681,9 @@ public class SimulationResultSampler : MonoBehaviour
             latestMetrics.statusMessage = "SimulationController is missing.";
             return;
         }
+
+        PopulateCaseContext();
+        latestMetrics.massConservationStatus = "Density unavailable in temperature-only mode.";
 
         uint nx = simulationController.Nx;
         uint ny = simulationController.Ny;
@@ -806,6 +879,35 @@ public class SimulationResultSampler : MonoBehaviour
 
         latestMetrics.statusMessage =
             $"Sampled at t={simulationController.SimulatedTimeSeconds:F3}s (temperature-only)";
+    }
+
+    private void PopulateCaseContext()
+    {
+        latestMetrics.stepCount = simulationController.StepCount;
+        latestMetrics.simulationTimeSeconds = simulationController.SimulatedTimeSeconds;
+        latestMetrics.dtPhys = simulationController.DtPhys;
+        latestMetrics.preset = simulationController.SolverPresetName;
+        latestMetrics.readbackMode = readbackMode.ToString();
+        latestMetrics.tauF = simulationController.TauF;
+        latestMetrics.tauT = simulationController.TauT;
+        latestMetrics.reynoldsNumber = simulationController.ReynoldsNumber;
+        latestMetrics.prandtlNumber = simulationController.PrandtlNumber;
+        latestMetrics.stabilityStatus = simulationController.StabilityStatus.ToString();
+        latestMetrics.readinessStatus = simulationController.ReadinessStatus.ToString();
+    }
+
+    private static string BuildMassConservationStatus(
+        bool hasFlowDiagnostic,
+        float massResidualNormalized,
+        float relativeFlowImbalance)
+    {
+        if (!hasFlowDiagnostic)
+            return "Flow diagnostic unavailable.";
+
+        if (massResidualNormalized > 1e-2f || Mathf.Abs(relativeFlowImbalance) > 0.05f)
+            return "Warning: review density residual or inlet/outlet flow balance.";
+
+        return "OK";
     }
 
     private float LatticeSpeedToPhysical(float speedLat)

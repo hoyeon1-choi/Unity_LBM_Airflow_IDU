@@ -52,13 +52,13 @@ public class TemperatureGraphGraphic : MaskableGraphic
     protected override void Awake()
     {
         base.Awake();
-        _inletSeries.name = "Inlet Temperature";
+        _inletSeries.name = "Inlet";
         _inletSeries.color = inletColor;
 
-        _outletSeries.name = "Outlet Temperature";
+        _outletSeries.name = "Outlet";
         _outletSeries.color = outletColor;
 
-        _avgSeries.name = "Averaged Room Temperature";
+        _avgSeries.name = "Room Avg";
         _avgSeries.color = averageColor;
     }
 

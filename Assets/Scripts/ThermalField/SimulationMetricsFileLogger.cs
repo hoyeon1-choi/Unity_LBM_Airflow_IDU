@@ -271,6 +271,9 @@ public class SimulationMetricsFileLogger : MonoBehaviour
         if (!m.hasValidRoomAverage || !m.hasValidInletAverage || !m.hasValidOutletAverage)
             return false;
 
+        if (!m.hasValidVelocityDiagnostic || !m.hasValidFlowDiagnostic || !m.hasValidDensityDiagnostic)
+            return false;
+
         string status = m.statusMessage ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(status))
@@ -315,86 +318,32 @@ public class SimulationMetricsFileLogger : MonoBehaviour
             "step_count",
             "sim_time_sec",
             "dt_phys",
-            "graph_inlet_temp_degC",
-            "graph_outlet_temp_degC",
-            "graph_avg_room_temp_degC",
+            "preset",
+            "room_avg_temp_degC",
+            "room_min_temp_degC",
+            "room_max_temp_degC",
             "room_temp_stddev_degC",
-            "outlet_temp_stddev_degC",
-            "inlet_avg_speed_phys",
-            "outlet_avg_speed_phys",
-            "inlet_normal_speed_phys",
-            "outlet_normal_speed_phys",
-            "inlet_flow_signed_m3ps",
-            "outlet_flow_signed_m3ps",
-            "inlet_flow_abs_m3ps",
-            "outlet_flow_abs_m3ps",
-            "net_flow_signed_m3ps",
+            "inlet_avg_temp_degC",
+            "outlet_avg_temp_degC",
+            "inlet_flow_m3ps",
+            "outlet_flow_m3ps",
+            "inlet_flow_cmm",
+            "outlet_flow_cmm",
             "relative_flow_imbalance",
-            "thermal_inlet_clamp_count",
-            "thermal_outlet_clamp_count",
-            "fluid_inlet_clamp_count",
-            "fluid_outlet_clamp_count",
             "max_speed_phys",
+            "max_mach",
             "avg_density",
             "density_stddev",
             "mass_residual_normalized",
-            "avg_kinetic_energy_lat",
-            "fluid_cell_count",
-            "rack_cell_count",
-            "inlet_sample_count",
-            "outlet_sample_count",
+            "stability_status",
+            "readiness_status",
             "status"
         );
     }
 
     private string BuildSummaryHeader()
     {
-        return string.Join(",",
-            "timestamp_local",
-            "experiment_tag",
-            "collision_model",
-            "turbulence_model",
-            "turbulence_model_constant",
-            "turbulent_prandtl",
-            "wall_function_enabled",
-            "step_count",
-            "sim_time_sec",
-            "dt_phys",
-            "grid_nx",
-            "grid_ny",
-            "grid_nz",
-            "avg_room_temp_degC",
-            "min_room_temp_degC",
-            "max_room_temp_degC",
-            "room_temp_stddev_degC",
-            "inlet_avg_temp_degC",
-            "outlet_avg_temp_degC",
-            "outlet_temp_stddev_degC",
-            "inlet_avg_speed_phys",
-            "outlet_avg_speed_phys",
-            "inlet_normal_speed_phys",
-            "outlet_normal_speed_phys",
-            "inlet_flow_signed_m3ps",
-            "outlet_flow_signed_m3ps",
-            "inlet_flow_abs_m3ps",
-            "outlet_flow_abs_m3ps",
-            "net_flow_signed_m3ps",
-            "relative_flow_imbalance",
-            "thermal_inlet_clamp_count",
-            "thermal_outlet_clamp_count",
-            "fluid_inlet_clamp_count",
-            "fluid_outlet_clamp_count",
-            "max_speed_phys",
-            "avg_density",
-            "density_stddev",
-            "mass_residual_normalized",
-            "avg_kinetic_energy_lat",
-            "fluid_cell_count",
-            "rack_cell_count",
-            "inlet_sample_count",
-            "outlet_sample_count",
-            "status"
-        );
+        return BuildTimeSeriesHeader();
     }
 
     private string BuildTimeSeriesRow(SimulationResultMetrics m)
@@ -402,89 +351,35 @@ public class SimulationMetricsFileLogger : MonoBehaviour
         return string.Join(",",
             Csv(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)),
             Csv(experimentTag),
-            Csv(simulationController.StepCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(simulationController.SimulatedTimeSeconds.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(simulationController.DtPhys.ToString("E6", CultureInfo.InvariantCulture)),
-            Csv(m.inletAverageTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletAverageTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.avgRoomTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.roomTemperatureStdDevDegC.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletTemperatureStdDevDegC.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.inletAverageSpeedPhys.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletAverageSpeedPhys.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.inletAverageNormalSpeedPhys.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletAverageNormalSpeedPhys.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.inletFlowRatePhysSigned.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletFlowRatePhysSigned.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.inletFlowRatePhysAbs.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletFlowRatePhysAbs.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.netFlowRatePhysSigned.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.relativeFlowImbalance.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.thermalInletClampCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.thermalOutletClampCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.fluidInletClampCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.fluidOutletClampCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.maxSpeedPhys.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.avgDensity.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.densityStdDev.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.massResidualNormalized.ToString("E6", CultureInfo.InvariantCulture)),
-            Csv(m.averageKineticEnergyLat.ToString("E6", CultureInfo.InvariantCulture)),
-            Csv(m.fluidCellCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.rackCellCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.inletSampleCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.outletSampleCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.statusMessage ?? "")
-        );
-    }
-
-    private string BuildSummaryRow(SimulationResultMetrics m)
-    {
-        return string.Join(",",
-            Csv(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)),
-            Csv(experimentTag),
-            Csv(simulationController.CollisionModelName),
-            Csv(simulationController.TurbulenceModelName),
-            Csv(simulationController.TurbulenceModelConstant.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(simulationController.TurbulentPrandtl.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(simulationController.WallFunctionEnabled.ToString()),
-            Csv(simulationController.StepCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(simulationController.SimulatedTimeSeconds.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(simulationController.DtPhys.ToString("E6", CultureInfo.InvariantCulture)),
-            Csv(simulationController.Nx.ToString(CultureInfo.InvariantCulture)),
-            Csv(simulationController.Ny.ToString(CultureInfo.InvariantCulture)),
-            Csv(simulationController.Nz.ToString(CultureInfo.InvariantCulture)),
+            Csv(m.stepCount.ToString(CultureInfo.InvariantCulture)),
+            Csv(m.simulationTimeSeconds.ToString("F6", CultureInfo.InvariantCulture)),
+            Csv(m.dtPhys.ToString("E6", CultureInfo.InvariantCulture)),
+            Csv(m.preset ?? ""),
             Csv(m.avgRoomTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),
             Csv(m.minRoomTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),
             Csv(m.maxRoomTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),
             Csv(m.roomTemperatureStdDevDegC.ToString("F6", CultureInfo.InvariantCulture)),
             Csv(m.inletAverageTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),
             Csv(m.outletAverageTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletTemperatureStdDevDegC.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.inletAverageSpeedPhys.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletAverageSpeedPhys.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.inletAverageNormalSpeedPhys.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletAverageNormalSpeedPhys.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.inletFlowRatePhysSigned.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletFlowRatePhysSigned.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.inletFlowRatePhysAbs.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.outletFlowRatePhysAbs.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.netFlowRatePhysSigned.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.relativeFlowImbalance.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.thermalInletClampCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.thermalOutletClampCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.fluidInletClampCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.fluidOutletClampCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.maxSpeedPhys.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.avgDensity.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.densityStdDev.ToString("F6", CultureInfo.InvariantCulture)),
-            Csv(m.massResidualNormalized.ToString("E6", CultureInfo.InvariantCulture)),
-            Csv(m.averageKineticEnergyLat.ToString("E6", CultureInfo.InvariantCulture)),
-            Csv(m.fluidCellCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.rackCellCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.inletSampleCount.ToString(CultureInfo.InvariantCulture)),
-            Csv(m.outletSampleCount.ToString(CultureInfo.InvariantCulture)),
+            CsvFloat(m.hasValidFlowDiagnostic, m.inletFlowRatePhysAbs, "F6"),
+            CsvFloat(m.hasValidFlowDiagnostic, m.outletFlowRatePhysAbs, "F6"),
+            CsvFloat(m.hasValidFlowDiagnostic, m.inletFlowRateCMM, "F6"),
+            CsvFloat(m.hasValidFlowDiagnostic, m.outletFlowRateCMM, "F6"),
+            CsvFloat(m.hasValidFlowDiagnostic, m.relativeFlowImbalance, "F6"),
+            CsvFloat(m.hasValidVelocityDiagnostic, m.maxSpeedPhys, "F6"),
+            CsvFloat(m.hasValidVelocityDiagnostic, m.maxMach, "F6"),
+            CsvFloat(m.hasValidDensityDiagnostic, m.avgDensity, "F6"),
+            CsvFloat(m.hasValidDensityDiagnostic, m.densityStdDev, "F6"),
+            CsvFloat(m.hasValidDensityDiagnostic, m.massResidualNormalized, "E6"),
+            Csv(m.stabilityStatus ?? ""),
+            Csv(m.readinessStatus ?? ""),
             Csv(m.statusMessage ?? "")
         );
+    }
+
+    private string BuildSummaryRow(SimulationResultMetrics m)
+    {
+        return BuildTimeSeriesRow(m);
     }
 
     private void EnsureDirectoryExists(string filePath)
@@ -501,6 +396,13 @@ public class SimulationMetricsFileLogger : MonoBehaviour
 
         string escaped = s.Replace("\"", "\"\"");
         return $"\"{escaped}\"";
+    }
+
+    private static string CsvFloat(bool valid, float value, string format)
+    {
+        return valid
+            ? Csv(value.ToString(format, CultureInfo.InvariantCulture))
+            : Csv("");
     }
 
     private static string Sanitize(string input)

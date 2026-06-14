@@ -12,33 +12,57 @@ public class LBMZouHeBox : MonoBehaviour
     public enum Kind { Inlet, Outlet }
     public enum Axis { X, Y, Z }
     public enum Sign { Negative = -1, Positive = +1 }
+    public enum BoundaryInputMode
+    {
+        Velocity,
+        VolumeFlowRate,
+        PressureDensity,
+        AutoMassBalancedOutlet
+    }
 
-    [Header("Enable")]
+    public enum FlowRateInputUnit
+    {
+        CubicMetersPerSecond,
+        CMM
+    }
+
+    [Header("Boundary Type")]
     [SerializeField] private bool power = true;
     public bool Power => power;
 
-    [Header("Patch kind")]
     public Kind kind = Kind.Inlet;
+    [SerializeField] private BoundaryInputMode boundaryInputMode = BoundaryInputMode.Velocity;
 
-    [Header("Inlet settings (used only when Kind = Inlet)")]
+    [Header("Geometry / Patch Summary")]
+    [SerializeField, ReadOnly] private float patchAreaPhysCached = 0.0f;
+    [SerializeField, ReadOnly] private float targetFlowRateM3psCached = 0.0f;
+    [SerializeField, ReadOnly] private float targetFlowRateCMMCached = 0.0f;
+    [TextArea(4, 12)]
+    [SerializeField, ReadOnly] private string boundarySummary = "";
+
+    [Header("Inlet Settings")]
     [Tooltip("Physical inlet velocity vector [m/s] (World space). " +
              "This directly controls inlet direction without rotating the box.")]
     [SerializeField] private Vector3 windSpeedPhys = new Vector3(0f, 0f, -0.8f);
+    [SerializeField] private FlowRateInputUnit volumeFlowRateUnit = FlowRateInputUnit.CMM;
+    [SerializeField] private float volumeFlowRateM3ps = 0.1f;
+    [SerializeField] private float volumeFlowRateCMM = 6.0f;
 
+    [Header("Thermal Settings")]
     [Tooltip("Inlet physical temperature target [degC]. This is converted to LBM temperature before sending to solver.")]
     [SerializeField] private float inletTemperatureDegC = 20.0f;
 
     [Header("Computed Temperature (read-only)")]
     [SerializeField, ReadOnly] private float inletTemperatureLBM = 0.5f;
 
-    [Header("Outlet settings (used only when Kind = Outlet)")]
+    [Header("Outlet Settings")]
     [Tooltip("Outlet density target (pressure proxy).")]
     [SerializeField] private float rhoOut = 1.0f;
 
     [Header("Adaptive Outlet Feedback (read-only)")]
     [SerializeField, ReadOnly] private float adaptiveRhoOutOffset = 0.0f;
 
-    [Header("Mass-Flux Corrected Outlet")]
+    [Header("Advanced LBM Boundary")]
     [SerializeField] private bool enableMassFluxCorrection = true;
 
     [Tooltip("Target outlet normal speed [m/s] computed by controller.")]
@@ -77,6 +101,7 @@ public class LBMZouHeBox : MonoBehaviour
     public uint3 MaxIdx => maxIdx;
     public int PlaneIndex => planeIndex;
     public Kind PatchKind => kind;
+    public BoundaryInputMode InputMode => GetEffectiveBoundaryInputMode();
 
     public float3 InletVelocityLat { get; private set; } = new float3(0f, 0f, 0f);
     public float InletTemperatureDegC => inletTemperatureDegC;
@@ -86,8 +111,15 @@ public class LBMZouHeBox : MonoBehaviour
     public float AdaptiveRhoOutOffset => adaptiveRhoOutOffset;
     public float RhoOut => Mathf.Clamp(rhoOut + adaptiveRhoOutOffset, 0.90f, 1.10f);
 
-    public bool EnableMassFluxCorrection => enableMassFluxCorrection;
+    public bool EnableMassFluxCorrection =>
+        kind == Kind.Outlet &&
+        GetEffectiveBoundaryInputMode() == BoundaryInputMode.AutoMassBalancedOutlet &&
+        enableMassFluxCorrection;
     public float TargetOutletNormalSpeedPhys => targetOutletNormalSpeedPhys;
+    public float PatchAreaPhysCached => patchAreaPhysCached;
+    public float TargetFlowRateM3psCached => targetFlowRateM3psCached;
+    public float TargetFlowRateCMMCached => targetFlowRateCMMCached;
+    public string BoundarySummary => boundarySummary;
     public float OutletNormalVelocityBlend =>
         forceFullTargetNormalBlendForDebug ? 1.0f : outletNormalVelocityBlend;
     public float OutletRhoAnchor =>
@@ -119,11 +151,13 @@ public class LBMZouHeBox : MonoBehaviour
     public void SetTargetOutletNormalSpeedPhys(float value)
     {
         targetOutletNormalSpeedPhys = Mathf.Clamp(value, 0f, Mathf.Max(maxOutletNormalSpeedPhys, 0f));
+        UpdateOutletTargetFlowCache();
     }
 
     public void ResetTargetOutletNormalSpeedPhys()
     {
         targetOutletNormalSpeedPhys = 0.0f;
+        UpdateOutletTargetFlowCache();
     }
 
     public float3 WindSpeedPhys => new float3(windSpeedPhys.x, windSpeedPhys.y, windSpeedPhys.z);
@@ -147,6 +181,85 @@ public class LBMZouHeBox : MonoBehaviour
     public Axis NormalAxis => snappedAxis;
     public Sign NormalSign => snappedSign;
 
+    private BoundaryInputMode GetEffectiveBoundaryInputMode()
+    {
+        if (kind == Kind.Inlet)
+        {
+            if (boundaryInputMode == BoundaryInputMode.VolumeFlowRate)
+                return BoundaryInputMode.VolumeFlowRate;
+
+            return BoundaryInputMode.Velocity;
+        }
+
+        if (boundaryInputMode == BoundaryInputMode.PressureDensity)
+            return BoundaryInputMode.PressureDensity;
+
+        return enableMassFluxCorrection
+            ? BoundaryInputMode.AutoMassBalancedOutlet
+            : BoundaryInputMode.PressureDensity;
+    }
+
+    private void NormalizeBoundaryInputModeForKind()
+    {
+        if (kind == Kind.Inlet)
+        {
+            if (boundaryInputMode == BoundaryInputMode.PressureDensity ||
+                boundaryInputMode == BoundaryInputMode.AutoMassBalancedOutlet)
+            {
+                boundaryInputMode = BoundaryInputMode.Velocity;
+            }
+
+            return;
+        }
+
+        if (boundaryInputMode == BoundaryInputMode.Velocity ||
+            boundaryInputMode == BoundaryInputMode.VolumeFlowRate)
+        {
+            boundaryInputMode = enableMassFluxCorrection
+                ? BoundaryInputMode.AutoMassBalancedOutlet
+                : BoundaryInputMode.PressureDensity;
+        }
+    }
+
+    private void SyncFlowRateFields()
+    {
+        if (volumeFlowRateUnit == FlowRateInputUnit.CMM)
+            volumeFlowRateM3ps = Mathf.Max(0.0f, volumeFlowRateCMM / 60.0f);
+        else
+            volumeFlowRateCMM = Mathf.Max(0.0f, volumeFlowRateM3ps * 60.0f);
+    }
+
+    private void ApplyInletInputMode(float dx, float dt)
+    {
+        SyncFlowRateFields();
+
+        if (GetEffectiveBoundaryInputMode() == BoundaryInputMode.VolumeFlowRate)
+        {
+            float area = Mathf.Max(PatchAreaPhys(dx), 1e-8f);
+            float normalVelocity = volumeFlowRateM3ps / area;
+            windSpeedPhys = planeNormalWorld.normalized * normalVelocity;
+        }
+
+        float scale = (dx > 0f) ? (dt / dx) : 0f;
+        float3 uPhys = new float3(windSpeedPhys.x, windSpeedPhys.y, windSpeedPhys.z);
+        float3 uLat = uPhys * scale;
+
+        float uLatMax = 0.30f / math.sqrt(3.0f);
+        float mag = math.length(uLat);
+        if (mag > uLatMax && mag > 1e-8f)
+            uLat *= (uLatMax / mag);
+
+        InletVelocityLat = uLat;
+        targetFlowRateM3psCached = Mathf.Abs(GetFlowRatePhys(dx));
+        targetFlowRateCMMCached = targetFlowRateM3psCached * 60.0f;
+    }
+
+    private void UpdateOutletTargetFlowCache()
+    {
+        targetFlowRateM3psCached = targetOutletNormalSpeedPhys * patchAreaPhysCached;
+        targetFlowRateCMMCached = targetFlowRateM3psCached * 60.0f;
+    }
+
     void OnEnable()
     {
         Refresh();
@@ -156,6 +269,8 @@ public class LBMZouHeBox : MonoBehaviour
 #if UNITY_EDITOR
     void OnValidate()
     {
+        NormalizeBoundaryInputModeForKind();
+        SyncFlowRateFields();
         Refresh();
         NotifySceneCacheDirty();
     }
@@ -197,31 +312,6 @@ public class LBMZouHeBox : MonoBehaviour
         snappedSign = PickSign(faceNormalWorld, snappedAxis);
         planeNormalWorld = AxisToWorld(snappedAxis) * (snappedSign == Sign.Positive ? 1f : -1f);
 
-        if (kind == Kind.Inlet)
-        {
-            float dt = ctrl.DtPhys;
-            float dx = ctrl.CellSize;
-            float scale = (dx > 0f) ? (dt / dx) : 0f;
-
-            float3 uPhys = new float3(windSpeedPhys.x, windSpeedPhys.y, windSpeedPhys.z);
-            float3 uLat = uPhys * scale;
-
-            float uLatMax = 0.30f / math.sqrt(3.0f);
-            float mag = math.length(uLat);
-            if (mag > uLatMax && mag > 1e-8f)
-                uLat *= (uLatMax / mag);
-
-            InletVelocityLat = uLat;
-
-            float tLbm = ctrl.TemperatureDegCToLBM(inletTemperatureDegC);
-            inletTemperatureLBM = Mathf.Clamp01(tLbm);
-        }
-        else
-        {
-            InletVelocityLat = new float3(0f, 0f, 0f);
-            inletTemperatureLBM = 0f;
-        }
-
         float dxCell = ctrl.CellSize;
         uint Nx = ctrl.Nx;
         uint Ny = ctrl.Ny;
@@ -237,6 +327,24 @@ public class LBMZouHeBox : MonoBehaviour
             Nx, Ny, Nz,
             fluidOffset,
             out minIdx, out maxIdx, out planeIndex);
+
+        patchAreaPhysCached = PatchAreaPhys(dxCell);
+
+        if (kind == Kind.Inlet)
+        {
+            ApplyInletInputMode(dxCell, ctrl.DtPhys);
+
+            float tLbm = ctrl.TemperatureDegCToLBM(inletTemperatureDegC);
+            inletTemperatureLBM = Mathf.Clamp01(tLbm);
+        }
+        else
+        {
+            InletVelocityLat = new float3(0f, 0f, 0f);
+            inletTemperatureLBM = 0f;
+            UpdateOutletTargetFlowCache();
+        }
+
+        boundarySummary = BuildBoundarySummary(dxCell);
     }
 
     public uint PatchCellCount
@@ -278,10 +386,15 @@ public class LBMZouHeBox : MonoBehaviour
     public string GetSummaryText(float dx)
     {
         Refresh();
+        return boundarySummary;
+    }
 
+    private string BuildBoundarySummary(float dx)
+    {
         string axisText = $"{(snappedSign == Sign.Positive ? "+" : "-")}{snappedAxis}";
         string indexRangeText = $"x:[{minIdx.x},{maxIdx.x}] y:[{minIdx.y},{maxIdx.y}] z:[{minIdx.z},{maxIdx.z}]";
         float area = PatchAreaPhys(dx);
+        BoundaryInputMode effectiveMode = GetEffectiveBoundaryInputMode();
 
         if (kind == Kind.Inlet)
         {
@@ -290,30 +403,35 @@ public class LBMZouHeBox : MonoBehaviour
 
             return
                 $"[Inlet] {name}\n" +
+                $"  Input mode         : {effectiveMode}\n" +
                 $"  Plane / Normal     : {axisText}, planeIndex={planeIndex}\n" +
                 $"  Patch area         : {area:F6} m^2 ({PatchCellCount} cells)\n" +
                 $"  Velocity (phys)    : ({windSpeedPhys.x:F4}, {windSpeedPhys.y:F4}, {windSpeedPhys.z:F4}) m/s\n" +
                 $"  Velocity magnitude : {WindSpeedMagnitudePhys:F4} m/s\n" +
                 $"  Normal speed       : {normalSpeed:F4} m/s\n" +
-                $"  Flow rate          : {flowRate:F6} m^3/s\n" +
+                $"  Flow rate          : {flowRate:F6} m^3/s ({flowRate * 60.0f:F3} CMM)\n" +
                 $"  Velocity (lattice) : ({InletVelocityLat.x:F6}, {InletVelocityLat.y:F6}, {InletVelocityLat.z:F6})\n" +
                 $"  Inlet temp (degC)  : {inletTemperatureDegC:F2}\n" +
                 $"  Inlet temp (LBM)   : {inletTemperatureLBM:F6}\n" +
+                $"  Warning            : {(area <= 1e-12f ? "Patch area is zero." : "None")}\n" +
                 $"  Cell bounds        : {indexRangeText}";
         }
 
         return
             $"[Outlet] {name}\n" +
+            $"  Input mode         : {effectiveMode}\n" +
             $"  Plane / Normal     : {axisText}, planeIndex={planeIndex}\n" +
             $"  Patch area         : {area:F6} m^2 ({PatchCellCount} cells)\n" +
             $"  Outlet rho target  : {RhoOut:F6}\n" +
             $"  Base rho target    : {BaseRhoOut:F6}\n" +
             $"  Adaptive offset    : {adaptiveRhoOutOffset:+0.000000;-0.000000;0.000000}\n" +
-            $"  Flux correction    : {enableMassFluxCorrection}\n" +
+            $"  Flux correction    : {EnableMassFluxCorrection}\n" +
             $"  Target normal phys : {targetOutletNormalSpeedPhys:F4} m/s\n" +
             $"  Target normal lat  : {TargetOutletNormalSpeedLat:F6}\n" +
+            $"  Target flow         : {targetFlowRateM3psCached:F6} m^3/s ({targetFlowRateCMMCached:F3} CMM)\n" +
             $"  Normal blend       : {outletNormalVelocityBlend:F3}\n" +
             $"  Rho anchor         : {outletRhoAnchor:F3}\n" +
+            $"  Warning            : {(area <= 1e-12f ? "Patch area is zero." : "None")}\n" +
             $"  Force Full Blend    : {forceFullTargetNormalBlendForDebug}\n" +
             $"  Force Zero RhoAnchor: {forceZeroRhoAnchorForDebug}\n" +
             $"  Cell bounds        : {indexRangeText}";
