@@ -23,22 +23,30 @@ public enum SimulationHealthStatus
 public class SimulationController : Singleton<SimulationController>
 {
     [Header("User Setup")]
+    [SerializeField] private SolverEasePreset solverPreset = SolverEasePreset.Balanced;
     [Tooltip("Main run switch. Invalid readiness status will prevent stepping even if this is enabled.")]
     [SerializeField] private bool runSimulation = true;
 
     [Header("Domain / Resolution")]
     [SerializeField] private GameObject domain;
+
+    [Header("Simulation Parameters")]
     [SerializeField] private ComputeShader lbmComputeShader;
-    [Tooltip("Physical lattice cell size in meters. Smaller values increase resolution and memory cost.")]
-    [SerializeField] private float dxPhys = 0.01f;
 
-    [Header("Solver Preset")]
-    [SerializeField] private SolverEasePreset solverPreset = SolverEasePreset.Balanced;
+    [Header("Scene Cache (Auto)")]
+    private SimulationSceneCache sceneCache;
+    [SerializeField, ReadOnly] private bool sceneCacheReady = false;
+    [SerializeField, ReadOnly] private string sceneCacheStatus = "Not initialized";
 
-    [Header("Physical Properties")]
+    [Header("Reference Maximum Physical Velocity")]
     [Tooltip("Reference maximum physical velocity for scaling (m/s). " +
              "The maximum speed of AC Sources can not exceed this value")]
     [Range(1.0f, 10.0f), SerializeField] private float U_ref = 10.0f;
+
+    [Tooltip("Physical lattice cell size in meters. Smaller values increase resolution and memory cost.")]
+    [SerializeField] private float dxPhys = 0.01f;
+
+    [Header("Physical Properties")]
     [Tooltip("Target Kinetic Viscosity [m^2/s] (air ≈ 1.5e-5)")]
     [SerializeField] private float nuPhysTarget = 1.5e-5f;
     [Tooltip("Target Prandtl Number (air ≈ 0.71)")]
@@ -51,6 +59,20 @@ public class SimulationController : Singleton<SimulationController>
     [SerializeField] private float tempPhysMaxDegC = 40.0f;
     [Tooltip("Reference temperature used for initialization and buoyancy [degC].")]
     [SerializeField] private float referenceTemperatureDegCInput = 20.0f;
+
+    [Header("Advanced LBM Parameters")]
+    [Tooltip("Lattice Mach number limit for LBM stability. Lower is usually more stable but slower.")]
+    [Range(0.10f, 0.30f), SerializeField] private float maxMach = 0.25f;
+    [Range(0.53f, 1.0f), SerializeField] private float tauMin = 0.56f;
+    [Range(1.0f, 4.0f), SerializeField] private float tauMax = 4.00f;
+
+    [Header("Advanced Solver Models")]
+    [SerializeField] private TurbulenceModel turbulenceModel = TurbulenceModel.Smagorinsky;
+    [Tooltip("Smagorinsky: Cs, WALE: Cw")]
+    [SerializeField] private float turbulenceModelConstant = 0.03f;
+    [Tooltip("Turbulent Prandtl number")]
+    [SerializeField] private float turbulentPrandtl = 0.7f;
+    [SerializeField] private bool wallFunctionEnabled = false;
 
     [Header("Boundary Auto Sync")]
     [SerializeField] private bool enableAdaptiveOutletRhoFeedback = true;
@@ -106,11 +128,6 @@ public class SimulationController : Singleton<SimulationController>
     [Range(0.1f, 1.0f), SerializeField] private float vramWarningRatio = 0.7f;
     [Tooltip("Approximate VRAM budget in GB used only for warnings. 0 = auto detect from SystemInfo.")]
     [SerializeField] private float manualVramBudgetGB = 0.0f;
-
-    [Header("Scene Cache (Auto)")]
-    private SimulationSceneCache sceneCache;
-    [SerializeField, ReadOnly] private bool sceneCacheReady = false;
-    [SerializeField, ReadOnly] private string sceneCacheStatus = "Not initialized";
 
     [Header("Debug / Logging")]
     [SerializeField] private bool autoLogSummaryOnStart = true;
@@ -184,20 +201,6 @@ public class SimulationController : Singleton<SimulationController>
     [SerializeField, ReadOnly] private string readinessSummary;
     [SerializeField, ReadOnly] private SimulationHealthStatus stabilityStatus = SimulationHealthStatus.Warning;
     [SerializeField, ReadOnly] private SimulationHealthStatus readinessStatus = SimulationHealthStatus.Warning;
-
-    [Header("Advanced LBM Parameters")]
-    [Tooltip("Lattice Mach number limit for LBM stability. Lower is usually more stable but slower.")]
-    [Range(0.10f, 0.30f), SerializeField] private float maxMach = 0.25f;
-    [Range(0.53f, 1.0f), SerializeField] private float tauMin = 0.56f;
-    [Range(1.0f, 4.0f), SerializeField] private float tauMax = 4.00f;
-
-    [Header("Advanced Solver Models")]
-    [SerializeField] private TurbulenceModel turbulenceModel = TurbulenceModel.Smagorinsky;
-    [Tooltip("Smagorinsky: Cs, WALE: Cw")]
-    [SerializeField] private float turbulenceModelConstant = 0.03f;
-    [Tooltip("Turbulent Prandtl number")]
-    [SerializeField] private float turbulentPrandtl = 0.7f;
-    [SerializeField] private bool wallFunctionEnabled = false;
 
     [Header("Read-Only (Estimated GPU Memory)")]
     [SerializeField, ReadOnly] private float estimatedDistributionBuffersMB = 0.0f;
@@ -859,16 +862,6 @@ public class SimulationController : Singleton<SimulationController>
 
     public SimulationHealthStatus CheckRunReadiness()
     {
-        if (sceneCache == null)
-            sceneCache = GetComponent<SimulationSceneCache>();
-
-        if (sceneCache != null &&
-            (sceneCache.IsDirty || sceneCache.ZouHeBoxes == null || sceneCache.ZouHeBoxes.Length == 0))
-        {
-            sceneCache.ForceRefresh();
-            UpdateSceneCacheStatus();
-        }
-
         var errors = new StringBuilder();
         var warnings = new StringBuilder();
 
@@ -1212,7 +1205,7 @@ public class SimulationController : Singleton<SimulationController>
         if (domain == null)
             return;
 
-        if (tempPhysMaxDegC <= tempPhysMinDegC)
+         if (tempPhysMaxDegC <= tempPhysMinDegC)
             tempPhysMaxDegC = tempPhysMinDegC + 0.01f;
 
         T_ref = Mathf.Clamp01(TemperatureDegCToLBM(referenceTemperatureDegCInput));
