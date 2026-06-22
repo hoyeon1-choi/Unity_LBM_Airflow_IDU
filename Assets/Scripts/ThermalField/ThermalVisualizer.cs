@@ -11,9 +11,15 @@ public class ThermalVisualizer : MonoBehaviour
     [SerializeField] private float tempMinDegC = 0.0f;
     [SerializeField] private float tempMaxDegC = 40.0f;
 
+    [Header("Update Rate")]
+    [Tooltip("Real-time interval for updating contour slice material uniforms.")]
+    [Min(0.05f)]
+    [SerializeField] private float updateIntervalSeconds = 1.0f;
+
     private Material _sliceMaterial;
     private Matrix4x4 _unitizeMatrix;
     private bool _initialized;
+    private float _nextUpdateRealtime;
 
     private float _currentTempMinDegC = 0.0f;
     private float _currentTempMaxDegC = 40.0f;
@@ -36,6 +42,8 @@ public class ThermalVisualizer : MonoBehaviour
         _sliceMaterial.SetTexture("_VolumeTex", sc.LBMSolver.ThermalTexture);
 
         ApplyTemperatureScale(sc);
+        UpdateWorldToVolumeMatrix();
+        _nextUpdateRealtime = Time.unscaledTime + Mathf.Max(updateIntervalSeconds, 0.05f);
 
         _initialized = true;
     }
@@ -44,15 +52,22 @@ public class ThermalVisualizer : MonoBehaviour
     {
         if (!_initialized) return;
         if (_sliceMaterial == null || volumeTransform == null) return;
+        if (Time.unscaledTime < _nextUpdateRealtime) return;
 
-        Matrix4x4 worldToVolume = _unitizeMatrix * volumeTransform.worldToLocalMatrix;
-        _sliceMaterial.SetMatrix("_WorldToVolume", worldToVolume);
+        _nextUpdateRealtime = Time.unscaledTime + Mathf.Max(updateIntervalSeconds, 0.05f);
+        UpdateWorldToVolumeMatrix();
 
         var sc = SimulationController.Instance;
         if (sc != null)
         {
             ApplyTemperatureScale(sc);
         }
+    }
+
+    private void UpdateWorldToVolumeMatrix()
+    {
+        Matrix4x4 worldToVolume = _unitizeMatrix * volumeTransform.worldToLocalMatrix;
+        _sliceMaterial.SetMatrix("_WorldToVolume", worldToVolume);
     }
 
     private void ApplyTemperatureScale(SimulationController sc)

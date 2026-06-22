@@ -133,6 +133,16 @@ public class SimulationController : Singleton<SimulationController>
     [SerializeField] private bool autoLogSummaryOnStart = true;
     [SerializeField] private bool autoLogSummaryOnSceneRefresh = false;
 
+    [Header("Inspector / Plot Performance")]
+    [Tooltip("Minimum real-time interval for refreshing serialized read-only Inspector fields and large summary strings.")]
+    [Min(0.05f)]
+    [SerializeField] private float readOnlyInspectorUpdateIntervalSeconds = 1.0f;
+    [Tooltip("Minimum simulated-time interval for updating velocity/thermal contour volume textures.")]
+    [Min(0.0f)]
+    [SerializeField] private float contourPlotUpdateIntervalSeconds = 1.0f;
+    [SerializeField, ReadOnly] private int contourPlotUpdateIntervalSteps = 1;
+    [SerializeField, ReadOnly] private string readOnlyInspectorUpdateStatus = "Not updated";
+
     [Header("Simulation Stop Condition")]
     [SerializeField] private bool useTargetSimulationTime = false;
     [Tooltip("Automatically stop simulation when simulated physical time reaches this value [s].")]
@@ -235,6 +245,25 @@ public class SimulationController : Singleton<SimulationController>
     [SerializeField, ReadOnly] private uint fluidInletClampCount = 0u;
     [SerializeField, ReadOnly] private uint fluidOutletClampCount = 0u;
 
+    private ulong runtimeStepCount = 0;
+    private float runtimeSimulatedTimeSeconds = 0.0f;
+    private float runtimeSimulatedTimeMinutes = 0.0f;
+    private float nextReadOnlyInspectorUpdateRealtime = 0.0f;
+    private bool readOnlyInspectorDirty = true;
+    private float runtimeAdaptiveOutletRhoOffset = 0.0f;
+    private float runtimeAdaptiveFeedbackAvgDensity = 1.0f;
+    private float runtimeDebugInletFlowFromSampler = 0.0f;
+    private float runtimeDebugInletFlowFromBoxes = 0.0f;
+    private float runtimeDebugOutletAreaFromBoxes = 0.0f;
+    private bool runtimeDebugAnyOutletTargetApplied = false;
+    private int runtimeDebugOutletTargetAppliedPatchCount = 0;
+    private float runtimeEffectiveOutletAreaPhys = 0.0f;
+    private float runtimeGrossToEffectiveAreaRatio = 0.0f;
+    private float runtimeEffectiveOutletNormalSpeedFromFlow = 0.0f;
+    private float runtimeGrossAreaBasedTargetNormalSpeed = 0.0f;
+    private float runtimeComputedOutletTargetNormalSpeedPhys = 0.0f;
+    private float runtimeTotalOutletAreaPhys = 0.0f;
+
     private float lx, ly, lz;
     private bool scalingDirty = true;
     private bool solverRebuildRequired = true;
@@ -265,8 +294,8 @@ public class SimulationController : Singleton<SimulationController>
     public float Lz => lz;
     public float DtPhys => dtPhys;
     public float MaxWindSpeedPhys => maxWindSpeedPhys;
-    public ulong StepCount => stepCount;
-    public float SimulatedTimeSeconds => simulatedTimeSeconds;
+    public ulong StepCount => runtimeStepCount;
+    public float SimulatedTimeSeconds => runtimeSimulatedTimeSeconds;
     public float TempPhysMinDegC => tempPhysMinDegC;
     public float TempPhysMaxDegC => tempPhysMaxDegC;
     public bool IsSimulationRunning => runSimulation;
@@ -366,7 +395,7 @@ public class SimulationController : Singleton<SimulationController>
         ResetMassFluxCorrectedOutletTargets();
         ApplyMassFluxCorrectedOutletTarget();
         MarkSummaryDirty();
-        RefreshSummaryIfNeeded();
+        RefreshReadOnlyInspectorNow();
 
         CheckAndLogTimeConsistency(true);
 
@@ -413,7 +442,7 @@ public class SimulationController : Singleton<SimulationController>
             ApplyMassFluxCorrectedOutletTarget();
 
             MarkSummaryDirty();
-            RefreshSummaryIfNeeded();
+            RefreshReadOnlyInspectorNow();
             CheckAndLogTimeConsistency(true);
 
             scalingDirty = false;
@@ -439,7 +468,7 @@ public class SimulationController : Singleton<SimulationController>
             ApplyMassFluxCorrectedOutletTarget();
 
             MarkSummaryDirty();
-            RefreshSummaryIfNeeded();
+            RefreshReadOnlyInspectorNow();
             CheckAndLogTimeConsistency(true);
 
             if (autoLogSummaryOnSceneRefresh)
@@ -456,23 +485,22 @@ public class SimulationController : Singleton<SimulationController>
         if (readinessStatus == SimulationHealthStatus.Invalid)
             return;
 
-        float nextSimulatedTimeSeconds = (stepCount + 1) * dtPhys;
+        float nextSimulatedTimeSeconds = (runtimeStepCount + 1) * dtPhys;
 
         if (useTargetSimulationTime && nextSimulatedTimeSeconds > targetSimulationTimeSeconds)
         {
-            simulatedTimeSeconds = stepCount * dtPhys;
-            simulatedTimeMinutes = simulatedTimeSeconds / 60.0f;
+            runtimeSimulatedTimeSeconds = runtimeStepCount * dtPhys;
+            runtimeSimulatedTimeMinutes = runtimeSimulatedTimeSeconds / 60.0f;
             targetTimeReached = true;
             runSimulation = false;
 
             Debug.Log(
                 $"[SimulationController] Target simulation time reached before next step. " +
-                $"Target = {targetSimulationTimeSeconds:F3}s, Current = {simulatedTimeSeconds:F3}s. " +
+                $"Target = {targetSimulationTimeSeconds:F3}s, Current = {runtimeSimulatedTimeSeconds:F3}s. " +
                 "Simulation stopped automatically.");
 
-            PullLatestResultMetrics();
             MarkSummaryDirty();
-            RefreshSummaryIfNeeded();
+            RefreshReadOnlyInspectorNow();
             CheckAndLogTimeConsistency(true);
             return;
         }
@@ -486,12 +514,11 @@ public class SimulationController : Singleton<SimulationController>
         _lbmSolver.ResetDebugThermalClampCounters();
         _lbmSolver.Step();
 
-        stepCount++;
-        simulatedTimeSeconds = stepCount * dtPhys;
-        simulatedTimeMinutes = simulatedTimeSeconds / 60.0f;
-        targetTimeReached = false;
-
-        PullLatestResultMetrics();
+        runtimeStepCount++;
+        runtimeSimulatedTimeSeconds = runtimeStepCount * dtPhys;
+        runtimeSimulatedTimeMinutes = runtimeSimulatedTimeSeconds / 60.0f;
+        if (targetTimeReached)
+            targetTimeReached = false;
 
         ApplyMassFluxCorrectedOutletTarget();
         LogGrossVsEffectiveOutletAreaComparison();
@@ -502,8 +529,7 @@ public class SimulationController : Singleton<SimulationController>
         }
 
         MarkSummaryDirty();
-        RefreshSummaryIfNeeded();
-        CheckAndLogTimeConsistency();
+        RefreshReadOnlyInspectorIfDue();
     }
 
     void OnDestroy()
@@ -539,7 +565,7 @@ public class SimulationController : Singleton<SimulationController>
         ApplyMassFluxCorrectedOutletTarget();
 
         MarkSummaryDirty();
-        RefreshSummaryIfNeeded();
+        RefreshReadOnlyInspectorNow();
         CheckAndLogTimeConsistency(true);
         Debug.Log(latestSummary);
     }
@@ -561,7 +587,7 @@ public class SimulationController : Singleton<SimulationController>
         ApplyMassFluxCorrectedOutletTarget();
 
         MarkSummaryDirty();
-        RefreshSummaryIfNeeded();
+        RefreshReadOnlyInspectorNow();
         CheckAndLogTimeConsistency(true);
         Debug.Log(latestSummary);
     }
@@ -600,14 +626,15 @@ public class SimulationController : Singleton<SimulationController>
         scalingDirty = true;
         solverRebuildRequired = true;
         MarkSummaryDirty();
-        RefreshSummaryIfNeeded();
+        RefreshReadOnlyInspectorNow();
     }
 
     [ContextMenu("Check Run Readiness")]
     public void PrintRunReadiness()
     {
         CheckRunReadiness();
-        RefreshSummaryIfNeeded();
+        MarkSummaryDirty();
+        RefreshReadOnlyInspectorNow();
 
         if (readinessStatus == SimulationHealthStatus.Invalid)
             Debug.LogError(readinessSummary);
@@ -621,7 +648,7 @@ public class SimulationController : Singleton<SimulationController>
     public void PrintSimulationSummary()
     {
         MarkSummaryDirty();
-        RefreshSummaryIfNeeded();
+        RefreshReadOnlyInspectorNow();
         Debug.Log(latestSummary);
     }
 
@@ -634,19 +661,27 @@ public class SimulationController : Singleton<SimulationController>
     [ContextMenu("Reset Physical Time")]
     public void ResetPhysicalTime()
     {
+        runtimeStepCount = 0;
+        runtimeSimulatedTimeSeconds = 0.0f;
+        runtimeSimulatedTimeMinutes = 0.0f;
         stepCount = 0;
         simulatedTimeSeconds = 0.0f;
         simulatedTimeMinutes = 0.0f;
         expectedSimulatedTimeSeconds = 0.0f;
         simulatedTimeErrorSeconds = 0.0f;
         targetTimeReached = false;
-        computedOutletTargetNormalSpeedPhys = 0.0f;
-        totalOutletAreaPhys = 0.0f;
+        runtimeComputedOutletTargetNormalSpeedPhys = 0.0f;
+        runtimeTotalOutletAreaPhys = 0.0f;
         MarkSummaryDirty();
-        RefreshSummaryIfNeeded();
+        RefreshReadOnlyInspectorNow();
         CheckAndLogTimeConsistency(true);
         ResetAdaptiveOutletRhoFeedback();
         ResetMassFluxCorrectedOutletTargets();
+
+        if (resultSampler == null)
+            resultSampler = GetComponent<SimulationResultSampler>();
+
+        resultSampler?.ResetSamplingSchedule();
     }
 
     [ContextMenu("Force Sample Result Metrics")]
@@ -695,8 +730,8 @@ public class SimulationController : Singleton<SimulationController>
 
     private void CheckAndLogTimeConsistency(bool forceLog = false)
     {
-        expectedSimulatedTimeSeconds = stepCount * dtPhys;
-        simulatedTimeErrorSeconds = math.abs(expectedSimulatedTimeSeconds - simulatedTimeSeconds);
+        expectedSimulatedTimeSeconds = runtimeStepCount * dtPhys;
+        simulatedTimeErrorSeconds = math.abs(expectedSimulatedTimeSeconds - runtimeSimulatedTimeSeconds);
 
         if (!logTimeConsistency)
             return;
@@ -705,8 +740,8 @@ public class SimulationController : Singleton<SimulationController>
 
         if (!shouldLog && timeConsistencyLogIntervalSteps > 0)
         {
-            shouldLog = (stepCount > 0) &&
-                        (stepCount % (ulong)timeConsistencyLogIntervalSteps == 0);
+            shouldLog = (runtimeStepCount > 0) &&
+                        (runtimeStepCount % (ulong)timeConsistencyLogIntervalSteps == 0);
         }
 
         if (!shouldLog)
@@ -714,10 +749,10 @@ public class SimulationController : Singleton<SimulationController>
 
         string message =
             "[LBM Time Check] " +
-            $"stepCount={stepCount:N0}, " +
+            $"stepCount={runtimeStepCount:N0}, " +
             $"dtPhys={dtPhys:E6} s, " +
             $"expectedTime={expectedSimulatedTimeSeconds:F6} s, " +
-            $"actualTime={simulatedTimeSeconds:F6} s, " +
+            $"actualTime={runtimeSimulatedTimeSeconds:F6} s, " +
             $"error={simulatedTimeErrorSeconds:E6} s";
 
         if (simulatedTimeErrorSeconds > timeConsistencyWarningThreshold)
@@ -729,6 +764,57 @@ public class SimulationController : Singleton<SimulationController>
     private void MarkSummaryDirty()
     {
         summaryDirty = true;
+        readOnlyInspectorDirty = true;
+    }
+
+    private void RefreshReadOnlyInspectorIfDue()
+    {
+        if (!readOnlyInspectorDirty)
+            return;
+
+        float now = Time.realtimeSinceStartup;
+        if (now < nextReadOnlyInspectorUpdateRealtime)
+            return;
+
+        RefreshReadOnlyInspectorNow();
+    }
+
+    private void RefreshReadOnlyInspectorNow()
+    {
+        stepCount = runtimeStepCount;
+        simulatedTimeSeconds = runtimeSimulatedTimeSeconds;
+        simulatedTimeMinutes = runtimeSimulatedTimeMinutes;
+        SyncRuntimeDiagnosticsToInspector();
+
+        PullLatestResultMetrics();
+        CheckAndLogTimeConsistency();
+        RefreshSummaryIfNeeded();
+
+        float interval = Mathf.Max(readOnlyInspectorUpdateIntervalSeconds, 0.05f);
+        nextReadOnlyInspectorUpdateRealtime = Time.realtimeSinceStartup + interval;
+        readOnlyInspectorDirty = false;
+        readOnlyInspectorUpdateStatus =
+            $"Updated at t={runtimeSimulatedTimeSeconds:F3}s, step={runtimeStepCount:N0}, interval={interval:F2}s";
+    }
+
+    private void SyncRuntimeDiagnosticsToInspector()
+    {
+        adaptiveOutletRhoOffset = runtimeAdaptiveOutletRhoOffset;
+        adaptiveFeedbackAvgDensity = runtimeAdaptiveFeedbackAvgDensity;
+
+        debugInletFlowFromSampler = runtimeDebugInletFlowFromSampler;
+        debugInletFlowFromBoxes = runtimeDebugInletFlowFromBoxes;
+        debugOutletAreaFromBoxes = runtimeDebugOutletAreaFromBoxes;
+        debugAnyOutletTargetApplied = runtimeDebugAnyOutletTargetApplied;
+        debugOutletTargetAppliedPatchCount = runtimeDebugOutletTargetAppliedPatchCount;
+
+        effectiveOutletAreaPhys = runtimeEffectiveOutletAreaPhys;
+        grossToEffectiveAreaRatio = runtimeGrossToEffectiveAreaRatio;
+        effectiveOutletNormalSpeedFromFlow = runtimeEffectiveOutletNormalSpeedFromFlow;
+        grossAreaBasedTargetNormalSpeed = runtimeGrossAreaBasedTargetNormalSpeed;
+
+        computedOutletTargetNormalSpeedPhys = runtimeComputedOutletTargetNormalSpeedPhys;
+        totalOutletAreaPhys = runtimeTotalOutletAreaPhys;
     }
 
     private void PullLatestResultMetrics()
@@ -771,8 +857,8 @@ public class SimulationController : Singleton<SimulationController>
 
     private void ResetAdaptiveOutletRhoFeedback()
     {
-        adaptiveOutletRhoOffset = 0.0f;
-        adaptiveFeedbackAvgDensity = 1.0f;
+        runtimeAdaptiveOutletRhoOffset = 0.0f;
+        runtimeAdaptiveFeedbackAvgDensity = 1.0f;
 
         if (sceneCache == null || sceneCache.ZouHeBoxes == null)
             return;
@@ -788,8 +874,17 @@ public class SimulationController : Singleton<SimulationController>
 
     private void ResetMassFluxCorrectedOutletTargets()
     {
-        computedOutletTargetNormalSpeedPhys = 0.0f;
-        totalOutletAreaPhys = 0.0f;
+        runtimeComputedOutletTargetNormalSpeedPhys = 0.0f;
+        runtimeTotalOutletAreaPhys = 0.0f;
+        runtimeDebugInletFlowFromSampler = 0.0f;
+        runtimeDebugInletFlowFromBoxes = 0.0f;
+        runtimeDebugOutletAreaFromBoxes = 0.0f;
+        runtimeDebugAnyOutletTargetApplied = false;
+        runtimeDebugOutletTargetAppliedPatchCount = 0;
+        runtimeEffectiveOutletAreaPhys = 0.0f;
+        runtimeGrossToEffectiveAreaRatio = 0.0f;
+        runtimeEffectiveOutletNormalSpeedFromFlow = 0.0f;
+        runtimeGrossAreaBasedTargetNormalSpeed = 0.0f;
 
         if (sceneCache == null || sceneCache.ZouHeBoxes == null)
             return;
@@ -815,7 +910,7 @@ public class SimulationController : Singleton<SimulationController>
         if (m == null || !m.hasValidRoomAverage)
             return false;
 
-        adaptiveFeedbackAvgDensity = m.avgDensity;
+        runtimeAdaptiveFeedbackAvgDensity = m.avgDensity;
 
         float densityError = 1.0f - m.avgDensity;
 
@@ -827,10 +922,10 @@ public class SimulationController : Singleton<SimulationController>
             -adaptiveOutletRhoMaxOffset,
             adaptiveOutletRhoMaxOffset);
 
-        if (Mathf.Abs(newOffset - adaptiveOutletRhoOffset) < 1e-7f)
+        if (Mathf.Abs(newOffset - runtimeAdaptiveOutletRhoOffset) < 1e-7f)
             return false;
 
-        adaptiveOutletRhoOffset = newOffset;
+        runtimeAdaptiveOutletRhoOffset = newOffset;
 
         bool changed = false;
         foreach (var box in sceneCache.ZouHeBoxes)
@@ -838,7 +933,7 @@ public class SimulationController : Singleton<SimulationController>
             if (box == null || !box.Power || box.PatchKind != LBMZouHeBox.Kind.Outlet)
                 continue;
 
-            box.SetAdaptiveRhoOutOffset(adaptiveOutletRhoOffset);
+            box.SetAdaptiveRhoOutOffset(runtimeAdaptiveOutletRhoOffset);
             changed = true;
         }
 
@@ -972,7 +1067,7 @@ public class SimulationController : Singleton<SimulationController>
             $"Cell size [m]   : {dxPhys:F5}\n" +
             $"Grid            : {nx} x {ny} x {nz} ({cellCount:N0} cells)\n" +
             $"Estimated memory: {estimatedTotalGpuMemoryMB:F1} MiB\n" +
-            $"Simulation time : {simulatedTimeSeconds:F3} s";
+            $"Simulation time : {runtimeSimulatedTimeSeconds:F3} s";
 
         solverSummary =
             "=== Solver Summary ===\n" +
@@ -1093,8 +1188,8 @@ public class SimulationController : Singleton<SimulationController>
             nx, ny, nz,
             dxPhys,
             dtPhys,
-            stepCount,
-            simulatedTimeSeconds,
+            runtimeStepCount,
+            runtimeSimulatedTimeSeconds,
             tau_f,
             tau_T,
             nuPhys,
@@ -1194,10 +1289,22 @@ public class SimulationController : Singleton<SimulationController>
             sceneCache.ACSources,
             sceneCache.ZouHeBoxes);
 
-        _lbmSolver.SetVisualizeInterval(4);
+        UpdateContourPlotUpdateInterval();
         ResetAdaptiveOutletRhoFeedback();
         ResetMassFluxCorrectedOutletTargets();
         solverRebuildRequired = false;
+    }
+
+    private void UpdateContourPlotUpdateInterval()
+    {
+        float intervalSeconds = Mathf.Max(contourPlotUpdateIntervalSeconds, 0.0f);
+        float safeDt = Mathf.Max(dtPhys, 1e-8f);
+
+        contourPlotUpdateIntervalSteps = intervalSeconds <= 0.0f
+            ? 1
+            : Mathf.Max(1, Mathf.CeilToInt(intervalSeconds / safeDt));
+
+        _lbmSolver?.SetVisualizeInterval(contourPlotUpdateIntervalSteps);
     }
 
     private void RebuildScaling()
@@ -1276,7 +1383,7 @@ public class SimulationController : Singleton<SimulationController>
 
         if (grossVsEffectiveAreaLogIntervalSteps > 0)
         {
-            if ((stepCount % (ulong)grossVsEffectiveAreaLogIntervalSteps) != 0)
+            if ((runtimeStepCount % (ulong)grossVsEffectiveAreaLogIntervalSteps) != 0)
                 return;
         }
 
@@ -1317,8 +1424,8 @@ public class SimulationController : Singleton<SimulationController>
             }
         }
 
-        totalOutletAreaPhys = grossAreaSum;
-        grossAreaBasedTargetNormalSpeed = computedOutletTargetNormalSpeedPhys;
+        runtimeTotalOutletAreaPhys = grossAreaSum;
+        runtimeGrossAreaBasedTargetNormalSpeed = runtimeComputedOutletTargetNormalSpeedPhys;
 
         float effArea = 0f;
         if (Mathf.Abs(m.outletAverageNormalSpeedPhys) > 1e-8f)
@@ -1326,9 +1433,9 @@ public class SimulationController : Singleton<SimulationController>
             effArea = m.outletFlowRatePhysAbs / Mathf.Abs(m.outletAverageNormalSpeedPhys);
         }
 
-        effectiveOutletAreaPhys = effArea;
-        grossToEffectiveAreaRatio = (effArea > 1e-12f) ? (grossAreaSum / effArea) : 0f;
-        effectiveOutletNormalSpeedFromFlow =
+        runtimeEffectiveOutletAreaPhys = effArea;
+        runtimeGrossToEffectiveAreaRatio = (effArea > 1e-12f) ? (grossAreaSum / effArea) : 0f;
+        runtimeEffectiveOutletNormalSpeedFromFlow =
             (effArea > 1e-12f) ? (m.outletFlowRatePhysAbs / effArea) : 0f;
 
         float targetNormalFromInletUsingEffectiveArea = 0f;
@@ -1350,22 +1457,22 @@ public class SimulationController : Singleton<SimulationController>
 
         var sb = new StringBuilder(1024);
         sb.AppendLine("[OutletAreaDebug] Gross vs Effective Outlet Area");
-        sb.AppendLine($"  stepCount                          : {stepCount}");
-        sb.AppendLine($"  simulatedTimeSeconds               : {simulatedTimeSeconds:F3}");
+        sb.AppendLine($"  stepCount                          : {runtimeStepCount}");
+        sb.AppendLine($"  simulatedTimeSeconds               : {runtimeSimulatedTimeSeconds:F3}");
         sb.AppendLine($"  outletPatchCount                   : {outletPatchCount}");
         sb.AppendLine($"  grossOutletCellCount(sum patches)  : {grossCellCountSum}");
         sb.AppendLine($"  effectiveOutletSampleCount         : {m.outletSampleCount}");
         sb.AppendLine($"  dxPhys                             : {dxPhys:F6} m");
         sb.AppendLine($"  grossOutletAreaPhys                : {grossAreaSum:F6} m^2");
         sb.AppendLine($"  effectiveOutletAreaPhys            : {effArea:F6} m^2");
-        sb.AppendLine($"  gross/effective area ratio         : {grossToEffectiveAreaRatio:F6}");
+        sb.AppendLine($"  gross/effective area ratio         : {runtimeGrossToEffectiveAreaRatio:F6}");
         sb.AppendLine($"  area mismatch                      : {areaMismatchPercent:F3} %");
         sb.AppendLine($"  effectiveCellEstimate(area/dx^2)   : {effectiveCellEstimate}");
         sb.AppendLine($"  inletFlowAbs                       : {m.inletFlowRatePhysAbs:F6} m^3/s");
         sb.AppendLine($"  outletFlowAbs                      : {m.outletFlowRatePhysAbs:F6} m^3/s");
         sb.AppendLine($"  inletAverageNormalSpeedPhys        : {m.inletAverageNormalSpeedPhys:F6} m/s");
         sb.AppendLine($"  outletAverageNormalSpeedPhys       : {m.outletAverageNormalSpeedPhys:F6} m/s");
-        sb.AppendLine($"  grossAreaBasedTargetNormalSpeed    : {grossAreaBasedTargetNormalSpeed:F6} m/s");
+        sb.AppendLine($"  grossAreaBasedTargetNormalSpeed    : {runtimeGrossAreaBasedTargetNormalSpeed:F6} m/s");
         sb.AppendLine($"  targetNormalUsingEffectiveArea     : {targetNormalFromInletUsingEffectiveArea:F6} m/s");
         sb.AppendLine($"  relativeFlowImbalance              : {m.relativeFlowImbalance:F6}");
         sb.AppendLine($"  avgDensity                         : {m.avgDensity:F6}");
@@ -1410,20 +1517,20 @@ public class SimulationController : Singleton<SimulationController>
 
         int interval = Mathf.Max(outletRootCauseLogIntervalSteps, 1);
 
-        if (stepCount != 0 && (stepCount % (ulong)interval) != 0UL)
+        if (runtimeStepCount != 0 && (runtimeStepCount % (ulong)interval) != 0UL)
             return;
 
         var sb = new StringBuilder(1024);
         sb.AppendLine("[OutletRootCauseDebug] Controller -> Patch Target");
-        sb.AppendLine($"  stepCount                    : {stepCount}");
-        sb.AppendLine($"  simulatedTimeSeconds         : {simulatedTimeSeconds:F3}");
+        sb.AppendLine($"  stepCount                    : {runtimeStepCount}");
+        sb.AppendLine($"  simulatedTimeSeconds         : {runtimeSimulatedTimeSeconds:F3}");
         sb.AppendLine($"  resultMetricsStatus          : {resultMetricsStatus}");
         sb.AppendLine($"  inletFlowAbs(sampler)        : {inletFlowAbsSampler:F6} m^3/s");
         sb.AppendLine($"  inletFlowAbs(direct boxes)   : {inletFlowAbsDirect:F6} m^3/s");
         sb.AppendLine($"  outletAreaSum                : {outletAreaSum:F6} m^2");
         sb.AppendLine($"  computedTargetNormalSpeed    : {targetNormalSpeedPhys:F6} m/s");
         sb.AppendLine($"  targetAppliedPatchCount      : {appliedPatchCount}");
-        sb.AppendLine($"  anyTargetApplied             : {debugAnyOutletTargetApplied}");
+        sb.AppendLine($"  anyTargetApplied             : {runtimeDebugAnyOutletTargetApplied}");
         sb.AppendLine($"  currentOutletFlowAbs         : {outletFlowRatePhysAbs:F6} m^3/s");
         sb.AppendLine($"  currentOutletNormalSpeed     : {outletAverageNormalSpeedPhys:F6} m/s");
         sb.AppendLine($"  currentRelativeImbalance     : {relativeFlowImbalance:F6}");
@@ -1447,14 +1554,14 @@ public class SimulationController : Singleton<SimulationController>
             outletCount++;
         }
 
-        totalOutletAreaPhys = outletAreaSum;
-        debugOutletAreaFromBoxes = outletAreaSum;
+        runtimeTotalOutletAreaPhys = outletAreaSum;
+        runtimeDebugOutletAreaFromBoxes = outletAreaSum;
 
         if (outletCount == 0 || outletAreaSum <= 1e-12f)
         {
-            computedOutletTargetNormalSpeedPhys = 0f;
-            debugAnyOutletTargetApplied = false;
-            debugOutletTargetAppliedPatchCount = 0;
+            runtimeComputedOutletTargetNormalSpeedPhys = 0f;
+            runtimeDebugAnyOutletTargetApplied = false;
+            runtimeDebugOutletTargetAppliedPatchCount = 0;
 
             Debug.LogWarning(
                 "[MassFluxTargetDebug] No valid outlet area. " +
@@ -1463,11 +1570,14 @@ public class SimulationController : Singleton<SimulationController>
             return;
         }
 
-        float inletFlowAbsSampler = Mathf.Max(0f, inletFlowRatePhysAbs);
+        SimulationResultMetrics latestMetrics = resultSampler != null ? resultSampler.LatestMetrics : null;
+        float inletFlowAbsSampler = latestMetrics != null && latestMetrics.hasValidFlowDiagnostic
+            ? Mathf.Max(0f, latestMetrics.inletFlowRatePhysAbs)
+            : Mathf.Max(0f, inletFlowRatePhysAbs);
         float inletFlowAbsDirect = Mathf.Max(0f, ComputeInletFlowAbsDirectFromBoxes());
 
-        debugInletFlowFromSampler = inletFlowAbsSampler;
-        debugInletFlowFromBoxes = inletFlowAbsDirect;
+        runtimeDebugInletFlowFromSampler = inletFlowAbsSampler;
+        runtimeDebugInletFlowFromBoxes = inletFlowAbsDirect;
 
         float targetOutletFlowAbs = Mathf.Max(inletFlowAbsSampler, inletFlowAbsDirect);
 
@@ -1481,7 +1591,7 @@ public class SimulationController : Singleton<SimulationController>
             0f,
             safeMaxTargetNormalSpeedPhys);
 
-        computedOutletTargetNormalSpeedPhys = clampedTargetNormalSpeedPhys;
+        runtimeComputedOutletTargetNormalSpeedPhys = clampedTargetNormalSpeedPhys;
 
         bool anyChanged = false;
         int appliedCount = 0;
@@ -1505,15 +1615,15 @@ public class SimulationController : Singleton<SimulationController>
             anyChanged = true;
         }
 
-        debugAnyOutletTargetApplied = anyChanged;
-        debugOutletTargetAppliedPatchCount = appliedCount;
+        runtimeDebugAnyOutletTargetApplied = anyChanged;
+        runtimeDebugOutletTargetAppliedPatchCount = appliedCount;
 
         int interval = Mathf.Max(outletRootCauseLogIntervalSteps, 1);
-        if (stepCount == 0 || (stepCount % (ulong)interval) == 0UL)
+        if (runtimeStepCount == 0 || (runtimeStepCount % (ulong)interval) == 0UL)
         {
             Debug.Log(
                 "[MassFluxTargetDebug] " +
-                $"step={stepCount}, " +
+                $"step={runtimeStepCount}, " +
                 $"inletFlowAbsSampler={inletFlowAbsSampler:F6}, " +
                 $"inletFlowAbsDirect={inletFlowAbsDirect:F6}, " +
                 $"targetOutletFlowAbs={targetOutletFlowAbs:F6}, " +

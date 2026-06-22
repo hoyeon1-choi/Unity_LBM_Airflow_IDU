@@ -183,7 +183,7 @@ public class ThermalSolver
         _shaderWrapper.Dispatch(Kernels.calculate_macro, _nx, _ny, _nz);
 
         _stepCounter++;
-        if (_visualizeEvery <= 1 || (_stepCounter % (ulong)_visualizeEvery) == 0)
+        if (_stepCounter == 1 || _visualizeEvery <= 1 || (_stepCounter % (ulong)_visualizeEvery) == 0)
         {
             _shaderWrapper.Dispatch(Kernels.visualize, _nx, _ny, _nz);
         }

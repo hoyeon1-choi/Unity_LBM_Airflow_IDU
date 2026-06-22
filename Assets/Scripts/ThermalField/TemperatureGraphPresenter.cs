@@ -86,13 +86,6 @@ public class TemperatureGraphPresenter : MonoBehaviour
         if (simulationController == null || resultSampler == null || graph == null)
             return;
 
-        float simTime = simulationController.SimulatedTimeSeconds;
-        if (simTime + 1e-6f < _nextGraphSampleTime)
-            return;
-
-        if (simTime <= _lastSampledTime)
-            return;
-
         var m = resultSampler.LatestMetrics;
         if (m == null)
             return;
@@ -103,21 +96,28 @@ public class TemperatureGraphPresenter : MonoBehaviour
                 return;
         }
 
-        if (requireSamplerTimeMatch && !IsSamplerTimeCloseEnough(m.statusMessage, simTime))
+        float sampleTime = m.simulationTimeSeconds;
+        if (sampleTime <= _lastSampledTime + 1e-6f)
+            return;
+
+        if (sampleTime + 1e-6f < _nextGraphSampleTime)
+            return;
+
+        if (requireSamplerTimeMatch && !IsSamplerTimeCloseEnough(m.statusMessage, sampleTime))
             return;
 
         graph.AddSample(
-            simTime,
+            sampleTime,
             m.inletAverageTemperatureDegC,
             m.outletAverageTemperatureDegC,
             m.avgRoomTemperatureDegC);
 
-        _lastSampledTime = simTime;
-        _nextGraphSampleTime += Mathf.Max(graphSampleIntervalSeconds, 1e-6f);
+        _lastSampledTime = sampleTime;
+        _nextGraphSampleTime = sampleTime + Mathf.Max(graphSampleIntervalSeconds, 1e-6f);
 
         UpdateAxisLabels();
         UpdateCurrentValueText(
-            simTime,
+            sampleTime,
             m.inletAverageTemperatureDegC,
             m.outletAverageTemperatureDegC,
             m.avgRoomTemperatureDegC);
@@ -190,9 +190,8 @@ public class TemperatureGraphPresenter : MonoBehaviour
 
     private void ResetGraphSamplingSchedule()
     {
-        if (simulationController != null)
-            _nextGraphSampleTime = simulationController.SimulatedTimeSeconds + Mathf.Max(graphSampleIntervalSeconds, 1e-6f);
-        else
-            _nextGraphSampleTime = Mathf.Max(graphSampleIntervalSeconds, 1e-6f);
+        _nextGraphSampleTime = simulationController != null
+            ? Mathf.Max(0.0f, simulationController.SimulatedTimeSeconds)
+            : 0.0f;
     }
 }

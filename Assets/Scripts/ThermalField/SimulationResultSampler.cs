@@ -1,4 +1,3 @@
-using System.Collections;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
@@ -7,6 +6,7 @@ using UnityEngine.Rendering;
 public class SimulationResultSampler : MonoBehaviour
 {
     private const float CsLat = 0.5773502691896258f;
+    private const float TimeEpsilon = 1e-6f;
 
     public enum ReadbackMode
     {
@@ -30,13 +30,16 @@ public class SimulationResultSampler : MonoBehaviour
     [SerializeField, ReadOnly] private SimulationResultMetrics latestMetrics = new SimulationResultMetrics();
     [SerializeField, ReadOnly] private float nextSampleSimTimeSeconds = 0.0f;
     [SerializeField, ReadOnly] private float lastRequestedSampleSimTimeSeconds = -1.0f;
+    [SerializeField, ReadOnly] private float lastCompletedSampleSimTimeSeconds = -1.0f;
+    [SerializeField, ReadOnly] private int skippedSamplesWhileReadbackBusy = 0;
 
     [Header("Readback Debug")]
     [SerializeField, ReadOnly] private string activeReadbackMode = "";
     [SerializeField, ReadOnly] private string readbackModeStatus = "";
 
-    private Coroutine _samplingRoutine;
     private bool _requestInFlight = false;
+    private PendingFullMetricsReadback _pendingFullMetricsReadback;
+    private PendingTemperatureReadback _pendingTemperatureReadback;
 
     public SimulationResultMetrics LatestMetrics => latestMetrics;
 
@@ -55,9 +58,6 @@ public class SimulationResultSampler : MonoBehaviour
     {
         NormalizeReadbackMode();
         ResetSamplingSchedule();
-
-        if (_samplingRoutine == null)
-            _samplingRoutine = StartCoroutine(SamplingLoop());
     }
 
 #if UNITY_EDITOR
@@ -69,32 +69,25 @@ public class SimulationResultSampler : MonoBehaviour
 
     private void OnDisable()
     {
-        if (_samplingRoutine != null)
-        {
-            StopCoroutine(_samplingRoutine);
-            _samplingRoutine = null;
-        }
+        DisposePendingReadbacks();
+        _requestInFlight = false;
     }
 
     public void ResetSamplingSchedule()
     {
         lastRequestedSampleSimTimeSeconds = -1.0f;
+        lastCompletedSampleSimTimeSeconds = -1.0f;
+        skippedSamplesWhileReadbackBusy = 0;
 
-        if (simulationController != null)
-            nextSampleSimTimeSeconds = simulationController.SimulatedTimeSeconds + Mathf.Max(sampleIntervalSeconds, 1e-6f);
-        else
-            nextSampleSimTimeSeconds = Mathf.Max(sampleIntervalSeconds, 1e-6f);
+        float interval = GetSafeSampleInterval();
+        float simTime = simulationController != null ? simulationController.SimulatedTimeSeconds : 0.0f;
+        nextSampleSimTimeSeconds = GetNextSampleTimeAfter(simTime, interval);
     }
 
-    private IEnumerator SamplingLoop()
+    private void LateUpdate()
     {
-        while (true)
-        {
-            if (enableSampling)
-                TryRequestSamplingBySimulatedTime();
-
-            yield return null;
-        }
+        if (enableSampling)
+            TryRequestSamplingBySimulatedTime();
     }
 
     public void ForceSampleNow()
@@ -129,14 +122,21 @@ public class SimulationResultSampler : MonoBehaviour
         }
 
         float simTime = simulationController.SimulatedTimeSeconds;
-        if (simTime + 1e-6f < nextSampleSimTimeSeconds)
+        if (simTime + TimeEpsilon < nextSampleSimTimeSeconds)
             return;
 
-        if (TryRequestSampling())
+        float interval = GetSafeSampleInterval();
+        if (_requestInFlight)
         {
-            lastRequestedSampleSimTimeSeconds = simTime;
-            nextSampleSimTimeSeconds += Mathf.Max(sampleIntervalSeconds, 1e-6f);
+            skippedSamplesWhileReadbackBusy++;
+            nextSampleSimTimeSeconds = GetNextSampleTimeAfter(simTime, interval);
+            readbackModeStatus =
+                $"Readback busy. Skipped sample target near t={simTime:F3}s.";
+            return;
         }
+
+        if (TryRequestSampling())
+            nextSampleSimTimeSeconds = GetNextSampleTimeAfter(simTime, interval);
     }
 
     private bool TryRequestSampling(bool force = false)
@@ -145,7 +145,10 @@ public class SimulationResultSampler : MonoBehaviour
         activeReadbackMode = readbackMode.ToString();
 
         if (_requestInFlight)
+        {
+            readbackModeStatus = "Readback request is already in flight.";
             return false;
+        }
 
         if (simulationController == null || simulationController.LBMSolver == null)
         {
@@ -176,6 +179,10 @@ public class SimulationResultSampler : MonoBehaviour
             return false;
         }
 
+        ulong requestedStepCount = simulationController.StepCount;
+        float requestedSimTimeSeconds = simulationController.SimulatedTimeSeconds;
+        lastRequestedSampleSimTimeSeconds = requestedSimTimeSeconds;
+
         _requestInFlight = true;
 
         if (readbackMode == ReadbackMode.FullMetrics)
@@ -183,21 +190,25 @@ public class SimulationResultSampler : MonoBehaviour
             if (logMetricsToConsole)
                 Debug.Log("[SimulationResultSampler] Requesting FullMetrics readback.");
 
-            StartCoroutine(RequestFullMetricsCoroutine(
+            RequestFullMetricsReadback(
                 solver.TemperatureBuffer,
                 solver.VelocityRhoBuffer,
                 solver.FieldBuffer,
-                solver.DebugThermalClampCounterBuffer));
+                solver.DebugThermalClampCounterBuffer,
+                requestedStepCount,
+                requestedSimTimeSeconds);
         }
         else
         {
             if (logMetricsToConsole)
                 Debug.Log("[SimulationResultSampler] Requesting TemperatureOnly readback.");
 
-            StartCoroutine(RequestTemperatureOnlyCoroutine(
+            RequestTemperatureOnlyReadback(
                 solver.TemperatureBuffer,
                 solver.FieldBuffer,
-                solver.DebugThermalClampCounterBuffer));
+                solver.DebugThermalClampCounterBuffer,
+                requestedStepCount,
+                requestedSimTimeSeconds);
         }
 
         return true;
@@ -220,96 +231,284 @@ public class SimulationResultSampler : MonoBehaviour
             : "TemperatureOnly: flow, velocity, density, Mach and mass residual are unavailable.";
     }
 
-    private IEnumerator RequestFullMetricsCoroutine(
+    private float GetSafeSampleInterval()
+    {
+        return Mathf.Max(sampleIntervalSeconds, TimeEpsilon);
+    }
+
+    private static float GetNextSampleTimeAfter(float simTime, float interval)
+    {
+        if (interval <= TimeEpsilon)
+            return simTime + TimeEpsilon;
+
+        if (simTime <= 0.0f)
+            return interval;
+
+        float sampleIndex = Mathf.Floor((simTime + TimeEpsilon) / interval) + 1.0f;
+        return sampleIndex * interval;
+    }
+
+    private void RequestFullMetricsReadback(
         GraphicsBuffer temperatureBuffer,
         GraphicsBuffer velocityRhoBuffer,
         GraphicsBuffer fieldBuffer,
-        GraphicsBuffer debugClampBuffer)
+        GraphicsBuffer debugClampBuffer,
+        ulong sampleStepCount,
+        float sampleTimeSeconds)
     {
-        var tempRequest = AsyncGPUReadback.Request(temperatureBuffer);
-        var velRequest = AsyncGPUReadback.Request(velocityRhoBuffer);
-        var fieldRequest = AsyncGPUReadback.Request(fieldBuffer);
-        var clampRequest = AsyncGPUReadback.Request(debugClampBuffer);
+        DisposePendingReadbacks();
 
-        yield return new WaitUntil(() =>
-            tempRequest.done && velRequest.done && fieldRequest.done && clampRequest.done);
+        var pending = new PendingFullMetricsReadback(sampleStepCount, sampleTimeSeconds);
+        _pendingFullMetricsReadback = pending;
 
-        _requestInFlight = false;
+        AsyncGPUReadback.Request(temperatureBuffer, request => OnFullTemperatureReadback(pending, request));
+        AsyncGPUReadback.Request(velocityRhoBuffer, request => OnFullVelocityReadback(pending, request));
+        AsyncGPUReadback.Request(fieldBuffer, request => OnFullFieldReadback(pending, request));
+        AsyncGPUReadback.Request(debugClampBuffer, request => OnFullClampReadback(pending, request));
+    }
 
-        if (tempRequest.hasError || velRequest.hasError || fieldRequest.hasError || clampRequest.hasError)
+    private void RequestTemperatureOnlyReadback(
+        GraphicsBuffer temperatureBuffer,
+        GraphicsBuffer fieldBuffer,
+        GraphicsBuffer debugClampBuffer,
+        ulong sampleStepCount,
+        float sampleTimeSeconds)
+    {
+        DisposePendingReadbacks();
+
+        var pending = new PendingTemperatureReadback(sampleStepCount, sampleTimeSeconds);
+        _pendingTemperatureReadback = pending;
+
+        AsyncGPUReadback.Request(temperatureBuffer, request => OnTemperatureOnlyTemperatureReadback(pending, request));
+        AsyncGPUReadback.Request(fieldBuffer, request => OnTemperatureOnlyFieldReadback(pending, request));
+        AsyncGPUReadback.Request(debugClampBuffer, request => OnTemperatureOnlyClampReadback(pending, request));
+    }
+
+    private void OnFullTemperatureReadback(PendingFullMetricsReadback pending, AsyncGPUReadbackRequest request)
+    {
+        if (!IsActive(pending) || TryFailFullReadback(pending, request, "temperature"))
+            return;
+
+        if (!TryCopyReadback(request, ref pending.tempData, pending, "temperature"))
+            return;
+
+        CompleteFullReadbackPart(pending);
+    }
+
+    private void OnFullVelocityReadback(PendingFullMetricsReadback pending, AsyncGPUReadbackRequest request)
+    {
+        if (!IsActive(pending) || TryFailFullReadback(pending, request, "velocity_rho"))
+            return;
+
+        if (!TryCopyReadback(request, ref pending.velData, pending, "velocity_rho"))
+            return;
+
+        CompleteFullReadbackPart(pending);
+    }
+
+    private void OnFullFieldReadback(PendingFullMetricsReadback pending, AsyncGPUReadbackRequest request)
+    {
+        if (!IsActive(pending) || TryFailFullReadback(pending, request, "field"))
+            return;
+
+        if (!TryCopyReadback(request, ref pending.fieldData, pending, "field"))
+            return;
+
+        CompleteFullReadbackPart(pending);
+    }
+
+    private void OnFullClampReadback(PendingFullMetricsReadback pending, AsyncGPUReadbackRequest request)
+    {
+        if (!IsActive(pending) || TryFailFullReadback(pending, request, "clamp"))
+            return;
+
+        if (!TryCopyReadback(request, ref pending.clampData, pending, "clamp"))
+            return;
+
+        CompleteFullReadbackPart(pending);
+    }
+
+    private void OnTemperatureOnlyTemperatureReadback(PendingTemperatureReadback pending, AsyncGPUReadbackRequest request)
+    {
+        if (!IsActive(pending) || TryFailTemperatureReadback(pending, request, "temperature"))
+            return;
+
+        if (!TryCopyReadback(request, ref pending.tempData, pending, "temperature"))
+            return;
+
+        CompleteTemperatureReadbackPart(pending);
+    }
+
+    private void OnTemperatureOnlyFieldReadback(PendingTemperatureReadback pending, AsyncGPUReadbackRequest request)
+    {
+        if (!IsActive(pending) || TryFailTemperatureReadback(pending, request, "field"))
+            return;
+
+        if (!TryCopyReadback(request, ref pending.fieldData, pending, "field"))
+            return;
+
+        CompleteTemperatureReadbackPart(pending);
+    }
+
+    private void OnTemperatureOnlyClampReadback(PendingTemperatureReadback pending, AsyncGPUReadbackRequest request)
+    {
+        if (!IsActive(pending) || TryFailTemperatureReadback(pending, request, "clamp"))
+            return;
+
+        if (!TryCopyReadback(request, ref pending.clampData, pending, "clamp"))
+            return;
+
+        CompleteTemperatureReadbackPart(pending);
+    }
+
+    private bool TryCopyReadback<T>(
+        AsyncGPUReadbackRequest request,
+        ref NativeArray<T> destination,
+        PendingReadbackBase pending,
+        string bufferName)
+        where T : struct
+    {
+        try
         {
-            latestMetrics.statusMessage =
-                $"AsyncGPUReadback failed: " +
-                $"temp={tempRequest.hasError}, " +
-                $"vel={velRequest.hasError}, " +
-                $"field={fieldRequest.hasError}, " +
-                $"clamp={clampRequest.hasError}";
-
-            yield break;
+            destination = new NativeArray<T>(request.GetData<T>(), Allocator.Persistent);
+            return true;
         }
-
-        NativeArray<float> tempData = tempRequest.GetData<float>();
-        NativeArray<float4> velData = velRequest.GetData<float4>();
-        NativeArray<uint> fieldData = fieldRequest.GetData<uint>();
-        NativeArray<uint> clampData = clampRequest.GetData<uint>();
-
-        ComputeMetrics(tempData, velData, fieldData, clampData);
-
-        if (logMetricsToConsole)
+        catch (System.Exception ex)
         {
-            Debug.Log(latestMetrics.ToSummaryText());
-
-            if (clampData.Length >= 4)
-            {
-                Debug.Log(
-                    $"[ClampCounter] thermal_in={clampData[0]}, thermal_out={clampData[1]}, " +
-                    $"fluid_in={clampData[2]}, fluid_out={clampData[3]}");
-            }
+            FailPendingReadback(pending, $"AsyncGPUReadback copy failed for {bufferName}: {ex.Message}");
+            return false;
         }
     }
 
-    private IEnumerator RequestTemperatureOnlyCoroutine(
-        GraphicsBuffer temperatureBuffer,
-        GraphicsBuffer fieldBuffer,
-        GraphicsBuffer debugClampBuffer)
+    private bool TryFailFullReadback(
+        PendingFullMetricsReadback pending,
+        AsyncGPUReadbackRequest request,
+        string bufferName)
     {
-        var tempRequest = AsyncGPUReadback.Request(temperatureBuffer);
-        var fieldRequest = AsyncGPUReadback.Request(fieldBuffer);
-        var clampRequest = AsyncGPUReadback.Request(debugClampBuffer);
+        if (!request.hasError)
+            return false;
 
-        yield return new WaitUntil(() =>
-            tempRequest.done && fieldRequest.done && clampRequest.done);
+        FailPendingReadback(pending, $"AsyncGPUReadback failed: {bufferName}");
+        return true;
+    }
+
+    private bool TryFailTemperatureReadback(
+        PendingTemperatureReadback pending,
+        AsyncGPUReadbackRequest request,
+        string bufferName)
+    {
+        if (!request.hasError)
+            return false;
+
+        FailPendingReadback(pending, $"AsyncGPUReadback failed: {bufferName}");
+        return true;
+    }
+
+    private void CompleteFullReadbackPart(PendingFullMetricsReadback pending)
+    {
+        pending.completedParts++;
+        if (pending.completedParts < PendingFullMetricsReadback.ExpectedParts)
+            return;
+
+        try
+        {
+            ComputeMetrics(
+                pending.tempData,
+                pending.velData,
+                pending.fieldData,
+                pending.clampData,
+                pending.sampleStepCount,
+                pending.sampleTimeSeconds);
+
+            lastCompletedSampleSimTimeSeconds = pending.sampleTimeSeconds;
+            LogMetricsIfRequested(pending.clampData);
+        }
+        finally
+        {
+            FinishPendingReadback(pending);
+        }
+    }
+
+    private void CompleteTemperatureReadbackPart(PendingTemperatureReadback pending)
+    {
+        pending.completedParts++;
+        if (pending.completedParts < PendingTemperatureReadback.ExpectedParts)
+            return;
+
+        try
+        {
+            ComputeTemperatureOnlyMetrics(
+                pending.tempData,
+                pending.fieldData,
+                pending.clampData,
+                pending.sampleStepCount,
+                pending.sampleTimeSeconds);
+
+            lastCompletedSampleSimTimeSeconds = pending.sampleTimeSeconds;
+            LogMetricsIfRequested(pending.clampData);
+        }
+        finally
+        {
+            FinishPendingReadback(pending);
+        }
+    }
+
+    private void LogMetricsIfRequested(NativeArray<uint> clampData)
+    {
+        if (!logMetricsToConsole)
+            return;
+
+        Debug.Log(latestMetrics.ToSummaryText());
+
+        if (clampData.Length >= 4)
+        {
+            Debug.Log(
+                $"[ClampCounter] thermal_in={clampData[0]}, thermal_out={clampData[1]}, " +
+                $"fluid_in={clampData[2]}, fluid_out={clampData[3]}");
+        }
+    }
+
+    private bool IsActive(PendingFullMetricsReadback pending)
+    {
+        return pending != null && ReferenceEquals(_pendingFullMetricsReadback, pending) && !pending.failed;
+    }
+
+    private bool IsActive(PendingTemperatureReadback pending)
+    {
+        return pending != null && ReferenceEquals(_pendingTemperatureReadback, pending) && !pending.failed;
+    }
+
+    private void FailPendingReadback(PendingReadbackBase pending, string message)
+    {
+        if (pending == null || pending.failed)
+            return;
+
+        pending.failed = true;
+        latestMetrics.statusMessage = message;
+        readbackModeStatus = message;
+        FinishPendingReadback(pending);
+    }
+
+    private void FinishPendingReadback(PendingReadbackBase pending)
+    {
+        pending?.Dispose();
+
+        if (pending is PendingFullMetricsReadback full && ReferenceEquals(_pendingFullMetricsReadback, full))
+            _pendingFullMetricsReadback = null;
+
+        if (pending is PendingTemperatureReadback temperature && ReferenceEquals(_pendingTemperatureReadback, temperature))
+            _pendingTemperatureReadback = null;
 
         _requestInFlight = false;
+    }
 
-        if (tempRequest.hasError || fieldRequest.hasError || clampRequest.hasError)
-        {
-            latestMetrics.statusMessage =
-                $"AsyncGPUReadback failed: " +
-                $"temp={tempRequest.hasError}, " +
-                $"field={fieldRequest.hasError}, " +
-                $"clamp={clampRequest.hasError}";
+    private void DisposePendingReadbacks()
+    {
+        _pendingFullMetricsReadback?.Dispose();
+        _pendingFullMetricsReadback = null;
 
-            yield break;
-        }
-
-        NativeArray<float> tempData = tempRequest.GetData<float>();
-        NativeArray<uint> fieldData = fieldRequest.GetData<uint>();
-        NativeArray<uint> clampData = clampRequest.GetData<uint>();
-
-        ComputeTemperatureOnlyMetrics(tempData, fieldData, clampData);
-
-        if (logMetricsToConsole)
-        {
-            Debug.Log(latestMetrics.ToSummaryText());
-
-            if (clampData.Length >= 4)
-            {
-                Debug.Log(
-                    $"[ClampCounter] thermal_in={clampData[0]}, thermal_out={clampData[1]}, " +
-                    $"fluid_in={clampData[2]}, fluid_out={clampData[3]}");
-            }
-        }
+        _pendingTemperatureReadback?.Dispose();
+        _pendingTemperatureReadback = null;
     }
 
     private static uint ClampToInterior(int value, uint maxExclusive)
@@ -367,7 +566,9 @@ public class SimulationResultSampler : MonoBehaviour
         NativeArray<float> tempData,
         NativeArray<float4> velData,
         NativeArray<uint> fieldData,
-        NativeArray<uint> clampData)
+        NativeArray<uint> clampData,
+        ulong sampleStepCount,
+        float sampleTimeSeconds)
     {
         latestMetrics.Clear();
 
@@ -377,7 +578,7 @@ public class SimulationResultSampler : MonoBehaviour
             return;
         }
 
-        PopulateCaseContext();
+        PopulateCaseContext(sampleStepCount, sampleTimeSeconds);
 
         uint nx = simulationController.Nx;
         uint ny = simulationController.Ny;
@@ -666,13 +867,15 @@ public class SimulationResultSampler : MonoBehaviour
         }
 
         latestMetrics.statusMessage =
-            $"Sampled at t={simulationController.SimulatedTimeSeconds:F3}s (full)";
+            $"Sampled at t={sampleTimeSeconds:F3}s (full)";
     }
 
     private void ComputeTemperatureOnlyMetrics(
         NativeArray<float> tempData,
         NativeArray<uint> fieldData,
-        NativeArray<uint> clampData)
+        NativeArray<uint> clampData,
+        ulong sampleStepCount,
+        float sampleTimeSeconds)
     {
         latestMetrics.Clear();
 
@@ -682,7 +885,7 @@ public class SimulationResultSampler : MonoBehaviour
             return;
         }
 
-        PopulateCaseContext();
+        PopulateCaseContext(sampleStepCount, sampleTimeSeconds);
         latestMetrics.massConservationStatus = "Density unavailable in temperature-only mode.";
 
         uint nx = simulationController.Nx;
@@ -878,13 +1081,13 @@ public class SimulationResultSampler : MonoBehaviour
         latestMetrics.hasValidFlowDiagnostic = false;
 
         latestMetrics.statusMessage =
-            $"Sampled at t={simulationController.SimulatedTimeSeconds:F3}s (temperature-only)";
+            $"Sampled at t={sampleTimeSeconds:F3}s (temperature-only)";
     }
 
-    private void PopulateCaseContext()
+    private void PopulateCaseContext(ulong sampleStepCount, float sampleTimeSeconds)
     {
-        latestMetrics.stepCount = simulationController.StepCount;
-        latestMetrics.simulationTimeSeconds = simulationController.SimulatedTimeSeconds;
+        latestMetrics.stepCount = sampleStepCount;
+        latestMetrics.simulationTimeSeconds = sampleTimeSeconds;
         latestMetrics.dtPhys = simulationController.DtPhys;
         latestMetrics.preset = simulationController.SolverPresetName;
         latestMetrics.readbackMode = readbackMode.ToString();
@@ -894,6 +1097,75 @@ public class SimulationResultSampler : MonoBehaviour
         latestMetrics.prandtlNumber = simulationController.PrandtlNumber;
         latestMetrics.stabilityStatus = simulationController.StabilityStatus.ToString();
         latestMetrics.readinessStatus = simulationController.ReadinessStatus.ToString();
+    }
+
+    private abstract class PendingReadbackBase : System.IDisposable
+    {
+        public readonly ulong sampleStepCount;
+        public readonly float sampleTimeSeconds;
+        public int completedParts;
+        public bool failed;
+
+        protected PendingReadbackBase(ulong sampleStepCount, float sampleTimeSeconds)
+        {
+            this.sampleStepCount = sampleStepCount;
+            this.sampleTimeSeconds = sampleTimeSeconds;
+        }
+
+        public abstract void Dispose();
+
+        protected static void DisposeIfCreated<T>(ref NativeArray<T> data)
+            where T : struct
+        {
+            if (data.IsCreated)
+                data.Dispose();
+
+            data = default;
+        }
+    }
+
+    private sealed class PendingFullMetricsReadback : PendingReadbackBase
+    {
+        public const int ExpectedParts = 4;
+
+        public NativeArray<float> tempData;
+        public NativeArray<float4> velData;
+        public NativeArray<uint> fieldData;
+        public NativeArray<uint> clampData;
+
+        public PendingFullMetricsReadback(ulong sampleStepCount, float sampleTimeSeconds)
+            : base(sampleStepCount, sampleTimeSeconds)
+        {
+        }
+
+        public override void Dispose()
+        {
+            DisposeIfCreated(ref tempData);
+            DisposeIfCreated(ref velData);
+            DisposeIfCreated(ref fieldData);
+            DisposeIfCreated(ref clampData);
+        }
+    }
+
+    private sealed class PendingTemperatureReadback : PendingReadbackBase
+    {
+        public const int ExpectedParts = 3;
+
+        public NativeArray<float> tempData;
+        public NativeArray<uint> fieldData;
+        public NativeArray<uint> clampData;
+
+        public PendingTemperatureReadback(ulong sampleStepCount, float sampleTimeSeconds)
+            : base(sampleStepCount, sampleTimeSeconds)
+        {
+        }
+
+        public override void Dispose()
+        {
+            DisposeIfCreated(ref tempData);
+            DisposeIfCreated(ref fieldData);
+            DisposeIfCreated(ref clampData);
+        }
     }
 
     private static string BuildMassConservationStatus(

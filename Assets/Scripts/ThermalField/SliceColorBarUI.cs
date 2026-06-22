@@ -31,17 +31,29 @@ public class SliceColorBarUI : MonoBehaviour
     [SerializeField] private string thermalTitle = "Temperature (°C)";
     [SerializeField] private string numberFormat = "F2";
 
+    [Header("Update Rate")]
+    [Tooltip("Real-time interval for refreshing contour color-bar labels.")]
+    [Min(0.05f)]
+    [SerializeField] private float updateIntervalSeconds = 1.0f;
+
     [Header("Direction")]
     [SerializeField] private bool lowValueAtBottom = true;
+
+    private float _nextUpdateRealtime;
 
     private void Start()
     {
         ApplyBarVisual();
         RefreshNow();
+        _nextUpdateRealtime = Time.unscaledTime + Mathf.Max(updateIntervalSeconds, 0.05f);
     }
 
     private void Update()
     {
+        if (Time.unscaledTime < _nextUpdateRealtime)
+            return;
+
+        _nextUpdateRealtime = Time.unscaledTime + Mathf.Max(updateIntervalSeconds, 0.05f);
         RefreshNow();
     }
 

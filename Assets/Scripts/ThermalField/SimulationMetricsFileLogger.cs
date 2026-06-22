@@ -13,6 +13,12 @@ public class SimulationMetricsFileLogger : MonoBehaviour
         CustomFolder = 2
     }
 
+    public enum CsvSchemaMismatchHandling
+    {
+        RotateOldFileAndStartFresh = 0,
+        StopWriting = 1
+    }
+
     [Header("References")]
     [SerializeField] private SimulationController simulationController;
     [SerializeField] private SimulationResultSampler resultSampler;
@@ -40,6 +46,11 @@ public class SimulationMetricsFileLogger : MonoBehaviour
     [SerializeField] private string timeSeriesPrefix = "lbm_timeseries";
     [SerializeField] private string summaryFilePrefix = "lbm_summary";
 
+    [Header("CSV Schema Safety")]
+    [Tooltip("When an existing CSV header does not match the current output schema, keep the old file as a legacy backup and start a fresh CSV with the expected header.")]
+    [SerializeField] private CsvSchemaMismatchHandling schemaMismatchHandling =
+        CsvSchemaMismatchHandling.RotateOldFileAndStartFresh;
+
     [Header("Read Only")]
     [SerializeField, ReadOnly] private string resolvedBaseFolder = "";
     [SerializeField, ReadOnly] private string timeSeriesFilePath = "";
@@ -47,6 +58,7 @@ public class SimulationMetricsFileLogger : MonoBehaviour
     [SerializeField, ReadOnly] private float lastWrittenSimTime = -1f;
     [SerializeField, ReadOnly] private float nextScheduledSimTime = 0f;
     [SerializeField, ReadOnly] private string lastWriteStatus = "Idle";
+    [SerializeField, ReadOnly] private string csvSchemaStatus = "Not checked";
     [SerializeField, ReadOnly] private bool summaryWrittenForCurrentRun = false;
 
     private bool _timeSeriesHeaderWritten = false;
@@ -161,8 +173,9 @@ public class SimulationMetricsFileLogger : MonoBehaviour
 
     private void RefreshHeaderStates()
     {
-        _timeSeriesHeaderWritten = File.Exists(timeSeriesFilePath) && new FileInfo(timeSeriesFilePath).Length > 0;
-        _summaryHeaderWritten = File.Exists(summaryFilePath) && new FileInfo(summaryFilePath).Length > 0;
+        _timeSeriesHeaderWritten = HasMatchingCsvHeader(timeSeriesFilePath, BuildTimeSeriesHeader());
+        _summaryHeaderWritten = HasMatchingCsvHeader(summaryFilePath, BuildSummaryHeader());
+        csvSchemaStatus = BuildSchemaStatusText();
     }
 
     private bool TryWriteTimeSeriesRow(bool forceWrite = false)
@@ -196,22 +209,30 @@ public class SimulationMetricsFileLogger : MonoBehaviour
 
         try
         {
-            EnsureDirectoryExists(timeSeriesFilePath);
+            string header = BuildTimeSeriesHeader();
+            string row = BuildTimeSeriesRow(m);
+
+            if (!ValidateCsvColumnCount("time-series", header, row))
+                return false;
+
+            if (!EnsureCsvReadyForAppend(timeSeriesFilePath, header, ref _timeSeriesHeaderWritten, "time-series"))
+                return false;
 
             using (var stream = new FileStream(timeSeriesFilePath, FileMode.Append, FileAccess.Write, FileShare.Read))
             using (var writer = new StreamWriter(stream, Encoding.UTF8))
             {
                 if (!_timeSeriesHeaderWritten)
                 {
-                    writer.WriteLine(BuildTimeSeriesHeader());
+                    writer.WriteLine(header);
                     _timeSeriesHeaderWritten = true;
                 }
 
-                writer.WriteLine(BuildTimeSeriesRow(m));
+                writer.WriteLine(row);
             }
 
             lastWrittenSimTime = simTime;
             lastWriteStatus = $"Saved time-series row at t={simTime:F3}s";
+            csvSchemaStatus = BuildSchemaStatusText();
             return true;
         }
         catch (Exception ex)
@@ -239,22 +260,30 @@ public class SimulationMetricsFileLogger : MonoBehaviour
 
         try
         {
-            EnsureDirectoryExists(summaryFilePath);
+            string header = BuildSummaryHeader();
+            string row = BuildSummaryRow(m);
+
+            if (!ValidateCsvColumnCount("summary", header, row))
+                return;
+
+            if (!EnsureCsvReadyForAppend(summaryFilePath, header, ref _summaryHeaderWritten, "summary"))
+                return;
 
             using (var stream = new FileStream(summaryFilePath, FileMode.Append, FileAccess.Write, FileShare.Read))
             using (var writer = new StreamWriter(stream, Encoding.UTF8))
             {
                 if (!_summaryHeaderWritten)
                 {
-                    writer.WriteLine(BuildSummaryHeader());
+                    writer.WriteLine(header);
                     _summaryHeaderWritten = true;
                 }
 
-                writer.WriteLine(BuildSummaryRow(m));
+                writer.WriteLine(row);
             }
 
             summaryWrittenForCurrentRun = true;
             lastWriteStatus = $"Saved summary row for experiment '{experimentTag}'";
+            csvSchemaStatus = BuildSchemaStatusText();
         }
         catch (Exception ex)
         {
@@ -380,6 +409,174 @@ public class SimulationMetricsFileLogger : MonoBehaviour
     private string BuildSummaryRow(SimulationResultMetrics m)
     {
         return BuildTimeSeriesRow(m);
+    }
+
+    private bool ValidateCsvColumnCount(string label, string header, string row)
+    {
+        int headerCount = CountCsvFields(header);
+        int rowCount = CountCsvFields(row);
+
+        if (headerCount == rowCount)
+            return true;
+
+        lastWriteStatus = $"Skipped {label} CSV write: header has {headerCount} columns but row has {rowCount}.";
+        Debug.LogError(
+            "[SimulationMetricsFileLogger] CSV schema error. " +
+            $"{label} header columns={headerCount}, row columns={rowCount}. " +
+            "The row was not written.");
+        return false;
+    }
+
+    private bool EnsureCsvReadyForAppend(
+        string filePath,
+        string expectedHeader,
+        ref bool headerWritten,
+        string label)
+    {
+        EnsureDirectoryExists(filePath);
+
+        if (!File.Exists(filePath) || new FileInfo(filePath).Length == 0)
+        {
+            headerWritten = false;
+            return true;
+        }
+
+        string existingHeader = ReadFirstNonEmptyLine(filePath);
+        if (HeadersMatch(existingHeader, expectedHeader))
+        {
+            headerWritten = true;
+            return true;
+        }
+
+        int existingColumnCount = CountCsvFields(existingHeader);
+        int expectedColumnCount = CountCsvFields(expectedHeader);
+        string message =
+            $"{label} CSV header mismatch at {filePath}. " +
+            $"existing columns={existingColumnCount}, expected columns={expectedColumnCount}.";
+
+        if (schemaMismatchHandling == CsvSchemaMismatchHandling.StopWriting)
+        {
+            headerWritten = false;
+            lastWriteStatus = $"Stopped {label} CSV write: {message}";
+            csvSchemaStatus = lastWriteStatus;
+            Debug.LogError($"[SimulationMetricsFileLogger] {message} Writing stopped.");
+            return false;
+        }
+
+        string backupPath = BuildLegacyCsvPath(filePath);
+        File.Move(filePath, backupPath);
+
+        headerWritten = false;
+        lastWriteStatus =
+            $"Rotated legacy {label} CSV to {Path.GetFileName(backupPath)} and started a fresh schema.";
+        csvSchemaStatus = lastWriteStatus;
+        Debug.LogWarning($"[SimulationMetricsFileLogger] {message} Moved old file to {backupPath}.");
+        return true;
+    }
+
+    private bool HasMatchingCsvHeader(string filePath, string expectedHeader)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            return false;
+
+        var info = new FileInfo(filePath);
+        if (info.Length == 0)
+            return false;
+
+        return HeadersMatch(ReadFirstNonEmptyLine(filePath), expectedHeader);
+    }
+
+    private string BuildSchemaStatusText()
+    {
+        bool timeSeriesExists = File.Exists(timeSeriesFilePath) && new FileInfo(timeSeriesFilePath).Length > 0;
+        bool summaryExists = File.Exists(summaryFilePath) && new FileInfo(summaryFilePath).Length > 0;
+
+        string timeSeriesStatus = !timeSeriesExists
+            ? "time-series: no file"
+            : (_timeSeriesHeaderWritten ? "time-series: current schema" : "time-series: legacy/header mismatch");
+
+        string summaryStatus = !summaryExists
+            ? "summary: no file"
+            : (_summaryHeaderWritten ? "summary: current schema" : "summary: legacy/header mismatch");
+
+        return $"{timeSeriesStatus}; {summaryStatus}";
+    }
+
+    private static bool HeadersMatch(string actualHeader, string expectedHeader)
+    {
+        return string.Equals(
+            NormalizeCsvHeader(actualHeader),
+            NormalizeCsvHeader(expectedHeader),
+            StringComparison.Ordinal);
+    }
+
+    private static string NormalizeCsvHeader(string header)
+    {
+        return (header ?? string.Empty).Trim().TrimStart('\uFEFF');
+    }
+
+    private static string ReadFirstNonEmptyLine(string filePath)
+    {
+        using (var reader = new StreamReader(filePath, Encoding.UTF8, true))
+        {
+            while (!reader.EndOfStream)
+            {
+                string line = reader.ReadLine();
+                if (!string.IsNullOrWhiteSpace(line))
+                    return line;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string BuildLegacyCsvPath(string filePath)
+    {
+        string directory = Path.GetDirectoryName(filePath);
+        string name = Path.GetFileNameWithoutExtension(filePath);
+        string extension = Path.GetExtension(filePath);
+        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
+
+        string candidate = Path.Combine(directory, $"{name}.legacy_schema_{timestamp}{extension}");
+        int suffix = 1;
+
+        while (File.Exists(candidate))
+        {
+            candidate = Path.Combine(directory, $"{name}.legacy_schema_{timestamp}_{suffix}{extension}");
+            suffix++;
+        }
+
+        return candidate;
+    }
+
+    private static int CountCsvFields(string line)
+    {
+        if (string.IsNullOrEmpty(line))
+            return 0;
+
+        int count = 1;
+        bool inQuotes = false;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char c = line[i];
+            if (c == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    i++;
+                    continue;
+                }
+
+                inQuotes = !inQuotes;
+            }
+            else if (c == ',' && !inQuotes)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private void EnsureDirectoryExists(string filePath)

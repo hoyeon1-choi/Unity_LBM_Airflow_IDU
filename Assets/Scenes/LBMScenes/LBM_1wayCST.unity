@@ -725,26 +725,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 911ea887e117857439dc1100ff7e0b8c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  solverPreset: 1
+  runSimulation: 1
   domain: {fileID: 43662410}
   lbmComputeShader: {fileID: 7200000, guid: 7902e0f3cefad614495bc186d8dc23df, type: 3}
   sceneCacheReady: 0
   sceneCacheStatus: Scene cache not connected yet.
   U_ref: 2
   dxPhys: 0.04
+  nuPhysTarget: 0.000015
+  prandtlTarget: 0.71
+  beta: 0.00001901
+  gravity_y: -9.81
   tempPhysMinDegC: 10
   tempPhysMaxDegC: 30
   referenceTemperatureDegCInput: 30
-  maxMach: 0.3
+  maxMach: 0.25
   tauMin: 0.56
   tauMax: 4
-  beta: 0.00001901
-  gravity_y: -9.81
   turbulenceModel: 1
   turbulenceModelConstant: 0.03
   turbulentPrandtl: 0.7
   wallFunctionEnabled: 0
-  nuPhysTarget: 0.000015
-  prandtlTarget: 0.71
   enableAdaptiveOutletRhoFeedback: 1
   adaptiveOutletRhoGain: 0.1
   adaptiveOutletRhoMaxOffset: 0.01
@@ -754,10 +756,10 @@ MonoBehaviour:
   enableMassFluxCorrectedOutlet: 1
   useInletAbsFlowAsOutletTarget: 1
   maxOutletTargetNormalSpeedPhys: 2
-  logGrossVsEffectiveOutletArea: 1
+  logGrossVsEffectiveOutletArea: 0
   grossVsEffectiveAreaLogIntervalSteps: 300
   logEachOutletPatchDetail: 1
-  logOutletRootCause: 1
+  logOutletRootCause: 0
   outletRootCauseLogIntervalSteps: 300
   debugInletFlowFromSampler: 0
   debugInletFlowFromBoxes: 0
@@ -773,7 +775,6 @@ MonoBehaviour:
   logMemoryEstimate: 1
   vramWarningRatio: 0.7
   manualVramBudgetGB: 0
-  runSimulation: 1
   autoLogSummaryOnStart: 1
   autoLogSummaryOnSceneRefresh: 1
   useTargetSimulationTime: 1
@@ -812,7 +813,111 @@ MonoBehaviour:
   stepCount: 0
   simulatedTimeSeconds: 0
   simulatedTimeMinutes: 0
-  latestSummary: 
+  latestSummary: "=== Case Summary ===\nPreset          : FastPreview\nDomain [m]     
+    : 0.000 x 0.000 x 0.000\nCell size [m]   : 0.05000\nGrid            : 250 x 100
+    x 400 (10,000,000 cells)\nEstimated memory: 2403.3 MiB\nSimulation time : 0.000
+    s\n\n=== Boundary Summary ===\r\nNo Zou-He inlet/outlet boxes found.\r\n\n\n===
+    Solver Summary ===\ndtPhys [s]      : 1.732051E-003\nmaxMach limit   : 0.250\nMach           
+    : 0.3000\ntau_f / tau_T   : 0.5600 / 0.5600\nnu / alpha phys : 4.6188E-003 /
+    3.4641E-003\nRe / Pr         : 3.4641E+003 / 1.3333\nCollision       : MRT, Smagorinsky\n\n===
+    Stability Summary ===\nStatus          : Warning\nMach            : 0.3000 (recommended
+    <= 0.15)\ntau_f / tau_T   : 0.5600 / 0.5600 (recommended >= 0.55)\nPr             
+    : 1.3333\nBuffer safe     : True\n\n=== Run Readiness ===\nStatus : Invalid\nInlets
+    : 0, Outlets : 0\nErrors :\n  - At least one inlet boundary is required.\r\n 
+    - At least one outlet boundary is required.\r\nWarnings :\n  - Mach number is
+    high: Ma=0.3000. Lower maxMach for better stability.\r\n\n\n=== Recommendation
+    ===\nFix Invalid readiness items before running.\n\n=== LBM Simulation Summary
+    ===\r\nDomain Size [m]         : 0.0000 x 0.0000 x 0.0000\r\nGrid Size [cells]      
+    : 250 x 100 x 400\r\ndx_phys [m]             : 0.050000\r\ndt_phys [s]            
+    : 1.732051E-003\r\nStep Count              : 0\r\nPhysical Time [s]       : 0.000000\r\ntau_f
+    / tau_T           : 0.560000 / 0.560000\r\nnu_phys [m^2/s]         : 4.618803E-003\r\nalpha_phys
+    [m^2/s]      : 3.464102E-003\r\nMach Number             : 0.300000\r\nReynolds
+    Number (phys)  : 3464.101\r\nPrandtl Number          : 1.333333\r\nMax Wind Speed
+    [m/s]    : 2.000000\r\nCollision Model          : MRT\r\nTurbulence Model        
+    : Smagorinsky\r\nSGS Constant             : 0.030000\r\nTurbulent Prandtl       
+    : 0.700000\r\nWall Function            : Off\r\n\r\nNo active Zou-He patches.\r\n\n\n===
+    Temperature Mapping ===\nTemp Range [degC]        : 10.00 ~ 30.00\nReference
+    Temp [degC]    : 20.00\nReference Temp [LBM]     : 0.600000\n\n=== Stop Condition
+    ===\nUse Target Simulation Time : True\nTarget Simulation Time [s] : 600.000\nTarget
+    Time Reached        : False\n\n=== Mass-Flux Corrected Outlet ===\nEnable                   
+    : True\nUse Inlet Abs Flow Target : True\nTotal Outlet Area [m^2]   : 0.000000\nTarget
+    Outlet Normal [m/s]: 0.000000\nDebug Inlet Flow Sampler  : 0.000000\nDebug Inlet
+    Flow Direct   : 0.000000\nDebug Outlet Area Direct  : 0.000000\nDebug Target
+    Applied Cnt  : 0\n\n=== Result Metrics ===\n[Case / Time]\nStep                 
+    : 0\nSimulation Time       : 0.000 s\ndtPhys                : 0.000000E+000 s\nPreset               
+    : -\n[Thermal Result]\nRoom Avg Temp         : - degC\nRoom Min / Max Temp  
+    : - / - degC\nRoom Temp StdDev      : - degC\nInlet Avg Temp        : - degC\nOutlet
+    Avg Temp       : - degC\n[Flow Result]\nInlet Avg Speed       : - m/s\nOutlet
+    Avg Speed      : - m/s\nInlet Flow            : - m3/s (- CMM)\nOutlet Flow          
+    : - m3/s (- CMM)\nRelative Imbalance    : -\nMax Speed             : 0.0000 m/s\n[Stability
+    / Conservation]\nMax Mach              : 0.000000\nAvg Density           : 0.000000\nDensity
+    StdDev        : 0.000000\nMass Residual         : 0.0000E+000\nMass Status          
+    : -\ntau_f / tau_T         : 0.0000 / 0.0000\nRe / Pr               : 0.0000E+000
+    / 0.0000\nStability Status      : -\nReadiness Status      : -\n[Debug Counters]\nThermal
+    Clamp In/Out  : 0 / 0\nFluid Clamp In/Out    : 0 / 0\nStatus                :
+    -"
+  caseSummary: '=== Case Summary ===
+
+    Preset          : FastPreview
+
+    Domain
+    [m]      : 0.000 x 0.000 x 0.000
+
+    Cell size [m]   : 0.05000
+
+    Grid           
+    : 250 x 100 x 400 (10,000,000 cells)
+
+    Estimated memory: 2403.3 MiB
+
+    Simulation
+    time : 0.000 s'
+  boundarySummary: '=== Boundary Summary ===
+
+    No Zou-He inlet/outlet boxes found.
+
+'
+  solverSummary: '=== Solver Summary ===
+
+    dtPhys [s]      : 1.732051E-003
+
+    maxMach
+    limit   : 0.250
+
+    Mach            : 0.3000
+
+    tau_f / tau_T   : 0.5600 /
+    0.5600
+
+    nu / alpha phys : 4.6188E-003 / 3.4641E-003
+
+    Re / Pr        
+    : 3.4641E+003 / 1.3333
+
+    Collision       : MRT, Smagorinsky'
+  stabilitySummary: '=== Stability Summary ===
+
+    Status          : Warning
+
+    Mach           
+    : 0.3000 (recommended <= 0.15)
+
+    tau_f / tau_T   : 0.5600 / 0.5600 (recommended
+    >= 0.55)
+
+    Pr              : 1.3333
+
+    Buffer safe     : True'
+  recommendationSummary: '=== Recommendation ===
+
+    Fix Invalid readiness items
+    before running.'
+  readinessSummary: "=== Run Readiness ===\nStatus : Invalid\nInlets : 0, Outlets
+    : 0\nErrors :\n  - At least one inlet boundary is required.\r\n  - At least one
+    outlet boundary is required.\r\nWarnings :\n  - Mach number is high: Ma=0.3000.
+    Lower maxMach for better stability.\r\n"
+  stabilityStatus: 1
+  readinessStatus: 2
   estimatedDistributionBuffersMB: 1983.6426
   estimatedCoreBuffersMB: 2212.5244
   estimatedTexturesMB: 190.73486
@@ -888,12 +993,59 @@ MonoBehaviour:
   enableSampling: 1
   sampleIntervalSeconds: 2
   logMetricsToConsole: 1
-  readbackMode: 1
+  requireFlowDiagnostics: 1
+  readbackMode: 0
   latestMetrics:
+    stepCount: 0
+    simulationTimeSeconds: 0
+    dtPhys: 0
+    preset: 
+    readbackMode: 
     fluidCellCount: 0
     rackCellCount: 0
     inletSampleCount: 0
     outletSampleCount: 0
+    avgRoomTemperatureDegC: 0
+    minRoomTemperatureDegC: 0
+    maxRoomTemperatureDegC: 0
+    roomTemperatureStdDevDegC: 0
+    inletAverageTemperatureDegC: 0
+    outletAverageTemperatureDegC: 0
+    outletTemperatureStdDevDegC: 0
+    outletInnerPlaneAverageTemperatureDegC: 0
+    outletInnerPlaneSampleCount: 0
+    hasValidOutletInnerPlaneAverage: 0
+    inletAverageSpeedPhys: 0
+    outletAverageSpeedPhys: 0
+    inletAverageNormalSpeedPhys: 0
+    outletAverageNormalSpeedPhys: 0
+    inletFlowRatePhysSigned: 0
+    outletFlowRatePhysSigned: 0
+    inletFlowRatePhysAbs: 0
+    outletFlowRatePhysAbs: 0
+    inletFlowRateCMM: 0
+    outletFlowRateCMM: 0
+    netFlowRatePhysSigned: 0
+    relativeFlowImbalance: 0
+    maxSpeedPhys: 0
+    maxMach: 0
+    hasValidVelocityDiagnostic: 0
+    hasValidFlowDiagnostic: 0
+    avgDensity: 0
+    densityStdDev: 0
+    massResidualNormalized: 0
+    massConservationStatus: 
+    hasValidDensityDiagnostic: 0
+    tauF: 0
+    tauT: 0
+    reynoldsNumber: 0
+    prandtlNumber: 0
+    stabilityStatus: 
+    readinessStatus: 
+    thermalInletClampCount: 0
+    thermalOutletClampCount: 0
+    fluidInletClampCount: 0
+    fluidOutletClampCount: 0
     avgRoomTemperatureRaw: 0
     inletAverageTemperatureRaw: 0
     outletAverageTemperatureRaw: 0
@@ -903,37 +1055,9 @@ MonoBehaviour:
     maxRoomTemperatureRaw: 0
     roomTemperatureStdDevRaw: 0
     outletTemperatureStdDevRaw: 0
-    avgDensity: 0
-    densityStdDev: 0
     maxSpeedLat: 0
     outletInnerPlaneAverageTemperatureRaw: 0
-    outletInnerPlaneAverageTemperatureDegC: 0
-    outletInnerPlaneSampleCount: 0
-    hasValidOutletInnerPlaneAverage: 0
-    inletAverageNormalSpeedPhys: 0
-    outletAverageNormalSpeedPhys: 0
-    inletFlowRatePhysSigned: 0
-    outletFlowRatePhysSigned: 0
-    inletFlowRatePhysAbs: 0
-    outletFlowRatePhysAbs: 0
-    netFlowRatePhysSigned: 0
-    relativeFlowImbalance: 0
-    hasValidFlowDiagnostic: 0
-    thermalInletClampCount: 0
-    thermalOutletClampCount: 0
-    fluidInletClampCount: 0
-    fluidOutletClampCount: 0
-    avgRoomTemperatureDegC: 0
-    inletAverageTemperatureDegC: 0
-    outletAverageTemperatureDegC: 0
-    inletAverageSpeedPhys: 0
-    outletAverageSpeedPhys: 0
-    minRoomTemperatureDegC: 0
-    maxRoomTemperatureDegC: 0
-    roomTemperatureStdDevDegC: 0
-    outletTemperatureStdDevDegC: 0
-    maxSpeedPhys: 0
-    massResidualNormalized: 0
+    machMax: 0
     averageKineticEnergyLat: 0
     hasValidRoomAverage: 0
     hasValidInletAverage: 0
@@ -941,7 +1065,9 @@ MonoBehaviour:
     statusMessage: 
   nextSampleSimTimeSeconds: 0
   lastRequestedSampleSimTimeSeconds: -1
-  activeReadbackMode: 
+  activeReadbackMode: FullMetrics
+  readbackModeStatus: 'FullMetrics: temperature, velocity, density, flow, Mach and
+    mass residual are sampled.'
 --- !u!1001 &121286479
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1297,7 +1423,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   power: 1
   kind: 0
+  boundaryInputMode: 0
+  patchAreaPhysCached: 0.08
+  targetFlowRateM3psCached: 0.11312
+  targetFlowRateCMMCached: 6.7872
+  boundarySummary: "[Inlet] InletBox\n  Input mode         : Velocity\n  Plane /
+    Normal     : +Y, planeIndex=49\n  Patch area         : 0.080000 m^2 (50 cells)\n 
+    Velocity (phys)    : (0.0000, -1.4140, -1.4140) m/s\n  Velocity magnitude : 1.9997
+    m/s\n  Normal speed       : -1.4140 m/s\n  Flow rate          : -0.113120 m^3/s
+    (-6.787 CMM)\n  Velocity (lattice) : (0.000000, -0.061228, -0.061228)\n  Inlet
+    temp (degC)  : 10.00\n  Inlet temp (LBM)   : 0.000000\n  Warning            :
+    None\n  Cell bounds        : x:[50,74] y:[49,49] z:[139,140]"
   windSpeedPhys: {x: 0, y: -1.414, z: -1.414}
+  volumeFlowRateUnit: 1
+  volumeFlowRateM3ps: 0.1
+  volumeFlowRateCMM: 6
   inletTemperatureDegC: 10
   inletTemperatureLBM: 0
   rhoOut: 1
@@ -3818,7 +3958,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   power: 1
   kind: 0
+  boundaryInputMode: 0
+  patchAreaPhysCached: 0.0016
+  targetFlowRateM3psCached: 0.00128
+  targetFlowRateCMMCached: 0.076799996
+  boundarySummary: "[Inlet] inletBox (1)\n  Input mode         : Velocity\n  Plane
+    / Normal     : +Z, planeIndex=203\n  Patch area         : 0.001600 m^2 (1 cells)\n 
+    Velocity (phys)    : (0.0000, 0.0000, -0.8000) m/s\n  Velocity magnitude : 0.8000
+    m/s\n  Normal speed       : -0.8000 m/s\n  Flow rate          : -0.001280 m^3/s
+    (-0.077 CMM)\n  Velocity (lattice) : (0.000000, 0.000000, -0.034641)\n  Inlet
+    temp (degC)  : 20.00\n  Inlet temp (LBM)   : 0.500000\n  Warning            :
+    None\n  Cell bounds        : x:[137,137] y:[21,21] z:[203,203]"
   windSpeedPhys: {x: 0, y: 0, z: -0.8}
+  volumeFlowRateUnit: 1
+  volumeFlowRateM3ps: 0.1
+  volumeFlowRateCMM: 6
   inletTemperatureDegC: 20
   inletTemperatureLBM: 0.5
   rhoOut: 1
@@ -5182,7 +5336,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   power: 1
   kind: 1
+  boundaryInputMode: 3
+  patchAreaPhysCached: 0.24
+  targetFlowRateM3psCached: 0
+  targetFlowRateCMMCached: 0
+  boundarySummary: "[Outlet] OutletBox\n  Input mode         : AutoMassBalancedOutlet\n 
+    Plane / Normal     : +Y, planeIndex=49\n  Patch area         : 0.240000 m^2 (150
+    cells)\n  Outlet rho target  : 0.900000\n  Base rho target    : 0.900000\n  Adaptive
+    offset    : 0.000000\n  Flux correction    : True\n  Target normal phys : 0.0000
+    m/s\n  Target normal lat  : 0.000000\n  Target flow         : 0.000000 m^3/s
+    (0.000 CMM)\n  Normal blend       : 0.200\n  Rho anchor         : 0.000\n  Warning           
+    : None\n  Force Full Blend    : True\n  Force Zero RhoAnchor: True\n  Cell bounds       
+    : x:[50,74] y:[49,49] z:[157,162]"
   windSpeedPhys: {x: 0, y: 2, z: 0}
+  volumeFlowRateUnit: 1
+  volumeFlowRateM3ps: 0.1
+  volumeFlowRateCMM: 6
   inletTemperatureDegC: 30
   inletTemperatureLBM: 0
   rhoOut: 0.9

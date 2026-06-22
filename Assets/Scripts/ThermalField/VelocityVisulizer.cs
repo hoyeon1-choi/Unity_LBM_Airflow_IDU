@@ -14,9 +14,15 @@ public class VelocityVisualizer : MonoBehaviour
     [SerializeField] private bool useSimulationMaxSpeed = true;
     [SerializeField] private float autoScaleMultiplier = 1.0f;
 
+    [Header("Update Rate")]
+    [Tooltip("Real-time interval for updating contour slice material uniforms.")]
+    [Min(0.05f)]
+    [SerializeField] private float updateIntervalSeconds = 1.0f;
+
     private Material _sliceMaterial;
     private Matrix4x4 _unitizeMatrix;
     private bool _initialized;
+    private float _nextUpdateRealtime;
 
     private float _currentDisplayMin = 0.0f;
     private float _currentDisplayMax = 1.0f;
@@ -39,6 +45,8 @@ public class VelocityVisualizer : MonoBehaviour
         _sliceMaterial.SetTexture("_VolumeTex", sc.LBMSolver.VelocityTexture);
 
         ApplyPhysicalScale(sc);
+        UpdateWorldToVolumeMatrix();
+        _nextUpdateRealtime = Time.unscaledTime + Mathf.Max(updateIntervalSeconds, 0.05f);
 
         _initialized = true;
     }
@@ -47,15 +55,22 @@ public class VelocityVisualizer : MonoBehaviour
     {
         if (!_initialized) return;
         if (_sliceMaterial == null || volumeTransform == null) return;
+        if (Time.unscaledTime < _nextUpdateRealtime) return;
 
-        Matrix4x4 worldToVolume = _unitizeMatrix * volumeTransform.worldToLocalMatrix;
-        _sliceMaterial.SetMatrix("_WorldToVolume", worldToVolume);
+        _nextUpdateRealtime = Time.unscaledTime + Mathf.Max(updateIntervalSeconds, 0.05f);
+        UpdateWorldToVolumeMatrix();
 
         var sc = SimulationController.Instance;
         if (sc != null)
         {
             ApplyPhysicalScale(sc);
         }
+    }
+
+    private void UpdateWorldToVolumeMatrix()
+    {
+        Matrix4x4 worldToVolume = _unitizeMatrix * volumeTransform.worldToLocalMatrix;
+        _sliceMaterial.SetMatrix("_WorldToVolume", worldToVolume);
     }
 
     private void ApplyPhysicalScale(SimulationController sc)

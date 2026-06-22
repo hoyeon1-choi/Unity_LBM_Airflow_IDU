@@ -44,9 +44,21 @@ public class LBMZouHeBox : MonoBehaviour
     [Tooltip("Physical inlet velocity vector [m/s] (World space). " +
              "This directly controls inlet direction without rotating the box.")]
     [SerializeField] private Vector3 windSpeedPhys = new Vector3(0f, 0f, -0.8f);
+
+    [Header("Inlet Volume Flow")]
     [SerializeField] private FlowRateInputUnit volumeFlowRateUnit = FlowRateInputUnit.CMM;
     [SerializeField] private float volumeFlowRateM3ps = 0.1f;
     [SerializeField] private float volumeFlowRateCMM = 6.0f;
+
+    [Header("Inlet Volume Flow Direction")]
+    [Tooltip("Flow angle from inward normal toward the first BC tangential axis [deg]. Positive/negative follows the world axis direction shown in the boundary summary.")]
+    [Range(-80.0f, 80.0f)]
+    [SerializeField] private float volumeFlowTangentialAngleAdeg = 0.0f;
+    [Tooltip("Flow angle from inward normal toward the second BC tangential axis [deg]. Positive/negative follows the world axis direction shown in the boundary summary.")]
+    [Range(-80.0f, 80.0f)]
+    [SerializeField] private float volumeFlowTangentialAngleBdeg = 0.0f;
+    [Tooltip("Computed normalized world-space flow direction used by Volume Flow Rate mode.")]
+    [SerializeField, ReadOnly] private Vector3 volumeFlowDirectionWorld = Vector3.zero;
 
     [Header("Thermal Settings")]
     [Tooltip("Inlet physical temperature target [degC]. This is converted to LBM temperature before sending to solver.")]
@@ -232,12 +244,22 @@ public class LBMZouHeBox : MonoBehaviour
     private void ApplyInletInputMode(float dx, float dt)
     {
         SyncFlowRateFields();
+        volumeFlowTangentialAngleAdeg = Mathf.Clamp(volumeFlowTangentialAngleAdeg, -80.0f, 80.0f);
+        volumeFlowTangentialAngleBdeg = Mathf.Clamp(volumeFlowTangentialAngleBdeg, -80.0f, 80.0f);
 
         if (GetEffectiveBoundaryInputMode() == BoundaryInputMode.VolumeFlowRate)
         {
             float area = Mathf.Max(PatchAreaPhys(dx), 1e-8f);
             float normalVelocity = volumeFlowRateM3ps / area;
-            windSpeedPhys = planeNormalWorld.normalized * normalVelocity;
+            Vector3 velocityScale = BuildVolumeFlowVelocityScaleWorld(out Vector3 normalizedDirection);
+            windSpeedPhys = velocityScale * normalVelocity;
+            volumeFlowDirectionWorld = normalizedDirection;
+        }
+        else
+        {
+            volumeFlowDirectionWorld = windSpeedPhys.sqrMagnitude > 1e-12f
+                ? windSpeedPhys.normalized
+                : Vector3.zero;
         }
 
         float scale = (dx > 0f) ? (dt / dx) : 0f;
@@ -399,7 +421,10 @@ public class LBMZouHeBox : MonoBehaviour
         if (kind == Kind.Inlet)
         {
             float normalSpeed = GetNormalSpeedPhys();
+            float inwardNormalSpeed = -normalSpeed;
             float flowRate = GetFlowRatePhys(dx);
+            float flowRateAbs = Mathf.Abs(flowRate);
+            GetTangentialAxes(out Vector3 tangentA, out Vector3 tangentB);
 
             return
                 $"[Inlet] {name}\n" +
@@ -408,9 +433,14 @@ public class LBMZouHeBox : MonoBehaviour
                 $"  Patch area         : {area:F6} m^2 ({PatchCellCount} cells)\n" +
                 $"  Velocity (phys)    : ({windSpeedPhys.x:F4}, {windSpeedPhys.y:F4}, {windSpeedPhys.z:F4}) m/s\n" +
                 $"  Velocity magnitude : {WindSpeedMagnitudePhys:F4} m/s\n" +
-                $"  Normal speed       : {normalSpeed:F4} m/s\n" +
-                $"  Flow rate          : {flowRate:F6} m^3/s ({flowRate * 60.0f:F3} CMM)\n" +
+                $"  Normal speed       : {normalSpeed:F4} m/s (plane signed)\n" +
+                $"  Inward normal speed: {inwardNormalSpeed:F4} m/s\n" +
+                $"  Flow rate          : {flowRateAbs:F6} m^3/s ({flowRateAbs * 60.0f:F3} CMM)\n" +
+                $"  Signed flow        : {flowRate:F6} m^3/s\n" +
                 $"  Velocity (lattice) : ({InletVelocityLat.x:F6}, {InletVelocityLat.y:F6}, {InletVelocityLat.z:F6})\n" +
+                $"  Flow direction     : ({volumeFlowDirectionWorld.x:F4}, {volumeFlowDirectionWorld.y:F4}, {volumeFlowDirectionWorld.z:F4})\n" +
+                $"  Tangential axes    : A={FormatAxis(tangentA)}, B={FormatAxis(tangentB)}\n" +
+                $"  Tangential angles  : A={volumeFlowTangentialAngleAdeg:F2} deg, B={volumeFlowTangentialAngleBdeg:F2} deg\n" +
                 $"  Inlet temp (degC)  : {inletTemperatureDegC:F2}\n" +
                 $"  Inlet temp (LBM)   : {inletTemperatureLBM:F6}\n" +
                 $"  Warning            : {(area <= 1e-12f ? "Patch area is zero." : "None")}\n" +
@@ -466,6 +496,83 @@ public class LBMZouHeBox : MonoBehaviour
         if (v.x >= v.y && v.x >= v.z) return Axis.X;
         if (v.y >= v.x && v.y >= v.z) return Axis.Y;
         return Axis.Z;
+    }
+
+    private Vector3 BuildVolumeFlowVelocityScaleWorld(out Vector3 normalizedDirection)
+    {
+        Vector3 inwardNormal = GetInwardNormalWorld();
+        if (inwardNormal.sqrMagnitude < 1e-12f)
+            inwardNormal = Vector3.back;
+
+        GetTangentialAxes(out Vector3 tangentA, out Vector3 tangentB);
+
+        float angleA = Mathf.Clamp(volumeFlowTangentialAngleAdeg, -80.0f, 80.0f);
+        float angleB = Mathf.Clamp(volumeFlowTangentialAngleBdeg, -80.0f, 80.0f);
+
+        Vector3 direction =
+            inwardNormal +
+            tangentA * Mathf.Tan(angleA * Mathf.Deg2Rad) +
+            tangentB * Mathf.Tan(angleB * Mathf.Deg2Rad);
+
+        if (direction.sqrMagnitude < 1e-12f)
+            direction = inwardNormal;
+
+        float normalDot = Vector3.Dot(direction, inwardNormal);
+        if (normalDot <= 1e-6f)
+        {
+            direction = inwardNormal;
+            normalDot = 1.0f;
+        }
+
+        normalizedDirection = direction.normalized;
+
+        // Preserve the requested volume flow rate by keeping the inward-normal
+        // velocity component equal to volumeFlowRate / patchArea.
+        return direction / Mathf.Max(normalDot, 1e-6f);
+    }
+
+    private Vector3 GetInwardNormalWorld()
+    {
+        Vector3 outwardNormal = planeNormalWorld;
+        if (outwardNormal.sqrMagnitude < 1e-12f)
+            outwardNormal = faceNormalWorld;
+        if (outwardNormal.sqrMagnitude < 1e-12f)
+            outwardNormal = transform.forward;
+        if (outwardNormal.sqrMagnitude < 1e-12f)
+            outwardNormal = Vector3.forward;
+
+        return -outwardNormal.normalized;
+    }
+
+    private void GetTangentialAxes(out Vector3 tangentA, out Vector3 tangentB)
+    {
+        switch (snappedAxis)
+        {
+            case Axis.X:
+                tangentA = Vector3.up;
+                tangentB = Vector3.forward;
+                break;
+            case Axis.Y:
+                tangentA = Vector3.right;
+                tangentB = Vector3.forward;
+                break;
+            default:
+                tangentA = Vector3.right;
+                tangentB = Vector3.up;
+                break;
+        }
+    }
+
+    private static string FormatAxis(Vector3 axis)
+    {
+        if (axis == Vector3.right) return "+X";
+        if (axis == Vector3.left) return "-X";
+        if (axis == Vector3.up) return "+Y";
+        if (axis == Vector3.down) return "-Y";
+        if (axis == Vector3.forward) return "+Z";
+        if (axis == Vector3.back) return "-Z";
+
+        return $"({axis.x:F1},{axis.y:F1},{axis.z:F1})";
     }
 
     private static Sign PickSign(Vector3 v, Axis a)
