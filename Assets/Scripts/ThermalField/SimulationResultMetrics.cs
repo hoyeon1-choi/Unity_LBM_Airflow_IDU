@@ -9,6 +9,7 @@ public class SimulationResultMetrics
     public float simulationTimeSeconds;
     public float dtPhys;
     public string preset;
+    public string caseName;
     public string readbackMode;
 
     [Header("Counts")]
@@ -55,6 +56,21 @@ public class SimulationResultMetrics
     public bool hasValidDensityDiagnostic;
     public float tauF;
     public float tauT;
+    public float tauFRaw;
+    public float tauTRaw;
+    public float tauFluidMin;
+    public float tauThermalMin;
+    public float tauFluidMax;
+    public float tauThermalMax;
+    public bool tauFWasClamped;
+    public bool tauTWasClamped;
+    public float nuPhysTarget;
+    public float alphaPhysTarget;
+    public float nuPhysEffective;
+    public float alphaPhysEffective;
+    public float nuPhysEffectiveRatio;
+    public float alphaPhysEffectiveRatio;
+    public float maxMachLimit;
     public float reynoldsNumber;
     public float prandtlNumber;
     public string stabilityStatus;
@@ -95,6 +111,7 @@ public class SimulationResultMetrics
         simulationTimeSeconds = 0f;
         dtPhys = 0f;
         preset = "";
+        caseName = "";
         readbackMode = "";
 
         fluidCellCount = 0;
@@ -137,6 +154,21 @@ public class SimulationResultMetrics
         hasValidDensityDiagnostic = false;
         tauF = 0f;
         tauT = 0f;
+        tauFRaw = 0f;
+        tauTRaw = 0f;
+        tauFluidMin = 0f;
+        tauThermalMin = 0f;
+        tauFluidMax = 0f;
+        tauThermalMax = 0f;
+        tauFWasClamped = false;
+        tauTWasClamped = false;
+        nuPhysTarget = 0f;
+        alphaPhysTarget = 0f;
+        nuPhysEffective = 0f;
+        alphaPhysEffective = 0f;
+        nuPhysEffectiveRatio = 0f;
+        alphaPhysEffectiveRatio = 0f;
+        maxMachLimit = 0f;
         reynoldsNumber = 0f;
         prandtlNumber = 0f;
         stabilityStatus = "";
@@ -178,6 +210,7 @@ public class SimulationResultMetrics
             $"Simulation Time       : {simulationTimeSeconds:F3} s\n" +
             $"dtPhys                : {dtPhys:E6} s\n" +
             $"Preset                : {SafeText(preset)}\n" +
+            $"Case                  : {SafeText(caseName)}\n" +
             $"Readback Mode         : {SafeText(readbackMode)}\n" +
             $"[Thermal Result]\n" +
             $"Room Avg Temp         : {ValueOrDash(hasValidRoomAverage, avgRoomTemperatureDegC, "F3")} degC\n" +
@@ -198,7 +231,12 @@ public class SimulationResultMetrics
             $"Density StdDev        : {ValueOrDash(hasValidDensityDiagnostic, densityStdDev, "F6")}\n" +
             $"Mass Residual         : {ValueOrDash(hasValidDensityDiagnostic, massResidualNormalized, "E4")}\n" +
             $"Mass Status           : {SafeText(massConservationStatus)}\n" +
-            $"tau_f / tau_T         : {tauF:F4} / {tauT:F4}\n" +
+            $"[Solver Diagnostics]\n" +
+            $"tau_f raw -> clamped  : {tauFRaw:F6} -> {tauF:F6} (min={tauFluidMin:F4}, clamped={tauFWasClamped})\n" +
+            $"tau_T raw -> clamped  : {tauTRaw:F6} -> {tauT:F6} (min={tauThermalMin:F4}, clamped={tauTWasClamped})\n" +
+            $"nu target/effective   : {nuPhysTarget:E4} / {nuPhysEffective:E4} (x{nuPhysEffectiveRatio:F2})\n" +
+            $"alpha target/effect   : {alphaPhysTarget:E4} / {alphaPhysEffective:E4} (x{alphaPhysEffectiveRatio:F2})\n" +
+            $"Max Mach Limit        : {maxMachLimit:F4}\n" +
             $"Re / Pr               : {reynoldsNumber:E4} / {prandtlNumber:F4}\n" +
             $"Stability Status      : {SafeText(stabilityStatus)}\n" +
             $"Readiness Status      : {SafeText(readinessStatus)}\n" +

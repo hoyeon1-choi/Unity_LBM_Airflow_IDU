@@ -141,6 +141,25 @@ public class SimulationMetricsFileLogger : MonoBehaviour
             nextScheduledSimTime = Mathf.Max(writeIntervalSeconds, 1e-6f);
     }
 
+    public void SetExperimentTag(string tag)
+    {
+        experimentTag = string.IsNullOrWhiteSpace(tag) ? "experiment" : tag.Trim();
+        RefreshPaths();
+        RefreshHeaderStates();
+        ResetWriteSchedule();
+        lastWriteStatus = $"Experiment tag set to '{experimentTag}'.";
+    }
+
+    public void ForceWriteSummaryRow()
+    {
+        TryWriteSummaryRow();
+    }
+
+    public bool TryForceWriteTimeSeriesRow()
+    {
+        return TryWriteTimeSeriesRow(true);
+    }
+
     private void RefreshPaths()
     {
         resolvedBaseFolder = ResolveBaseFolder();
@@ -348,6 +367,22 @@ public class SimulationMetricsFileLogger : MonoBehaviour
             "sim_time_sec",
             "dt_phys",
             "preset",
+            "case_name",
+            "tau_f_raw",
+            "tau_T_raw",
+            "tau_f",
+            "tau_T",
+            "tau_fluid_min",
+            "tau_thermal_min",
+            "tau_f_clamped",
+            "tau_T_clamped",
+            "nu_phys_target",
+            "alpha_phys_target",
+            "nu_phys_effective",
+            "alpha_phys_effective",
+            "nu_effective_ratio",
+            "alpha_effective_ratio",
+            "max_mach_limit",
             "room_avg_temp_degC",
             "room_min_temp_degC",
             "room_max_temp_degC",
@@ -384,6 +419,22 @@ public class SimulationMetricsFileLogger : MonoBehaviour
             Csv(m.simulationTimeSeconds.ToString("F6", CultureInfo.InvariantCulture)),
             Csv(m.dtPhys.ToString("E6", CultureInfo.InvariantCulture)),
             Csv(m.preset ?? ""),
+            Csv(m.caseName ?? ""),
+            Csv(m.tauFRaw.ToString("F8", CultureInfo.InvariantCulture)),
+            Csv(m.tauTRaw.ToString("F8", CultureInfo.InvariantCulture)),
+            Csv(m.tauF.ToString("F8", CultureInfo.InvariantCulture)),
+            Csv(m.tauT.ToString("F8", CultureInfo.InvariantCulture)),
+            Csv(m.tauFluidMin.ToString("F8", CultureInfo.InvariantCulture)),
+            Csv(m.tauThermalMin.ToString("F8", CultureInfo.InvariantCulture)),
+            Csv(m.tauFWasClamped ? "True" : "False"),
+            Csv(m.tauTWasClamped ? "True" : "False"),
+            Csv(m.nuPhysTarget.ToString("E8", CultureInfo.InvariantCulture)),
+            Csv(m.alphaPhysTarget.ToString("E8", CultureInfo.InvariantCulture)),
+            Csv(m.nuPhysEffective.ToString("E8", CultureInfo.InvariantCulture)),
+            Csv(m.alphaPhysEffective.ToString("E8", CultureInfo.InvariantCulture)),
+            Csv(m.nuPhysEffectiveRatio.ToString("F6", CultureInfo.InvariantCulture)),
+            Csv(m.alphaPhysEffectiveRatio.ToString("F6", CultureInfo.InvariantCulture)),
+            Csv(m.maxMachLimit.ToString("F6", CultureInfo.InvariantCulture)),
             Csv(m.avgRoomTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),
             Csv(m.minRoomTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),
             Csv(m.maxRoomTemperatureDegC.ToString("F6", CultureInfo.InvariantCulture)),

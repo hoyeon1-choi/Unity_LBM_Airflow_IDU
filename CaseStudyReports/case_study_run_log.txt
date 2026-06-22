@@ -1,0 +1,13 @@
+﻿Case study runtime runner started.
+Started at: 2026-06-22 15:13:05
+START A0_Baseline at realTime=7.420s
+DONE A0_Baseline, simTime=29.999120s, targetReached=True
+START A1_FluidTau_0530_Thermal_0560_Off at realTime=53.091s
+DONE A1_FluidTau_0530_Thermal_0560_Off, simTime=29.999120s, targetReached=True
+START A2_FluidTau_0510_Thermal_0560_Off at realTime=99.447s
+DONE A2_FluidTau_0510_Thermal_0560_Off, simTime=29.999120s, targetReached=True
+START A3_FluidTau_0510_Thermal_0530_Off at realTime=145.330s
+DONE A3_FluidTau_0510_Thermal_0530_Off, simTime=29.999120s, targetReached=True
+START A4_FluidTau_0510_Thermal_0530_Smag003 at realTime=192.357s
+DONE A4_FluidTau_0510_Thermal_0530_Smag003, simTime=29.999120s, targetReached=True
+Finished at: 2026-06-22 15:16:57

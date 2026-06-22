@@ -20,6 +20,15 @@ public enum SimulationHealthStatus
     Invalid
 }
 
+public enum CaseStudyPreset
+{
+    A0_Baseline,
+    A1_FluidTau_0530_Thermal_0560_Off,
+    A2_FluidTau_0510_Thermal_0560_Off,
+    A3_FluidTau_0510_Thermal_0530_Off,
+    A4_FluidTau_0510_Thermal_0530_Smag003
+}
+
 public class SimulationController : Singleton<SimulationController>
 {
     [Header("User Setup")]
@@ -63,8 +72,16 @@ public class SimulationController : Singleton<SimulationController>
     [Header("Advanced LBM Parameters")]
     [Tooltip("Lattice Mach number limit for LBM stability. Lower is usually more stable but slower.")]
     [Range(0.10f, 0.30f), SerializeField] private float maxMach = 0.25f;
-    [Range(0.53f, 1.0f), SerializeField] private float tauMin = 0.56f;
-    [Range(1.0f, 4.0f), SerializeField] private float tauMax = 4.00f;
+    [Tooltip("Minimum fluid relaxation time clamp. Values close to 0.5 reduce numerical viscosity but can be unstable.")]
+    [Range(0.5001f, 1.0f), SerializeField] private float tauFluidMin = 0.56f;
+    [Tooltip("Minimum thermal relaxation time clamp. Values close to 0.5 reduce thermal diffusion but can be unstable.")]
+    [Range(0.5001f, 1.0f), SerializeField] private float tauThermalMin = 0.56f;
+    [Tooltip("Maximum fluid relaxation time clamp.")]
+    [Range(1.0f, 4.0f), SerializeField] private float tauFluidMax = 4.00f;
+    [Tooltip("Maximum thermal relaxation time clamp.")]
+    [Range(1.0f, 4.0f), SerializeField] private float tauThermalMax = 4.00f;
+    [SerializeField, HideInInspector] private float tauMin = 0.56f;
+    [SerializeField, HideInInspector] private float tauMax = 4.00f;
 
     [Header("Advanced Solver Models")]
     [SerializeField] private TurbulenceModel turbulenceModel = TurbulenceModel.Smagorinsky;
@@ -73,6 +90,17 @@ public class SimulationController : Singleton<SimulationController>
     [Tooltip("Turbulent Prandtl number")]
     [SerializeField] private float turbulentPrandtl = 0.7f;
     [SerializeField] private bool wallFunctionEnabled = false;
+
+    [Header("Case Study")]
+    [Tooltip("Enable this before running A0-A4 case-study automation. Keep it off to prevent accidental long runs.")]
+    [SerializeField] private bool enableCaseStudyExecution = false;
+    [SerializeField] private CaseStudyPreset selectedCaseStudy = CaseStudyPreset.A0_Baseline;
+    [Tooltip("Apply the AGENTS.md short-run target time when a case-study preset is applied.")]
+    [SerializeField] private bool setTargetTimeWhenApplyingCaseStudy = true;
+    [SerializeField] private float caseStudyTargetSimulationTimeSeconds = 30.0f;
+    [SerializeField, ReadOnly] private string activeCaseName = "Manual";
+    [TextArea(3, 8)]
+    [SerializeField, ReadOnly] private string caseStudySummary = "No case study preset applied.";
 
     [Header("Boundary Auto Sync")]
     [SerializeField] private bool enableAdaptiveOutletRhoFeedback = true;
@@ -180,6 +208,14 @@ public class SimulationController : Singleton<SimulationController>
     [SerializeField, ReadOnly] private float alphaLat = 0f;
     [SerializeField, ReadOnly] private float nuPhys = 0f;
     [SerializeField, ReadOnly] private float alphaPhys = 0f;
+    [SerializeField, ReadOnly] private float nuPhysTargetReadOnly = 0f;
+    [SerializeField, ReadOnly] private float alphaPhysTargetReadOnly = 0f;
+    [SerializeField, ReadOnly] private float tauFRaw = 0.5f;
+    [SerializeField, ReadOnly] private float tauTRaw = 0.5f;
+    [SerializeField, ReadOnly] private bool tauFWasClamped = false;
+    [SerializeField, ReadOnly] private bool tauTWasClamped = false;
+    [SerializeField, ReadOnly] private float nuPhysEffectiveRatio = 0f;
+    [SerializeField, ReadOnly] private float alphaPhysEffectiveRatio = 0f;
     [SerializeField, ReadOnly] private float machNumber = 0.0f;
     [SerializeField, ReadOnly] private float reynoldsNumber = 0.0f;
     [SerializeField, ReadOnly] private float reynoldsNumberPhys = 0.0f;
@@ -203,6 +239,8 @@ public class SimulationController : Singleton<SimulationController>
     [SerializeField, ReadOnly] private string boundarySummary;
     [TextArea(3, 8)]
     [SerializeField, ReadOnly] private string solverSummary;
+    [TextArea(3, 8)]
+    [SerializeField, ReadOnly] private string scalingDiagnosticsSummary;
     [TextArea(3, 8)]
     [SerializeField, ReadOnly] private string stabilitySummary;
     [TextArea(3, 8)]
@@ -301,6 +339,7 @@ public class SimulationController : Singleton<SimulationController>
     public bool IsSimulationRunning => runSimulation;
     public SolverEasePreset SolverPreset => solverPreset;
     public string SolverPresetName => solverPreset.ToString();
+    public string ActiveCaseName => activeCaseName;
     public SimulationHealthStatus StabilityStatus => stabilityStatus;
     public SimulationHealthStatus ReadinessStatus => readinessStatus;
     public string StabilityStatusText => stabilitySummary;
@@ -310,6 +349,20 @@ public class SimulationController : Singleton<SimulationController>
     public float PrandtlNumber => prandtlNumber;
     public float TauF => tau_f;
     public float TauT => tau_T;
+    public float TauFRaw => tauFRaw;
+    public float TauTRaw => tauTRaw;
+    public float TauFluidMin => tauFluidMin;
+    public float TauThermalMin => tauThermalMin;
+    public float TauFluidMax => tauFluidMax;
+    public float TauThermalMax => tauThermalMax;
+    public bool TauFWasClamped => tauFWasClamped;
+    public bool TauTWasClamped => tauTWasClamped;
+    public float NuPhysTarget => nuPhysTargetReadOnly;
+    public float AlphaPhysTarget => alphaPhysTargetReadOnly;
+    public float NuPhysEffective => nuPhys;
+    public float AlphaPhysEffective => alphaPhys;
+    public float NuPhysEffectiveRatio => nuPhysEffectiveRatio;
+    public float AlphaPhysEffectiveRatio => alphaPhysEffectiveRatio;
     public float MaxMachLimit => maxMach;
     public string CollisionModelName => "MRT";
     public string TurbulenceModelName => turbulenceModel.ToString();
@@ -319,6 +372,7 @@ public class SimulationController : Singleton<SimulationController>
     public bool UseTargetSimulationTime => useTargetSimulationTime;
     public float TargetSimulationTimeSeconds => targetSimulationTimeSeconds;
     public bool TargetTimeReached => targetTimeReached;
+    public bool CaseStudyExecutionEnabled => enableCaseStudyExecution;
     public bool IsSolverReadyForReadback
     {
         get
@@ -408,6 +462,7 @@ public class SimulationController : Singleton<SimulationController>
     {
         scalingDirty = true;
         solverRebuildRequired = true;
+        NormalizeTauClampFields();
 
         if (sceneCache == null)
             sceneCache = GetComponent<SimulationSceneCache>();
@@ -629,6 +684,82 @@ public class SimulationController : Singleton<SimulationController>
         RefreshReadOnlyInspectorNow();
     }
 
+    [ContextMenu("Apply Selected Case Study")]
+    public void ApplySelectedCaseStudy()
+    {
+        ApplyCaseStudyPresetInternal(selectedCaseStudy, false);
+    }
+
+    [ContextMenu("Run Selected Case Study")]
+    public void RunSelectedCaseStudy()
+    {
+        ApplyCaseStudyPresetInternal(selectedCaseStudy, true);
+    }
+
+    [ContextMenu("Apply Case Study A0 Baseline")]
+    public void ApplyCaseStudyA0Baseline()
+    {
+        selectedCaseStudy = CaseStudyPreset.A0_Baseline;
+        ApplySelectedCaseStudy();
+    }
+
+    public void ApplyCaseStudyPreset(CaseStudyPreset preset)
+    {
+        ApplyCaseStudyPresetInternal(preset, false);
+    }
+
+    public void RunCaseStudyPreset(CaseStudyPreset preset)
+    {
+        ApplyCaseStudyPresetInternal(preset, true);
+    }
+
+    private void ApplyCaseStudyPresetInternal(CaseStudyPreset preset, bool startRunning)
+    {
+        CaseStudyDefinition definition = GetCaseStudyDefinition(preset);
+        bool shouldRun = startRunning && enableCaseStudyExecution;
+
+        selectedCaseStudy = preset;
+        solverPreset = SolverEasePreset.Custom;
+        activeCaseName = definition.Name;
+        dxPhys = 0.04f;
+        tauFluidMin = definition.TauFluidMin;
+        tauThermalMin = definition.TauThermalMin;
+        tauFluidMax = 4.0f;
+        tauThermalMax = 4.0f;
+        turbulenceModel = definition.TurbulenceModel;
+        turbulenceModelConstant = definition.TurbulenceConstant;
+
+        if (setTargetTimeWhenApplyingCaseStudy)
+        {
+            useTargetSimulationTime = true;
+            targetSimulationTimeSeconds = Mathf.Max(0.0f, caseStudyTargetSimulationTimeSeconds);
+        }
+
+        SyncLegacyTauClampFields();
+        scalingDirty = true;
+        solverRebuildRequired = true;
+        targetTimeReached = false;
+        runSimulation = shouldRun;
+
+        ResetPhysicalTime();
+        RebuildScaling();
+        UpdateCaseStudySummary(definition);
+        TryApplyExperimentTagToLogger(activeCaseName);
+
+        MarkSummaryDirty();
+        RefreshReadOnlyInspectorNow();
+
+        if (startRunning && !enableCaseStudyExecution)
+        {
+            Debug.LogWarning(
+                "[SimulationController] Case study execution is disabled. " +
+                "Enable 'Enable Case Study Execution' in the Case Study section before running.");
+        }
+
+        string mode = shouldRun ? "Run" : "Apply";
+        Debug.Log($"[SimulationController] {mode} case study preset: {activeCaseName}\n{caseStudySummary}");
+    }
+
     [ContextMenu("Check Run Readiness")]
     public void PrintRunReadiness()
     {
@@ -682,6 +813,105 @@ public class SimulationController : Singleton<SimulationController>
             resultSampler = GetComponent<SimulationResultSampler>();
 
         resultSampler?.ResetSamplingSchedule();
+    }
+
+    private readonly struct CaseStudyDefinition
+    {
+        public readonly string Name;
+        public readonly float TauFluidMin;
+        public readonly float TauThermalMin;
+        public readonly TurbulenceModel TurbulenceModel;
+        public readonly float TurbulenceConstant;
+        public readonly string Description;
+
+        public CaseStudyDefinition(
+            string name,
+            float tauFluidMin,
+            float tauThermalMin,
+            TurbulenceModel turbulenceModel,
+            float turbulenceConstant,
+            string description)
+        {
+            Name = name;
+            TauFluidMin = tauFluidMin;
+            TauThermalMin = tauThermalMin;
+            TurbulenceModel = turbulenceModel;
+            TurbulenceConstant = turbulenceConstant;
+            Description = description;
+        }
+    }
+
+    private static CaseStudyDefinition GetCaseStudyDefinition(CaseStudyPreset preset)
+    {
+        switch (preset)
+        {
+            case CaseStudyPreset.A1_FluidTau_0530_Thermal_0560_Off:
+                return new CaseStudyDefinition(
+                    "A1_FluidTau_0530_Thermal_0560_Off",
+                    0.530f,
+                    0.560f,
+                    TurbulenceModel.None,
+                    0.0f,
+                    "Fluid viscosity diffusion reduction only; thermal diffusion kept at baseline.");
+
+            case CaseStudyPreset.A2_FluidTau_0510_Thermal_0560_Off:
+                return new CaseStudyDefinition(
+                    "A2_FluidTau_0510_Thermal_0560_Off",
+                    0.510f,
+                    0.560f,
+                    TurbulenceModel.None,
+                    0.0f,
+                    "Aggressive fluid viscosity reduction; thermal diffusion kept at baseline.");
+
+            case CaseStudyPreset.A3_FluidTau_0510_Thermal_0530_Off:
+                return new CaseStudyDefinition(
+                    "A3_FluidTau_0510_Thermal_0530_Off",
+                    0.510f,
+                    0.530f,
+                    TurbulenceModel.None,
+                    0.0f,
+                    "Fluid and thermal diffusion both reduced without turbulence model.");
+
+            case CaseStudyPreset.A4_FluidTau_0510_Thermal_0530_Smag003:
+                return new CaseStudyDefinition(
+                    "A4_FluidTau_0510_Thermal_0530_Smag003",
+                    0.510f,
+                    0.530f,
+                    TurbulenceModel.Smagorinsky,
+                    0.03f,
+                    "Reduced fluid/thermal diffusion with light Smagorinsky stabilization.");
+
+            case CaseStudyPreset.A0_Baseline:
+            default:
+                return new CaseStudyDefinition(
+                    "A0_Baseline",
+                    0.560f,
+                    0.560f,
+                    TurbulenceModel.Smagorinsky,
+                    0.03f,
+                    "Current conservative clamp baseline.");
+        }
+    }
+
+    private void UpdateCaseStudySummary(CaseStudyDefinition definition)
+    {
+        caseStudySummary =
+            "=== Case Study ===\n" +
+            $"Active Case      : {definition.Name}\n" +
+            $"Execution Enabled: {enableCaseStudyExecution}\n" +
+            $"dxPhys           : {dxPhys:F4} m\n" +
+            $"tauFluidMin      : {tauFluidMin:F4}\n" +
+            $"tauThermalMin    : {tauThermalMin:F4}\n" +
+            $"Turbulence       : {turbulenceModel}, C={turbulenceModelConstant:F3}\n" +
+            $"Target Run Time  : {(useTargetSimulationTime ? targetSimulationTimeSeconds.ToString("F3") + " s" : "Manual")}\n" +
+            $"Meaning          : {definition.Description}";
+    }
+
+    private void TryApplyExperimentTagToLogger(string tag)
+    {
+        var logger = FindFirstObjectByType<SimulationMetricsFileLogger>();
+        if (logger != null)
+            logger.SetExperimentTag(tag);
     }
 
     [ContextMenu("Force Sample Result Metrics")]
@@ -984,16 +1214,18 @@ public class SimulationController : Singleton<SimulationController>
         if (!estimatedSingleBufferSafe)
             AppendReadinessLine(errors, "A single distribution buffer exceeds the Unity GraphicsBuffer limit.");
 
-        if (tau_f < 0.53f || tau_T < 0.53f)
-            AppendReadinessLine(errors, $"Relaxation time is invalid: tau_f={tau_f:F4}, tau_T={tau_T:F4}.");
+        if (tau_f <= 0.5f || tau_T <= 0.5f)
+            AppendReadinessLine(errors, $"Relaxation time must be greater than 0.5: tau_f={tau_f:F4}, tau_T={tau_T:F4}.");
 
         if (machNumber > 0.30f)
             AppendReadinessLine(errors, $"Mach number is too high for this setup: Ma={machNumber:F4}.");
         else if (machNumber > 0.15f)
             AppendReadinessLine(warnings, $"Mach number is high: Ma={machNumber:F4}. Lower maxMach for better stability.");
 
-        if (tau_f < 0.55f || tau_T < 0.55f)
-            AppendReadinessLine(warnings, $"tau is close to the lower stability limit: tau_f={tau_f:F4}, tau_T={tau_T:F4}.");
+        if (tau_f < 0.51f || tau_T < 0.51f)
+            AppendReadinessLine(warnings, $"tau is very close to the LBM lower limit 0.5: tau_f={tau_f:F4}, tau_T={tau_T:F4}.");
+        else if (tau_f < 0.53f || tau_T < 0.53f)
+            AppendReadinessLine(warnings, $"tau is below the conservative range but allowed for case study: tau_f={tau_f:F4}, tau_T={tau_T:F4}.");
 
         if (estimatedTotalGpuMemoryMB > 0.0f)
         {
@@ -1058,11 +1290,13 @@ public class SimulationController : Singleton<SimulationController>
     {
         UpdateStabilitySummary();
         CheckRunReadiness();
+        RefreshCaseStudySummaryText();
 
         long cellCount = GetCellCount64();
         caseSummary =
             "=== Case Summary ===\n" +
             $"Preset          : {solverPreset}\n" +
+            $"Active Case     : {activeCaseName}\n" +
             $"Domain [m]      : {lx:F3} x {ly:F3} x {lz:F3}\n" +
             $"Cell size [m]   : {dxPhys:F5}\n" +
             $"Grid            : {nx} x {ny} x {nz} ({cellCount:N0} cells)\n" +
@@ -1074,8 +1308,9 @@ public class SimulationController : Singleton<SimulationController>
             $"dtPhys [s]      : {dtPhys:E6}\n" +
             $"maxMach limit   : {maxMach:F3}\n" +
             $"Mach            : {machNumber:F4}\n" +
-            $"tau_f / tau_T   : {tau_f:F4} / {tau_T:F4}\n" +
+            $"tau_f / tau_T   : {tauFRaw:F4}->{tau_f:F4} / {tauTRaw:F4}->{tau_T:F4}\n" +
             $"nu / alpha phys : {nuPhys:E4} / {alphaPhys:E4}\n" +
+            $"target ratio    : nu x{nuPhysEffectiveRatio:F2}, alpha x{alphaPhysEffectiveRatio:F2}\n" +
             $"Re / Pr         : {reynoldsNumberPhys:E4} / {prandtlNumber:F4}\n" +
             $"Collision       : MRT, {turbulenceModel}";
 
@@ -1083,19 +1318,39 @@ public class SimulationController : Singleton<SimulationController>
         recommendationSummary = BuildRecommendationSummary();
     }
 
+    private void RefreshCaseStudySummaryText()
+    {
+        if (!string.IsNullOrWhiteSpace(activeCaseName) && activeCaseName != "Manual")
+        {
+            UpdateCaseStudySummary(GetCaseStudyDefinition(selectedCaseStudy));
+            return;
+        }
+
+        activeCaseName = "Manual";
+        caseStudySummary =
+            "=== Case Study ===\n" +
+            "Active Case      : Manual\n" +
+            $"Execution Enabled: {enableCaseStudyExecution}\n" +
+            $"dxPhys           : {dxPhys:F4} m\n" +
+            $"tauFluidMin      : {tauFluidMin:F4}\n" +
+            $"tauThermalMin    : {tauThermalMin:F4}\n" +
+            $"Turbulence       : {turbulenceModel}, C={turbulenceModelConstant:F3}\n" +
+            "Meaning          : Manual solver settings.";
+    }
+
     private void UpdateStabilitySummary()
     {
         bool invalid =
             dxPhys <= 0.0f ||
             dtPhys <= 0.0f ||
-            tau_f < 0.53f ||
-            tau_T < 0.53f ||
+            tau_f <= 0.5f ||
+            tau_T <= 0.5f ||
             machNumber > 0.30f;
 
         bool warning =
             machNumber > 0.15f ||
-            tau_f < 0.55f ||
-            tau_T < 0.55f ||
+            tau_f < 0.53f ||
+            tau_T < 0.53f ||
             !estimatedSingleBufferSafe;
 
         stabilityStatus = invalid
@@ -1106,7 +1361,7 @@ public class SimulationController : Singleton<SimulationController>
             "=== Stability Summary ===\n" +
             $"Status          : {stabilityStatus}\n" +
             $"Mach            : {machNumber:F4} (recommended <= 0.15)\n" +
-            $"tau_f / tau_T   : {tau_f:F4} / {tau_T:F4} (recommended >= 0.55)\n" +
+            $"tau_f / tau_T   : {tau_f:F4} / {tau_T:F4} (case-study warning below 0.53, invalid <= 0.5)\n" +
             $"Pr              : {prandtlNumber:F4}\n" +
             $"Buffer safe     : {estimatedSingleBufferSafe}";
     }
@@ -1163,6 +1418,9 @@ public class SimulationController : Singleton<SimulationController>
         if (machNumber > 0.15f)
             return "=== Recommendation ===\nReduce maxMach or characteristic velocity for better LBM stability.";
 
+        if (tau_f < 0.53f || tau_T < 0.53f)
+            return "=== Recommendation ===\nCase-study tau setting is near 0.5. Monitor mass residual, Mach, and density drift closely.";
+
         if (readinessStatus == SimulationHealthStatus.Warning || stabilityStatus == SimulationHealthStatus.Warning)
             return "=== Recommendation ===\nReady with warnings. Review stability and boundary summaries.";
 
@@ -1208,8 +1466,10 @@ public class SimulationController : Singleton<SimulationController>
 
         latestSummary =
             caseSummary +
+            "\n\n" + caseStudySummary +
             "\n\n" + boundarySummary +
             "\n\n" + solverSummary +
+            "\n\n" + scalingDiagnosticsSummary +
             "\n\n" + stabilitySummary +
             "\n\n" + readinessSummary +
             "\n\n" + recommendationSummary +
@@ -1312,8 +1572,10 @@ public class SimulationController : Singleton<SimulationController>
         if (domain == null)
             return;
 
-         if (tempPhysMaxDegC <= tempPhysMinDegC)
+        if (tempPhysMaxDegC <= tempPhysMinDegC)
             tempPhysMaxDegC = tempPhysMinDegC + 0.01f;
+
+        NormalizeTauClampFields();
 
         T_ref = Mathf.Clamp01(TemperatureDegCToLBM(referenceTemperatureDegCInput));
         referenceTemperatureDegC = referenceTemperatureDegCInput;
@@ -1337,16 +1599,20 @@ public class SimulationController : Singleton<SimulationController>
         float nuPhys_tgt = math.max(nuPhysTarget, 1e-12f);
         float pr_tgt = math.max(prandtlTarget, 1e-6f);
         float alphaPhys_tgt = nuPhys_tgt / pr_tgt;
+        nuPhysTargetReadOnly = nuPhys_tgt;
+        alphaPhysTargetReadOnly = alphaPhys_tgt;
 
         float inv_dx2 = 1.0f / (dxPhys * dxPhys);
         float nuLat_tgt = nuPhys_tgt * dtPhys * inv_dx2;
         float alphaLat_tgt = alphaPhys_tgt * dtPhys * inv_dx2;
 
-        float tau_f_raw = 3.0f * nuLat_tgt + 0.5f;
-        float tau_T_raw = 4.0f * alphaLat_tgt + 0.5f;
+        tauFRaw = 3.0f * nuLat_tgt + 0.5f;
+        tauTRaw = 4.0f * alphaLat_tgt + 0.5f;
 
-        tau_f = math.clamp(tau_f_raw, tauMin, tauMax);
-        tau_T = math.clamp(tau_T_raw, tauMin, tauMax);
+        tau_f = math.clamp(tauFRaw, tauFluidMin, tauFluidMax);
+        tau_T = math.clamp(tauTRaw, tauThermalMin, tauThermalMax);
+        tauFWasClamped = Mathf.Abs(tau_f - tauFRaw) > 1e-6f;
+        tauTWasClamped = Mathf.Abs(tau_T - tauTRaw) > 1e-6f;
 
         nuLat = (tau_f - 0.5f) / 3.0f;
         alphaLat = (tau_T - 0.5f) / 4.0f;
@@ -1364,6 +1630,8 @@ public class SimulationController : Singleton<SimulationController>
         }
 
         prandtlNumber = (alphaLat > 0f) ? (nuLat / alphaLat) : 0f;
+        nuPhysEffectiveRatio = nuPhys_tgt > 0f ? nuPhys / nuPhys_tgt : 0f;
+        alphaPhysEffectiveRatio = alphaPhys_tgt > 0f ? alphaPhys / alphaPhys_tgt : 0f;
 
         RecalculateACSourceScaling();
 
@@ -1374,6 +1642,42 @@ public class SimulationController : Singleton<SimulationController>
         reynoldsNumberPhys = (nuPhys > 0f) ? (U_phys_for_Re * maxDomainLengthPhys / nuPhys) : 0f;
 
         UpdateMemoryEstimateReadOnly();
+        UpdateScalingDiagnosticsSummary();
+    }
+
+    private void NormalizeTauClampFields()
+    {
+        tauFluidMin = Mathf.Clamp(tauFluidMin, 0.5001f, 1.0f);
+        tauThermalMin = Mathf.Clamp(tauThermalMin, 0.5001f, 1.0f);
+        tauFluidMax = Mathf.Clamp(tauFluidMax, 1.0f, 4.0f);
+        tauThermalMax = Mathf.Clamp(tauThermalMax, 1.0f, 4.0f);
+
+        if (tauFluidMax <= tauFluidMin)
+            tauFluidMax = Mathf.Min(4.0f, tauFluidMin + 0.0001f);
+
+        if (tauThermalMax <= tauThermalMin)
+            tauThermalMax = Mathf.Min(4.0f, tauThermalMin + 0.0001f);
+
+        SyncLegacyTauClampFields();
+    }
+
+    private void SyncLegacyTauClampFields()
+    {
+        tauMin = Mathf.Min(tauFluidMin, tauThermalMin);
+        tauMax = Mathf.Max(tauFluidMax, tauThermalMax);
+    }
+
+    private void UpdateScalingDiagnosticsSummary()
+    {
+        scalingDiagnosticsSummary =
+            "=== Scaling Diagnostics ===\n" +
+            $"Active Case      : {activeCaseName}\n" +
+            $"tau_f raw/clamp  : {tauFRaw:F6} -> {tau_f:F6} (min={tauFluidMin:F4}, max={tauFluidMax:F4}, clamped={tauFWasClamped})\n" +
+            $"tau_T raw/clamp  : {tauTRaw:F6} -> {tau_T:F6} (min={tauThermalMin:F4}, max={tauThermalMax:F4}, clamped={tauTWasClamped})\n" +
+            $"nu target/effect : {nuPhysTargetReadOnly:E4} / {nuPhys:E4} (x{nuPhysEffectiveRatio:F2})\n" +
+            $"alpha target/eff : {alphaPhysTargetReadOnly:E4} / {alphaPhys:E4} (x{alphaPhysEffectiveRatio:F2})\n" +
+            $"maxMach limit    : {maxMach:F4}\n" +
+            $"Re / Pr          : {reynoldsNumberPhys:E4} / {prandtlNumber:F4}";
     }
 
     private void LogGrossVsEffectiveOutletAreaComparison()
