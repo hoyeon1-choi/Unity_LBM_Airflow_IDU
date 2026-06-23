@@ -434,6 +434,7 @@ MonoBehaviour:
   speedMax: 2
   useSimulationMaxSpeed: 1
   autoScaleMultiplier: 1
+  updateIntervalSeconds: 1
 --- !u!1 &75834380
 GameObject:
   m_ObjectHideFlags: 0
@@ -737,16 +738,26 @@ MonoBehaviour:
   prandtlTarget: 0.71
   beta: 0.00001901
   gravity_y: -9.81
-  tempPhysMinDegC: 10
+  tempPhysMinDegC: 5
   tempPhysMaxDegC: 30
-  referenceTemperatureDegCInput: 30
+  referenceTemperatureDegCInput: 35
   maxMach: 0.25
+  tauFluidMin: 0.56
+  tauThermalMin: 0.56
+  tauFluidMax: 4
+  tauThermalMax: 4
   tauMin: 0.56
   tauMax: 4
   turbulenceModel: 1
   turbulenceModelConstant: 0.03
   turbulentPrandtl: 0.7
   wallFunctionEnabled: 0
+  enableCaseStudyExecution: 0
+  selectedCaseStudy: 0
+  setTargetTimeWhenApplyingCaseStudy: 0
+  caseStudyTargetSimulationTimeSeconds: 30
+  activeCaseName: Manual
+  caseStudySummary: No case study preset applied.
   enableAdaptiveOutletRhoFeedback: 1
   adaptiveOutletRhoGain: 0.1
   adaptiveOutletRhoMaxOffset: 0.01
@@ -777,6 +788,10 @@ MonoBehaviour:
   manualVramBudgetGB: 0
   autoLogSummaryOnStart: 1
   autoLogSummaryOnSceneRefresh: 1
+  readOnlyInspectorUpdateIntervalSeconds: 1
+  contourPlotUpdateIntervalSeconds: 1
+  contourPlotUpdateIntervalSteps: 1
+  readOnlyInspectorUpdateStatus: Not updated
   useTargetSimulationTime: 1
   targetSimulationTimeSeconds: 600
   targetTimeReached: 0
@@ -802,6 +817,14 @@ MonoBehaviour:
   alphaLat: 0.015000001
   nuPhys: 0.0046188026
   alphaPhys: 0.0034641016
+  nuPhysTargetReadOnly: 0
+  alphaPhysTargetReadOnly: 0
+  tauFRaw: 0.5
+  tauTRaw: 0.5
+  tauFWasClamped: 0
+  tauTWasClamped: 0
+  nuPhysEffectiveRatio: 0
+  alphaPhysEffectiveRatio: 0
   machNumber: 0.3
   reynoldsNumber: 3464.1013
   reynoldsNumberPhys: 3464.1013
@@ -895,6 +918,7 @@ MonoBehaviour:
     : 3.4641E+003 / 1.3333
 
     Collision       : MRT, Smagorinsky'
+  scalingDiagnosticsSummary: 
   stabilitySummary: '=== Stability Summary ===
 
     Status          : Warning
@@ -966,16 +990,18 @@ MonoBehaviour:
   skipRowsWhenSamplerTimeDoesNotMatch: 1
   samplerTimeToleranceSeconds: 0.25
   saveLocationMode: 1
-  resultsFolderName: LBMResults
+  resultsFolderName: LBMResults_test
   customFolderPath: 
   timeSeriesPrefix: lbm_timeseries
   summaryFilePrefix: lbm_summary
-  resolvedBaseFolder: D:\2_FFD\0_Unity\LBMUnity_1wayCST_260501_SolverUpdate_v2\LBMResults
-  timeSeriesFilePath: D:\2_FFD\0_Unity\LBMUnity_1wayCST_260501_SolverUpdate_v2\LBMResults\lbm_timeseries_baseline.csv
-  summaryFilePath: D:\2_FFD\0_Unity\LBMUnity_1wayCST_260501_SolverUpdate_v2\LBMResults\lbm_summary_baseline.csv
+  schemaMismatchHandling: 0
+  resolvedBaseFolder: D:\2_FFD\0_Unity\LBMUnity_1wayCST_260501_SolverUpdate_v2\LBMResults_test
+  timeSeriesFilePath: D:\2_FFD\0_Unity\LBMUnity_1wayCST_260501_SolverUpdate_v2\LBMResults_test\lbm_timeseries_baseline.csv
+  summaryFilePath: D:\2_FFD\0_Unity\LBMUnity_1wayCST_260501_SolverUpdate_v2\LBMResults_test\lbm_summary_baseline.csv
   lastWrittenSimTime: -1
   nextScheduledSimTime: 0
   lastWriteStatus: Idle
+  csvSchemaStatus: 'time-series: current schema; summary: current schema'
   summaryWrittenForCurrentRun: 0
 --- !u!114 &101745642
 MonoBehaviour:
@@ -1000,6 +1026,7 @@ MonoBehaviour:
     simulationTimeSeconds: 0
     dtPhys: 0
     preset: 
+    caseName: 
     readbackMode: 
     fluidCellCount: 0
     rackCellCount: 0
@@ -1038,6 +1065,21 @@ MonoBehaviour:
     hasValidDensityDiagnostic: 0
     tauF: 0
     tauT: 0
+    tauFRaw: 0
+    tauTRaw: 0
+    tauFluidMin: 0
+    tauThermalMin: 0
+    tauFluidMax: 0
+    tauThermalMax: 0
+    tauFWasClamped: 0
+    tauTWasClamped: 0
+    nuPhysTarget: 0
+    alphaPhysTarget: 0
+    nuPhysEffective: 0
+    alphaPhysEffective: 0
+    nuPhysEffectiveRatio: 0
+    alphaPhysEffectiveRatio: 0
+    maxMachLimit: 0
     reynoldsNumber: 0
     prandtlNumber: 0
     stabilityStatus: 
@@ -1065,6 +1107,8 @@ MonoBehaviour:
     statusMessage: 
   nextSampleSimTimeSeconds: 0
   lastRequestedSampleSimTimeSeconds: -1
+  lastCompletedSampleSimTimeSeconds: -1
+  skippedSamplesWhileReadbackBusy: 0
   activeReadbackMode: FullMetrics
   readbackModeStatus: 'FullMetrics: temperature, velocity, density, flow, Mach and
     mass residual are sampled.'
@@ -1430,16 +1474,22 @@ MonoBehaviour:
   boundarySummary: "[Inlet] InletBox\n  Input mode         : Velocity\n  Plane /
     Normal     : +Y, planeIndex=49\n  Patch area         : 0.080000 m^2 (50 cells)\n 
     Velocity (phys)    : (0.0000, -1.4140, -1.4140) m/s\n  Velocity magnitude : 1.9997
-    m/s\n  Normal speed       : -1.4140 m/s\n  Flow rate          : -0.113120 m^3/s
-    (-6.787 CMM)\n  Velocity (lattice) : (0.000000, -0.061228, -0.061228)\n  Inlet
-    temp (degC)  : 10.00\n  Inlet temp (LBM)   : 0.000000\n  Warning            :
-    None\n  Cell bounds        : x:[50,74] y:[49,49] z:[139,140]"
+    m/s\n  Normal speed       : -1.4140 m/s (plane signed)\n  Inward normal speed:
+    1.4140 m/s\n  Flow rate          : 0.113120 m^3/s (6.787 CMM)\n  Signed flow       
+    : -0.113120 m^3/s\n  Velocity (lattice) : (0.000000, -0.061228, -0.061228)\n 
+    Flow direction     : (0.0000, -0.7071, -0.7071)\n  Tangential axes    : A=+X,
+    B=+Z\n  Tangential angles  : A=0.00 deg, B=0.00 deg\n  Inlet temp (degC)  : 10.00\n 
+    Inlet temp (LBM)   : 0.200000\n  Warning            : None\n  Cell bounds       
+    : x:[50,74] y:[49,49] z:[139,140]"
   windSpeedPhys: {x: 0, y: -1.414, z: -1.414}
   volumeFlowRateUnit: 1
   volumeFlowRateM3ps: 0.1
   volumeFlowRateCMM: 6
+  volumeFlowTangentialAngleAdeg: 0
+  volumeFlowTangentialAngleBdeg: 0
+  volumeFlowDirectionWorld: {x: 0, y: -0.70710677, z: -0.70710677}
   inletTemperatureDegC: 10
-  inletTemperatureLBM: 0
+  inletTemperatureLBM: 0.2
   rhoOut: 1
   adaptiveRhoOutOffset: 0
   enableMassFluxCorrection: 1
@@ -1478,6 +1528,54 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 183542625}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &201009856
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 201009858}
+  - component: {fileID: 201009857}
+  m_Layer: 0
+  m_Name: CaseStudyRuntimeRunner
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &201009857
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 201009856}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d9c5316ca764db4ab7c000f51dd5136, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  caseSequence: 0000000001000000020000000300000004000000
+  postCaseWaitSeconds: 2
+  maxRealSecondsPerCase: 1200
+  quitEditorWhenComplete: 0
+--- !u!4 &201009858
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 201009856}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &239339123
 GameObject:
   m_ObjectHideFlags: 0
@@ -2779,6 +2877,7 @@ MonoBehaviour:
   velocityTitle: Velocity (m/s)
   thermalTitle: 
   numberFormat: F2
+  updateIntervalSeconds: 1
   lowValueAtBottom: 1
 --- !u!1 &406768927 stripped
 GameObject:
@@ -3843,6 +3942,7 @@ MonoBehaviour:
   useSimulationTemperatureRange: 1
   tempMinDegC: 10
   tempMaxDegC: 30
+  updateIntervalSeconds: 1
 --- !u!1 &650418469
 GameObject:
   m_ObjectHideFlags: 0
@@ -3965,16 +4065,22 @@ MonoBehaviour:
   boundarySummary: "[Inlet] inletBox (1)\n  Input mode         : Velocity\n  Plane
     / Normal     : +Z, planeIndex=203\n  Patch area         : 0.001600 m^2 (1 cells)\n 
     Velocity (phys)    : (0.0000, 0.0000, -0.8000) m/s\n  Velocity magnitude : 0.8000
-    m/s\n  Normal speed       : -0.8000 m/s\n  Flow rate          : -0.001280 m^3/s
-    (-0.077 CMM)\n  Velocity (lattice) : (0.000000, 0.000000, -0.034641)\n  Inlet
-    temp (degC)  : 20.00\n  Inlet temp (LBM)   : 0.500000\n  Warning            :
-    None\n  Cell bounds        : x:[137,137] y:[21,21] z:[203,203]"
+    m/s\n  Normal speed       : -0.8000 m/s (plane signed)\n  Inward normal speed:
+    0.8000 m/s\n  Flow rate          : 0.001280 m^3/s (0.077 CMM)\n  Signed flow       
+    : -0.001280 m^3/s\n  Velocity (lattice) : (0.000000, 0.000000, -0.034641)\n 
+    Flow direction     : (0.0000, 0.0000, -1.0000)\n  Tangential axes    : A=+X,
+    B=+Y\n  Tangential angles  : A=0.00 deg, B=0.00 deg\n  Inlet temp (degC)  : 20.00\n 
+    Inlet temp (LBM)   : 0.600000\n  Warning            : None\n  Cell bounds       
+    : x:[137,137] y:[21,21] z:[203,203]"
   windSpeedPhys: {x: 0, y: 0, z: -0.8}
   volumeFlowRateUnit: 1
   volumeFlowRateM3ps: 0.1
   volumeFlowRateCMM: 6
+  volumeFlowTangentialAngleAdeg: 0
+  volumeFlowTangentialAngleBdeg: 0
+  volumeFlowDirectionWorld: {x: 0, y: 0, z: -1}
   inletTemperatureDegC: 20
-  inletTemperatureLBM: 0.5
+  inletTemperatureLBM: 0.6
   rhoOut: 1
   adaptiveRhoOutOffset: 0
   enableMassFluxCorrection: 1
@@ -5352,6 +5458,9 @@ MonoBehaviour:
   volumeFlowRateUnit: 1
   volumeFlowRateM3ps: 0.1
   volumeFlowRateCMM: 6
+  volumeFlowTangentialAngleAdeg: 0
+  volumeFlowTangentialAngleBdeg: 0
+  volumeFlowDirectionWorld: {x: 0, y: 0, z: 0}
   inletTemperatureDegC: 30
   inletTemperatureLBM: 0
   rhoOut: 0.9
@@ -7197,6 +7306,7 @@ MonoBehaviour:
   speedMax: 2
   useSimulationMaxSpeed: 1
   autoScaleMultiplier: 1
+  updateIntervalSeconds: 1
 --- !u!1 &1624554015
 GameObject:
   m_ObjectHideFlags: 0
@@ -7400,6 +7510,7 @@ MonoBehaviour:
   velocityTitle: 
   thermalTitle: "Temperature (\xB0C)"
   numberFormat: F2
+  updateIntervalSeconds: 1
   lowValueAtBottom: 1
 --- !u!1 &1685392771
 GameObject:
@@ -9261,6 +9372,7 @@ MonoBehaviour:
   useSimulationTemperatureRange: 1
   tempMinDegC: 10
   tempMaxDegC: 30
+  updateIntervalSeconds: 1
 --- !u!64 &2114682015
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -23013,3 +23125,4 @@ SceneRoots:
   - {fileID: 928761144}
   - {fileID: 292170725}
   - {fileID: 906129461}
+  - {fileID: 201009858}
