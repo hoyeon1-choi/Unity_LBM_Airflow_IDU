@@ -45,3 +45,5 @@
 *.tif binary
 *.tiff binary
 *.wav binary
+*.dll binary
+*.fmu binary

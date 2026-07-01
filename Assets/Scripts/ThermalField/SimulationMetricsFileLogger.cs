@@ -65,6 +65,15 @@ public class SimulationMetricsFileLogger : MonoBehaviour
     private bool _summaryHeaderWritten = false;
     private bool _previousSimulationRunning = false;
 
+    public string ResolvedBaseFolder
+    {
+        get
+        {
+            RefreshPaths();
+            return resolvedBaseFolder;
+        }
+    }
+
     private void Awake()
     {
         if (simulationController == null)

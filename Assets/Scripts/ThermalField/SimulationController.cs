@@ -65,9 +65,9 @@ public class SimulationController : Singleton<SimulationController>
 
     [Header("Temperature Setup")]
     [SerializeField] private float tempPhysMinDegC = 0.0f;
-    [SerializeField] private float tempPhysMaxDegC = 40.0f;
+    [SerializeField] private float tempPhysMaxDegC = 30.0f;
     [Tooltip("Reference temperature used for initialization and buoyancy [degC].")]
-    [SerializeField] private float referenceTemperatureDegCInput = 20.0f;
+    [SerializeField] private float referenceTemperatureDegCInput = 30.0f;
 
     [Header("Advanced LBM Parameters")]
     [Tooltip("Lattice Mach number limit for LBM stability. Lower is usually more stable but slower.")]
@@ -623,6 +623,45 @@ public class SimulationController : Singleton<SimulationController>
         RefreshReadOnlyInspectorNow();
         CheckAndLogTimeConsistency(true);
         Debug.Log(latestSummary);
+    }
+
+    public void SyncDynamicBoundaryInputsNow()
+    {
+        if (sceneCache == null)
+        {
+            UpdateSceneCacheStatus();
+            Debug.LogWarning("[SimulationController] Dynamic boundary sync skipped because scene cache is missing.");
+            return;
+        }
+
+        if (sceneCache.IsDirty)
+        {
+            sceneCache.Refresh();
+        }
+        else if (sceneCache.ZouHeBoxes != null)
+        {
+            foreach (var box in sceneCache.ZouHeBoxes)
+            {
+                if (box != null && box.Power)
+                    box.Refresh();
+            }
+        }
+
+        UpdateSceneCacheStatus();
+
+        if (_lbmSolver != null)
+        {
+            _lbmSolver.SyncSourcesAtRuntime(
+                sceneCache.HeatSources,
+                sceneCache.Racks,
+                sceneCache.ACSources,
+                sceneCache.ZouHeBoxes);
+
+            _lbmSolver.MarkAllDynamicInputsDirty();
+        }
+
+        MarkSummaryDirty();
+        RefreshReadOnlyInspectorNow();
     }
 
     [ContextMenu("Rebuild Solver")]
