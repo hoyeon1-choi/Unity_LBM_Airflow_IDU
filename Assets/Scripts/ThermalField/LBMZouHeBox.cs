@@ -137,6 +137,21 @@ public class LBMZouHeBox : MonoBehaviour
     public float OutletRhoAnchor =>
         forceZeroRhoAnchorForDebug ? 0.0f : outletRhoAnchor;
 
+    public void SetInletTemperatureDegC(float value, bool notifySceneCache = true)
+    {
+        if (kind != Kind.Inlet)
+        {
+            Debug.LogWarning($"[LBMZouHeBox] SetInletTemperatureDegC ignored for non-inlet patch: {name}");
+            return;
+        }
+
+        inletTemperatureDegC = value;
+        Refresh();
+
+        if (notifySceneCache)
+            NotifySceneCacheDirty();
+    }
+
     public float TargetOutletNormalSpeedLat
     {
         get
