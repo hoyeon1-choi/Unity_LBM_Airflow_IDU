@@ -37,6 +37,40 @@ The FMU co-simulation release is tagged as:
 v0.2.0-fmu-cosim
 ```
 
+### Product FMU platform
+
+Product FMU integration is developed on:
+
+```text
+feature/product-fmu-platform
+```
+
+This mode keeps the Simple controller/plant workflow as the default profile, while allowing real product FMUs to be configured through a `CoSimulationProfile` asset. A profile owns:
+
+- FMU model list and FMU filenames.
+- Controller/product/airflow signal connections.
+- Primary debug signals and CSV labels.
+- Co-simulation step size and runtime logging options.
+
+To create the default Simple profile asset:
+
+```text
+Tools > Co-Simulation > Create Simple Controller-Plant Profile Asset
+```
+
+Select a product profile asset before running `Tools > Co-Simulation > Apply Production Harness To Open Scene` to build the scene harness from that profile. If no profile is selected, the Simple controller/plant profile is used.
+
+Real product FMUs should follow the same binary policy as the Simple FMUs:
+
+```text
+Assets/StreamingAssets/FMU/<controller-or-product>/<ProductController>.fmu
+Assets/StreamingAssets/FMU/<controller-or-product>/<ProductPlant>.fmu
+Assets/StreamingAssets/FMU/<controller-or-product>/binaries/win64/*.dll
+Assets/Plugins/x86_64/*.dll
+```
+
+Before running a product profile, confirm the FMU `modelDescription.xml` variables, selected LBM sensor source, product output boundary target, and required co-simulation step size.
+
 ## Required FMU and native plugin files
 
 Native runtime plugin:
@@ -90,6 +124,7 @@ custom folder from SimulationMetricsFileLogger
 ```
 
 Files use the `co_simulation_yyyyMMdd_HHmmss.csv` naming pattern by default.
+Product profiles can override the CSV prefix. CSV rows include the active profile name, active FMU model IDs, runtime mode, and configured debug signal values.
 
 ## Running production co-simulation
 

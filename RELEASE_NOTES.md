@@ -1,5 +1,28 @@
 # Release Notes
 
+## Unreleased - Product FMU platform
+
+Developed on `feature/product-fmu-platform`.
+
+### Added
+
+- `CoSimulationProfile` asset for profile-driven FMU-LBM coupling.
+- Profile-configurable FMU model list, FMU filenames, connection map, debug signals, CSV prefix, and co-simulation schedule.
+- Editor menu to create a default Simple controller/plant profile asset.
+- Scene configurator support for selected product profiles, while preserving the default Simple FMU workflow.
+- CSV fields for profile name, active FMU model IDs, and profile debug signal values.
+
+### Validation
+
+Validated with local C# builds:
+
+```text
+dotnet build Assembly-CSharp.csproj --no-restore
+dotnet build Assembly-CSharp-Editor.csproj --no-restore
+```
+
+Both builds completed with 0 warnings and 0 errors.
+
 ## v0.2.0-fmu-cosim
 
 Adds Simple FMU-LBM co-simulation coupling on top of the LBM-only solver.

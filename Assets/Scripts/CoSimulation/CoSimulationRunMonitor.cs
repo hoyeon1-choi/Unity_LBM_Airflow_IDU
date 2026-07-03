@@ -115,12 +115,13 @@ public class CoSimulationRunMonitor : MonoBehaviour
         observedSimulationRunning =
             simulationController == null || simulationController.IsSimulationRunning;
 
+        string profileName = orchestrator != null ? orchestrator.ProfileName : "-";
         string stopCondition = simulationController != null && simulationController.UseTargetSimulationTime
             ? $"SimulationController target={simulationController.TargetSimulationTimeSeconds:F3}s"
             : "SimulationController/manual stop";
 
         lastSummary =
-            $"Started. stopCondition={stopCondition}, minimumHealthyCoSimSteps={minimumHealthyCoSimSteps}.";
+            $"Started. profile={profileName}, stopCondition={stopCondition}, minimumHealthyCoSimSteps={minimumHealthyCoSimSteps}.";
 
         Debug.Log($"[CoSimulation] {lastSummary}");
     }
@@ -161,6 +162,8 @@ public class CoSimulationRunMonitor : MonoBehaviour
         double applied = orchestrator != null ? orchestrator.LatestAppliedInletTemperatureDegC : double.NaN;
         int inletTargets = airflowAdapter != null ? airflowAdapter.TargetInletCount : 0;
         float simTime = simulationController != null ? simulationController.SimulatedTimeSeconds : 0f;
+        string profileName = orchestrator != null ? orchestrator.ProfileName : "-";
+        string debugSignals = orchestrator != null ? orchestrator.LatestDebugSignalSummary : string.Empty;
 
         lastRunHealthy =
             orchestrator != null &&
@@ -172,10 +175,11 @@ public class CoSimulationRunMonitor : MonoBehaviour
             $"completed={(lastRunHealthy ? "OK" : "Check")}, " +
             $"elapsedRealtime={elapsedRealtimeSeconds:F2}s, " +
             $"lbmSimTime={simTime:F6}s, " +
-            $"coSimSteps={stepIndex}, " +
+            $"coSimSteps={stepIndex}, profile={profileName}, " +
             $"T_sensor={sensor:F3}C, T_set={setpoint:F3}C, Hz={hz:F3}, plantHz={plantHz:F3}, " +
             $"T_dis={discharge:F3}C, appliedInlet={applied:F3}C, targetInlets={inletTargets}, " +
             $"runtime={Safe(orchestrator != null ? orchestrator.RuntimeModeSummary : null)}, " +
+            $"debug={Safe(debugSignals)}, " +
             $"status={Safe(orchestrator != null ? orchestrator.LastStatus : null)}";
 
         if (logSummaryWhenSimulationStops)

@@ -51,6 +51,25 @@ public class CoSimConnectionMap : ScriptableObject
         return map;
     }
 
+    public void SetConnections(IEnumerable<CoSimConnection> sourceConnections)
+    {
+        if (connections == null)
+            connections = new List<CoSimConnection>();
+
+        connections.Clear();
+
+        if (sourceConnections == null)
+            return;
+
+        foreach (CoSimConnection source in sourceConnections)
+        {
+            if (source == null)
+                continue;
+
+            connections.Add(CloneConnection(source));
+        }
+    }
+
     private void Add(string sourceModelId, string sourceVariableName,
                      string targetModelId, string targetVariableName,
                      string description)
@@ -68,5 +87,24 @@ public class CoSimConnectionMap : ScriptableObject
             useClampMax = false,
             description = description
         });
+    }
+
+    private static CoSimConnection CloneConnection(CoSimConnection source)
+    {
+        return new CoSimConnection
+        {
+            enabled = source.enabled,
+            sourceModelId = source.sourceModelId,
+            sourceVariableName = source.sourceVariableName,
+            targetModelId = source.targetModelId,
+            targetVariableName = source.targetVariableName,
+            scale = source.scale,
+            offset = source.offset,
+            useClampMin = source.useClampMin,
+            clampMin = source.clampMin,
+            useClampMax = source.useClampMax,
+            clampMax = source.clampMax,
+            description = source.description
+        };
     }
 }

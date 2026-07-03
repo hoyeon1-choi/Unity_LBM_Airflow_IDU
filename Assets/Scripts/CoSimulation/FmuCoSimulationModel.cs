@@ -59,6 +59,39 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     public FmuModelDescription ModelDescription => modelDescription;
     public IReadOnlyList<FmuRealParameterOverride> RealParameterOverrides => realParameterOverrides;
 
+    public void ConfigureModel(CoSimulationFmuModelConfig config)
+    {
+        if (config == null)
+            return;
+
+        ConfigureModel(
+            config.modelId,
+            config.fmuFileName,
+            config.useMockRuntime,
+            config.fallbackToMockOnNativeFailure,
+            config.logging,
+            config.defaultStepSize);
+    }
+
+    public void ConfigureModel(
+        string modelId,
+        string fmuFileName,
+        bool useMockRuntime,
+        bool fallbackToMockOnNativeFailure,
+        bool logging,
+        double defaultStepSize)
+    {
+        if (isInitialized)
+            TerminateOrDispose();
+
+        this.modelId = string.IsNullOrWhiteSpace(modelId) ? name : modelId.Trim();
+        this.fmuFileName = string.IsNullOrWhiteSpace(fmuFileName) ? $"{this.modelId}.fmu" : fmuFileName.Trim();
+        this.useMockRuntime = useMockRuntime;
+        this.fallbackToMockOnNativeFailure = fallbackToMockOnNativeFailure;
+        this.logging = logging;
+        this.defaultStepSize = Math.Max(defaultStepSize, 1.0e-6);
+        lastStatus = $"Configured FMU model. modelId={this.modelId}, fmuFileName={this.fmuFileName}";
+    }
     public void Initialize(double startTime, double stopTime, double stepSize)
     {
         if (isInitialized)

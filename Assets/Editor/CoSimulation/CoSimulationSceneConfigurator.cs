@@ -20,7 +20,9 @@ public static class CoSimulationSceneConfigurator
         if (!EnsureSceneLoaded())
             return;
 
+        CoSimulationProfile profile = GetSelectedProfileOrDefault();
         ConfigurationResult result = ConfigureOpenScene(
+            profile,
             targetSimulationTimeSeconds: 0.0f,
             overrideTargetSimulationTime: false,
             quitEditorWhenComplete: false);
@@ -30,14 +32,29 @@ public static class CoSimulationSceneConfigurator
 
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
         Debug.Log(
-            $"[CoSimulation] Production harness configured. harness={result.Harness.name}, " +
-            $"controller={result.Controller.name}, fmus={result.FmuModels.Count}");
+            $"[CoSimulation] Production harness configured. profile={profile.ProfileName}, " +
+            $"harness={result.Harness.name}, controller={result.Controller.name}, fmus={result.FmuModels.Count}");
     }
 
     [MenuItem("Tools/Co-Simulation/Run Short Integration Test (50s)")]
     public static void RunShortIntegrationTest50s()
     {
         RunShortIntegrationTest(50.0f, false);
+    }
+
+    [MenuItem("Tools/Co-Simulation/Create Simple Controller-Plant Profile Asset")]
+    public static void CreateSimpleControllerPlantProfileAsset()
+    {
+        const string folder = "Assets/CoSimulationProfiles";
+        if (!AssetDatabase.IsValidFolder(folder))
+            AssetDatabase.CreateFolder("Assets", "CoSimulationProfiles");
+
+        CoSimulationProfile profile = CoSimulationProfile.CreateDefaultSimpleProfile();
+        string path = AssetDatabase.GenerateUniqueAssetPath($"{folder}/Simple_ControllerPlant_Profile.asset");
+        AssetDatabase.CreateAsset(profile, path);
+        AssetDatabase.SaveAssets();
+        Selection.activeObject = profile;
+        Debug.Log($"[CoSimulation] Created profile asset: {path}");
     }
 
     public static void RunShortIntegrationTest(float targetSimulationTimeSeconds, bool quitEditorWhenComplete)
@@ -50,7 +67,9 @@ public static class CoSimulationSceneConfigurator
             return;
         }
 
+        CoSimulationProfile profile = GetSelectedProfileOrDefault();
         ConfigurationResult result = ConfigureOpenScene(
+            profile,
             targetSimulationTimeSeconds,
             overrideTargetSimulationTime: true,
             quitEditorWhenComplete: quitEditorWhenComplete);
@@ -77,10 +96,14 @@ public static class CoSimulationSceneConfigurator
     }
 
     private static ConfigurationResult ConfigureOpenScene(
+        CoSimulationProfile profile,
         float targetSimulationTimeSeconds,
         bool overrideTargetSimulationTime,
         bool quitEditorWhenComplete)
     {
+        if (profile == null)
+            profile = CoSimulationProfile.CreateDefaultSimpleProfile();
+
         SimulationController controller = FindSceneComponent<SimulationController>();
         if (controller == null)
             controller = CreateControllerFallback();
@@ -101,10 +124,7 @@ public static class CoSimulationSceneConfigurator
         CoSimulationOrchestrator orchestrator = GetOrAdd<CoSimulationOrchestrator>(harness);
         CoSimulationRunMonitor monitor = GetOrAdd<CoSimulationRunMonitor>(harness);
 
-        GameObject controllerFmuGo = GetOrCreateChild(harness.transform, "Simple_CFMU_Model");
-        GameObject plantFmuGo = GetOrCreateChild(harness.transform, "Simple_Plant_Model");
-        FmuCoSimulationModel controllerFmu = GetOrAdd<FmuCoSimulationModel>(controllerFmuGo);
-        FmuCoSimulationModel plantFmu = GetOrAdd<FmuCoSimulationModel>(plantFmuGo);
+        List<FmuCoSimulationModel> configuredFmus = ConfigureFmuModels(harness.transform, profile);
 
         SimulationResultSampler sampler = controller.GetComponent<SimulationResultSampler>();
         if (sampler == null)
@@ -123,27 +143,14 @@ public static class CoSimulationSceneConfigurator
 
         LBMZouHeBox[] inletTargets = FindInlets();
 
-        SetPrivate(adapter, "simulationController", controller);
-        SetPrivate(adapter, "resultSampler", sampler);
-        SetPrivate(adapter, "inletTargets", inletTargets);
-        SetPrivate(adapter, "fallbackTemperatureDegC", 20.0f);
-        SetPrivate(adapter, "syncControllerAfterSet", false);
+        adapter.ConfigureFromProfile(profile, controller, sampler, inletTargets);
 
-        ConfigureFmu(controllerFmu, "Simple_CFMU", "Simple_CFMU.fmu");
-        ConfigureFmu(plantFmu, "Simple_Plant", "Simple_Plant.fmu");
+        csvLogger.ConfigureLogging(metricsLogger, profile.CsvFilePrefix, true);
 
-        SetPrivate(csvLogger, "metricsFileLogger", metricsLogger);
-        SetPrivate(csvLogger, "filePrefix", "co_simulation");
-        SetPrivate(csvLogger, "flushEveryRow", true);
-
-        SetPrivate(orchestrator, "enableCoSimulation", true);
-        SetPrivate(orchestrator, "coSimStepSizeSeconds", 2.0);
-        SetPrivate(orchestrator, "useLbmSimulatedTime", true);
-        SetPrivate(orchestrator, "runFmuBeforeLbmStep", false);
-        SetPrivate(orchestrator, "logEveryCoSimStep", true);
+        orchestrator.ApplyProfile(profile);
         SetPrivate(orchestrator, "airflowAdapter", adapter);
         SetPrivate(orchestrator, "csvLogger", csvLogger);
-        SetPrivate(orchestrator, "fmuModels", new List<FmuCoSimulationModel> { controllerFmu, plantFmu });
+        SetPrivate(orchestrator, "fmuModels", configuredFmus);
 
         monitor.ConfigureProductionRun(
             orchestrator,
@@ -170,8 +177,8 @@ public static class CoSimulationSceneConfigurator
         EditorUtility.SetDirty(csvLogger);
         EditorUtility.SetDirty(orchestrator);
         EditorUtility.SetDirty(monitor);
-        EditorUtility.SetDirty(controllerFmu);
-        EditorUtility.SetDirty(plantFmu);
+        for (int i = 0; i < configuredFmus.Count; i++)
+            EditorUtility.SetDirty(configuredFmus[i]);
         EditorUtility.SetDirty(sampler);
         EditorUtility.SetDirty(metricsLogger);
         EditorUtility.SetDirty(controller);
@@ -183,20 +190,41 @@ public static class CoSimulationSceneConfigurator
             csvLogger,
             orchestrator,
             monitor,
-            new List<FmuCoSimulationModel> { controllerFmu, plantFmu });
+            configuredFmus);
     }
 
-    private static void ConfigureFmu(FmuCoSimulationModel model, string modelId, string fmuFileName)
+    private static List<FmuCoSimulationModel> ConfigureFmuModels(Transform harnessRoot, CoSimulationProfile profile)
     {
-        SetPrivate(model, "modelId", modelId);
-        SetPrivate(model, "fmuFileName", fmuFileName);
-        SetPrivate(model, "useMockRuntime", false);
-        SetPrivate(model, "fallbackToMockOnNativeFailure", true);
-        SetPrivate(model, "logging", true);
-        SetPrivate(model, "startTime", 0.0);
-        SetPrivate(model, "stopTime", 0.0);
-        SetPrivate(model, "defaultStepSize", 2.0);
-        model.PopulateRealParameterOverridesFromModelDescription(false);
+        List<FmuCoSimulationModel> configured = new List<FmuCoSimulationModel>();
+        IReadOnlyList<CoSimulationFmuModelConfig> fmuConfigs = profile.FmuModels;
+
+        for (int i = 0; i < fmuConfigs.Count; i++)
+        {
+            CoSimulationFmuModelConfig config = fmuConfigs[i];
+            if (config == null || string.IsNullOrWhiteSpace(config.modelId))
+                continue;
+
+            string childName = string.IsNullOrWhiteSpace(config.childObjectName)
+                ? $"{config.modelId}_Model"
+                : config.childObjectName.Trim();
+
+            GameObject fmuGo = GetOrCreateChild(harnessRoot, childName);
+            FmuCoSimulationModel model = GetOrAdd<FmuCoSimulationModel>(fmuGo);
+            model.ConfigureModel(config);
+
+            if (config.loadMissingRealParametersFromFmu)
+                model.PopulateRealParameterOverridesFromModelDescription(false);
+
+            configured.Add(model);
+        }
+
+        return configured;
+    }
+
+    private static CoSimulationProfile GetSelectedProfileOrDefault()
+    {
+        CoSimulationProfile selected = Selection.activeObject as CoSimulationProfile;
+        return selected != null ? selected : CoSimulationProfile.CreateDefaultSimpleProfile();
     }
 
     private static bool EnsureSceneLoaded()

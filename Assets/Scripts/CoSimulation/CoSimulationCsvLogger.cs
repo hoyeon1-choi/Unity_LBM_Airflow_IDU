@@ -9,6 +9,8 @@ public struct CoSimulationCsvRow
 {
     public double simTimeSeconds;
     public ulong coSimStepIndex;
+    public string profileName;
+    public string activeFmuModels;
     public string sensorSource;
     public double sensorTemperatureDegC;
     public double controllerSetpointDegC;
@@ -23,6 +25,7 @@ public struct CoSimulationCsvRow
     public bool hasOutletAverage;
     public float outletAverageTemperatureDegC;
     public string runtimeMode;
+    public string debugSignals;
     public string status;
 }
 
@@ -48,6 +51,14 @@ public class CoSimulationCsvLogger : MonoBehaviour
     public string CurrentFilePath => currentFilePath;
     public int RowsWritten => rowsWritten;
     public string LastStatus => lastStatus;
+
+    public void ConfigureLogging(SimulationMetricsFileLogger metricsLogger, string prefix, bool flushRows)
+    {
+        metricsFileLogger = metricsLogger;
+        filePrefix = string.IsNullOrWhiteSpace(prefix) ? "co_simulation" : prefix.Trim();
+        flushEveryRow = flushRows;
+        lastStatus = $"Configured CSV logger. prefix={filePrefix}";
+    }
 
     private void Awake()
     {
@@ -118,9 +129,9 @@ public class CoSimulationCsvLogger : MonoBehaviour
         currentFilePath = Path.Combine(directory, $"{SanitizeFileName(filePrefix)}_{stamp}.csv");
         writer = new StreamWriter(currentFilePath, false, new UTF8Encoding(false));
         writer.WriteLine(
-            "timestamp_local,sim_time_sec,co_sim_step_index,sensor_source," +
+            "timestamp_local,sim_time_sec,co_sim_step_index,profile_name,active_fmu_models,sensor_source," +
             "T_sensor_degC,controller_T_set_degC,Hz,plant_hz_input,T_dis_Plant_degC,applied_inlet_temp_degC," +
-            "avg_room_temp_degC,inlet_avg_temp_degC,outlet_avg_temp_degC,runtime_mode,status");
+            "avg_room_temp_degC,inlet_avg_temp_degC,outlet_avg_temp_degC,runtime_mode,debug_signals,status");
         writer.Flush();
 
         rowsWritten = 0;
@@ -158,6 +169,8 @@ public class CoSimulationCsvLogger : MonoBehaviour
             Csv(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)),
             Number(row.simTimeSeconds),
             row.coSimStepIndex.ToString(CultureInfo.InvariantCulture),
+            Csv(row.profileName),
+            Csv(row.activeFmuModels),
             Csv(row.sensorSource),
             Number(row.sensorTemperatureDegC),
             Number(row.controllerSetpointDegC),
@@ -169,6 +182,7 @@ public class CoSimulationCsvLogger : MonoBehaviour
             MaybeNumber(row.hasInletAverage, row.inletAverageTemperatureDegC),
             MaybeNumber(row.hasOutletAverage, row.outletAverageTemperatureDegC),
             Csv(row.runtimeMode),
+            Csv(row.debugSignals),
             Csv(row.status));
     }
 

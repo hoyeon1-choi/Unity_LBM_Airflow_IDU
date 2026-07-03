@@ -48,6 +48,28 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
     public string LastStatus => lastStatus;
     public SimulationResultMetrics LatestMetrics => resultSampler != null ? resultSampler.LatestMetrics : null;
 
+    public void ConfigureFromProfile(
+        CoSimulationProfile profile,
+        SimulationController controller,
+        SimulationResultSampler sampler,
+        LBMZouHeBox[] inletTargets)
+    {
+        if (profile == null)
+            return;
+
+        modelId = profile.AirflowModelId;
+        sensorSignalName = profile.SensorSignalName;
+        dischargeSignalName = profile.DischargeSignalName;
+        sensorSource = profile.SensorSource;
+        fallbackTemperatureDegC = profile.FallbackTemperatureDegC;
+        syncControllerAfterSet = profile.SyncControllerAfterSet;
+        simulationController = controller;
+        resultSampler = sampler;
+        this.inletTargets = inletTargets ?? Array.Empty<LBMZouHeBox>();
+        targetInletCount = CountValidInletTargets();
+        targetInletNames = BuildTargetNamesText();
+        lastStatus = $"Configured from co-sim profile '{profile.ProfileName}'.";
+    }
     private void Awake()
     {
         ResolveReferences();

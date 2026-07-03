@@ -7,6 +7,7 @@ using UnityEngine;
 public class CoSimulationOrchestrator : MonoBehaviour
 {
     [Header("Co-Simulation")]
+    [SerializeField] private CoSimulationProfile coSimulationProfile;
     [SerializeField] private bool enableCoSimulation = true;
     [SerializeField] private double coSimStepSizeSeconds = 2.0;
     [SerializeField] private bool useLbmSimulatedTime = true;
@@ -30,6 +31,9 @@ public class CoSimulationOrchestrator : MonoBehaviour
     [SerializeField] private string debugDischargeVariableName = "T_dis_Plant";
 
     [Header("Read-Only Status")]
+    [SerializeField, ReadOnly] private string activeProfileName = "Simple_ControllerPlant";
+    [SerializeField, ReadOnly] private string activeFmuModelSummary = string.Empty;
+    [SerializeField, ReadOnly] private string latestDebugSignalSummary = string.Empty;
     [SerializeField, ReadOnly] private double currentCoSimTime = 0.0;
     [SerializeField, ReadOnly] private double nextCoSimTime = 0.0;
     [SerializeField, ReadOnly] private ulong coSimStepIndex = 0;
@@ -47,6 +51,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
 
     private readonly CoSimSignalBus signalBus = new CoSimSignalBus();
     private CoSimConnectionMap runtimeDefaultConnectionMap;
+    private CoSimConnectionMap runtimeProfileConnectionMap;
     private SimulationController simulationController;
     private bool scheduleInitialized;
 
@@ -59,10 +64,16 @@ public class CoSimulationOrchestrator : MonoBehaviour
     public double LatestDischargeTemperatureDegC => latestDischargeTemperatureDegC;
     public double LatestAppliedInletTemperatureDegC => latestAppliedInletTemperatureDegC;
     public string RuntimeModeSummary => runtimeModeSummary;
+    public string ProfileName => activeProfileName;
+    public string ActiveFmuModelSummary => activeFmuModelSummary;
+    public string LatestDebugSignalSummary => latestDebugSignalSummary;
     public string LastStatus => lastStatus;
 
     private void Awake()
     {
+        if (coSimulationProfile != null)
+            ApplyProfile(coSimulationProfile);
+
         ResolveReferences();
     }
 
@@ -78,6 +89,34 @@ public class CoSimulationOrchestrator : MonoBehaviour
             TickIfDue();
     }
 
+    public void ApplyProfile(CoSimulationProfile profile)
+    {
+        if (profile == null)
+            profile = CoSimulationProfile.CreateDefaultSimpleProfile();
+
+        coSimulationProfile = profile;
+        activeProfileName = profile.ProfileName;
+        coSimStepSizeSeconds = Math.Max(profile.CoSimStepSizeSeconds, 1.0e-6);
+        useLbmSimulatedTime = profile.UseLbmSimulatedTime;
+        runFmuBeforeLbmStep = profile.RunFmuBeforeLbmStep;
+        logEveryCoSimStep = profile.LogEveryCoSimStep;
+
+        ApplyPrimaryDebugSignal(profile.ControllerSetpointSignal, ref debugControllerSetpointModelId, ref debugControllerSetpointVariableName);
+        ApplyPrimaryDebugSignal(profile.ControllerOutputSignal, ref debugHzModelId, ref debugHzVariableName);
+        ApplyPrimaryDebugSignal(profile.PlantInputSignal, ref debugPlantHzInputModelId, ref debugPlantHzInputVariableName);
+        ApplyPrimaryDebugSignal(profile.DischargeOutputSignal, ref debugDischargeModelId, ref debugDischargeVariableName);
+
+        runtimeProfileConnectionMap = profile.CreateRuntimeConnectionMap();
+        runtimeDefaultConnectionMap = null;
+        ResetSchedule();
+        lastStatus = $"Applied co-sim profile '{activeProfileName}'.";
+    }
+
+    [ContextMenu("Apply Selected Profile")]
+    public void ApplySelectedProfileFromInspector()
+    {
+        ApplyProfile(coSimulationProfile);
+    }
     [ContextMenu("Run One Co-Sim Step Now")]
     public void RunOneStepFromInspector()
     {
@@ -218,6 +257,14 @@ public class CoSimulationOrchestrator : MonoBehaviour
     {
         if (connectionMap != null)
             return connectionMap;
+
+        if (coSimulationProfile != null)
+        {
+            if (runtimeProfileConnectionMap == null)
+                runtimeProfileConnectionMap = coSimulationProfile.CreateRuntimeConnectionMap();
+
+            return runtimeProfileConnectionMap;
+        }
 
         if (runtimeDefaultConnectionMap == null)
             runtimeDefaultConnectionMap = CoSimConnectionMap.CreateDefaultRuntimeMap();
@@ -411,6 +458,8 @@ public class CoSimulationOrchestrator : MonoBehaviour
 
         latestAppliedInletTemperatureDegC = airflowAdapter.LatestAppliedDischargeTemperatureDegC;
         latestTargetInletCount = airflowAdapter.TargetInletCount;
+        activeFmuModelSummary = BuildFmuModelListSummary();
+        latestDebugSignalSummary = BuildDebugSignalSummary();
         runtimeModeSummary = BuildRuntimeModeSummary();
         nativeFallbackActive = AnyNativeFallbackActive();
         lastStatus = string.IsNullOrEmpty(transferStatus) ? "Co-sim step completed." : transferStatus;
@@ -449,6 +498,70 @@ public class CoSimulationOrchestrator : MonoBehaviour
         return null;
     }
 
+    private static void ApplyPrimaryDebugSignal(CoSimSignalReference reference, ref string modelId, ref string variableName)
+    {
+        if (!reference.IsConfigured)
+            return;
+
+        modelId = reference.modelId;
+        variableName = reference.variableName;
+    }
+
+    private string BuildFmuModelListSummary()
+    {
+        if (fmuModels == null || fmuModels.Count == 0)
+            return string.Empty;
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < fmuModels.Count; i++)
+        {
+            FmuCoSimulationModel model = fmuModels[i];
+            if (model == null)
+                continue;
+
+            if (sb.Length > 0)
+                sb.Append("; ");
+
+            sb.Append(model.ModelId);
+        }
+
+        return sb.ToString();
+    }
+
+    private string BuildDebugSignalSummary()
+    {
+        if (coSimulationProfile == null || coSimulationProfile.DebugSignals == null || coSimulationProfile.DebugSignals.Count == 0)
+            return string.Empty;
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < coSimulationProfile.DebugSignals.Count; i++)
+        {
+            CoSimDebugSignal signal = coSimulationProfile.DebugSignals[i];
+            if (signal == null || !signal.Reference.IsConfigured)
+                continue;
+
+            double real;
+            if (!TryGetSignalReal(signal.Reference, out real))
+                continue;
+
+            if (sb.Length > 0)
+                sb.Append("; ");
+
+            sb.Append(string.IsNullOrWhiteSpace(signal.label) ? signal.variableName : signal.label)
+              .Append('=')
+              .Append(real.ToString("G6", System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        return sb.ToString();
+    }
+
+    private bool TryGetSignalReal(CoSimSignalReference reference, out double real)
+    {
+        if (TryGetBusReal(reference.modelId, reference.variableName, out real))
+            return true;
+
+        return TryGetFmuReal(reference.modelId, reference.variableName, out real);
+    }
     private string BuildRuntimeModeSummary()
     {
         if (fmuModels == null || fmuModels.Count == 0)
@@ -495,6 +608,8 @@ public class CoSimulationOrchestrator : MonoBehaviour
         {
             simTimeSeconds = currentCoSimTime,
             coSimStepIndex = coSimStepIndex,
+            profileName = activeProfileName,
+            activeFmuModels = activeFmuModelSummary,
             sensorSource = airflowAdapter.SensorSource.ToString(),
             sensorTemperatureDegC = latestSensorTemperatureDegC,
             controllerSetpointDegC = latestControllerSetpointDegC,
@@ -503,6 +618,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
             dischargeTemperatureDegC = latestDischargeTemperatureDegC,
             appliedInletTemperatureDegC = latestAppliedInletTemperatureDegC,
             runtimeMode = runtimeModeSummary,
+            debugSignals = latestDebugSignalSummary,
             status = lastStatus
         };
 
