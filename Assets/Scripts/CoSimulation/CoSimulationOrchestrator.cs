@@ -50,6 +50,8 @@ public class CoSimulationOrchestrator : MonoBehaviour
     [SerializeField, ReadOnly] private string lastStatus = "Not initialized.";
 
     private readonly CoSimSignalBus signalBus = new CoSimSignalBus();
+    private readonly Dictionary<CoSimSignalKey, CoSimSignalValue> previousStepSignals =
+        new Dictionary<CoSimSignalKey, CoSimSignalValue>();
     private CoSimConnectionMap runtimeDefaultConnectionMap;
     private CoSimConnectionMap runtimeProfileConnectionMap;
     private SimulationController simulationController;
@@ -185,6 +187,8 @@ public class CoSimulationOrchestrator : MonoBehaviour
             coSimStepIndex++;
 
             StringBuilder status = new StringBuilder(512);
+            SeedBusWithPreviousStepSignals(status);
+            PublishProfileConstantSignals(status);
             PublishProviderSources(map, airflowAdapter.ModelId, airflowAdapter, status);
 
             for (int i = 0; i < fmuModels.Count; i++)
@@ -202,6 +206,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
             if (appliedToAirflow)
                 airflowAdapter.SyncDynamicBoundaryInputsNow();
 
+            RememberCurrentStepSignals();
             UpdateReadOnlyDebugValues(status.ToString());
             WriteCsvRow();
 
@@ -331,6 +336,42 @@ public class CoSimulationOrchestrator : MonoBehaviour
         }
     }
 
+    private void SeedBusWithPreviousStepSignals(StringBuilder status)
+    {
+        if (previousStepSignals.Count == 0)
+            return;
+
+        signalBus.PublishAll(previousStepSignals);
+        status.Append($"Seeded previous step signals: count={previousStepSignals.Count}. ");
+    }
+
+    private void PublishProfileConstantSignals(StringBuilder status)
+    {
+        if (coSimulationProfile == null || coSimulationProfile.ConstantSignals == null)
+            return;
+
+        int published = 0;
+        for (int i = 0; i < coSimulationProfile.ConstantSignals.Count; i++)
+        {
+            CoSimConstantSignal signal = coSimulationProfile.ConstantSignals[i];
+            if (signal == null || !signal.enabled || string.IsNullOrWhiteSpace(signal.modelId) ||
+                string.IsNullOrWhiteSpace(signal.variableName))
+            {
+                continue;
+            }
+
+            signalBus.Publish(signal.Key, signal.ToSignalValue(currentCoSimTime));
+            published++;
+        }
+
+        if (published > 0)
+            status.Append($"Published profile constants: count={published}. ");
+    }
+
+    private void RememberCurrentStepSignals()
+    {
+        signalBus.CopyTo(previousStepSignals);
+    }
     private void PublishProviderSources(
         CoSimConnectionMap map,
         string providerModelId,

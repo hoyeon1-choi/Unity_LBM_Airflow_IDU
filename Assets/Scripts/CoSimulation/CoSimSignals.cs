@@ -218,6 +218,25 @@ public class CoSimSignalBus
         signals.Clear();
     }
 
+    public void CopyTo(Dictionary<CoSimSignalKey, CoSimSignalValue> target)
+    {
+        if (target == null)
+            return;
+
+        target.Clear();
+        foreach (KeyValuePair<CoSimSignalKey, CoSimSignalValue> pair in signals)
+            target[pair.Key] = pair.Value;
+    }
+
+    public void PublishAll(Dictionary<CoSimSignalKey, CoSimSignalValue> source)
+    {
+        if (source == null)
+            return;
+
+        foreach (KeyValuePair<CoSimSignalKey, CoSimSignalValue> pair in source)
+            signals[pair.Key] = pair.Value;
+    }
+
     public void Publish(CoSimSignalKey key, CoSimSignalValue value)
     {
         signals[key] = value;

@@ -57,6 +57,20 @@ public static class CoSimulationSceneConfigurator
         Debug.Log($"[CoSimulation] Created profile asset: {path}");
     }
 
+    [MenuItem("Tools/Co-Simulation/Create MultiV Product Draft Profile Asset")]
+    public static void CreateMultiVProductDraftProfileAsset()
+    {
+        const string folder = "Assets/CoSimulationProfiles";
+        if (!AssetDatabase.IsValidFolder(folder))
+            AssetDatabase.CreateFolder("Assets", "CoSimulationProfiles");
+
+        CoSimulationProfile profile = CoSimulationProfile.CreateDefaultMultiVProductProfile();
+        string path = AssetDatabase.GenerateUniqueAssetPath($"{folder}/MultiV_Product_Draft_Profile.asset");
+        AssetDatabase.CreateAsset(profile, path);
+        AssetDatabase.SaveAssets();
+        Selection.activeObject = profile;
+        Debug.Log($"[CoSimulation] Created MultiV draft profile asset: {path}");
+    }
     public static void RunShortIntegrationTest(float targetSimulationTimeSeconds, bool quitEditorWhenComplete)
     {
         if (!EnsureSceneLoaded())
@@ -213,7 +227,10 @@ public static class CoSimulationSceneConfigurator
             model.ConfigureModel(config);
 
             if (config.loadMissingRealParametersFromFmu)
+            {
                 model.PopulateRealParameterOverridesFromModelDescription(false);
+                model.PopulateStringParameterOverridesFromModelDescription(false);
+            }
 
             configured.Add(model);
         }

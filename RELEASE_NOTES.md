@@ -11,6 +11,10 @@ Developed on `feature/product-fmu-platform`.
 - Editor menu to create a default Simple controller/plant profile asset.
 - Scene configurator support for selected product profiles, while preserving the default Simple FMU workflow.
 - CSV fields for profile name, active FMU model IDs, and profile debug signal values.
+- MultiV product draft profile generator for uploaded Controller/Product/Chamber FMUs.
+- Profile constant signals for command/default inputs.
+- One-step delayed signal seeding for closed-loop FMU feedback.
+- String parameter presets that rewrite FMU cache `modelDescription.xml` start values for EEPROM path initialization.
 
 ### Validation
 

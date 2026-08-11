@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Xml.Linq;
 using UnityEngine;
 
 [Serializable]
@@ -10,6 +11,16 @@ public class FmuRealParameterOverride
     public bool enabled = true;
     public string variableName = string.Empty;
     public double value = 0.0;
+    [ReadOnly] public string status = "Not applied.";
+}
+
+[Serializable]
+public class FmuStringParameterOverride
+{
+    public bool enabled = true;
+    public string variableName = string.Empty;
+    public string value = string.Empty;
+    public bool rewriteModelDescriptionStart = true;
     [ReadOnly] public string status = "Not applied.";
 }
 
@@ -34,6 +45,8 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     [SerializeField] private bool applyTunableParameterOverridesBeforeEachStep = true;
     [SerializeField] private List<FmuRealParameterOverride> realParameterOverrides =
         new List<FmuRealParameterOverride>();
+    [SerializeField] private List<FmuStringParameterOverride> stringParameterOverrides =
+        new List<FmuStringParameterOverride>();
 
     [Header("Read-Only Status")]
     [SerializeField, ReadOnly] private bool isInitialized = false;
@@ -44,6 +57,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     [SerializeField, ReadOnly] private string parsedModelName = string.Empty;
     [SerializeField, ReadOnly] private int parsedVariableCount = 0;
     [SerializeField, ReadOnly] private int appliedParameterCount = 0;
+    [SerializeField, ReadOnly] private int appliedStringParameterCount = 0;
     [SerializeField, ReadOnly] private string parameterStatus = "No parameters applied.";
     [SerializeField, ReadOnly] private string lastStatus = "Not initialized.";
 
@@ -58,6 +72,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     public bool NativeFallbackActive => nativeFallbackActive;
     public FmuModelDescription ModelDescription => modelDescription;
     public IReadOnlyList<FmuRealParameterOverride> RealParameterOverrides => realParameterOverrides;
+    public IReadOnlyList<FmuStringParameterOverride> StringParameterOverrides => stringParameterOverrides;
 
     public void ConfigureModel(CoSimulationFmuModelConfig config)
     {
@@ -71,6 +86,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
             config.fallbackToMockOnNativeFailure,
             config.logging,
             config.defaultStepSize);
+        ConfigureParameterOverrides(config);
     }
 
     public void ConfigureModel(
@@ -91,6 +107,57 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         this.logging = logging;
         this.defaultStepSize = Math.Max(defaultStepSize, 1.0e-6);
         lastStatus = $"Configured FMU model. modelId={this.modelId}, fmuFileName={this.fmuFileName}";
+    }
+
+    private void ConfigureParameterOverrides(CoSimulationFmuModelConfig config)
+    {
+        if (config == null)
+            return;
+
+        if (realParameterOverrides == null)
+            realParameterOverrides = new List<FmuRealParameterOverride>();
+        if (stringParameterOverrides == null)
+            stringParameterOverrides = new List<FmuStringParameterOverride>();
+
+        realParameterOverrides.Clear();
+        stringParameterOverrides.Clear();
+
+        if (config.realParameterOverrides != null)
+        {
+            for (int i = 0; i < config.realParameterOverrides.Count; i++)
+            {
+                CoSimulationRealParameterPreset preset = config.realParameterOverrides[i];
+                if (preset == null)
+                    continue;
+
+                realParameterOverrides.Add(new FmuRealParameterOverride
+                {
+                    enabled = preset.enabled,
+                    variableName = preset.variableName,
+                    value = preset.value,
+                    status = "Configured from co-sim profile."
+                });
+            }
+        }
+
+        if (config.stringParameterOverrides != null)
+        {
+            for (int i = 0; i < config.stringParameterOverrides.Count; i++)
+            {
+                CoSimulationStringParameterPreset preset = config.stringParameterOverrides[i];
+                if (preset == null)
+                    continue;
+
+                stringParameterOverrides.Add(new FmuStringParameterOverride
+                {
+                    enabled = preset.enabled,
+                    variableName = preset.variableName,
+                    value = preset.value,
+                    rewriteModelDescriptionStart = preset.rewriteModelDescriptionStart,
+                    status = "Configured from co-sim profile."
+                });
+            }
+        }
     }
     public void Initialize(double startTime, double stopTime, double stepSize)
     {
@@ -120,6 +187,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
             cacheRoot,
             ModelId);
 
+        appliedStringParameterCount = ApplyStringParameterOverridesToModelDescription(resolvedUnzipDirectory, true);
         modelDescription = FmuModelDescriptionParser.ParseFromDirectory(resolvedUnzipDirectory);
         parsedModelName = modelDescription.modelName;
         parsedVariableCount = modelDescription.variables.Count;
@@ -232,6 +300,18 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         PopulateRealParameterOverridesFromModelDescription(true);
     }
 
+    [ContextMenu("Load String Parameter Defaults From FMU")]
+    public void LoadStringParameterDefaultsFromFmu()
+    {
+        PopulateStringParameterOverridesFromModelDescription(false);
+    }
+
+    [ContextMenu("Reset String Parameters To FMU Defaults")]
+    public void ResetStringParametersToFmuDefaults()
+    {
+        PopulateStringParameterOverridesFromModelDescription(true);
+    }
+
     [ContextMenu("Apply Real Parameters Now")]
     public void ApplyRealParametersFromInspector()
     {
@@ -302,6 +382,59 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         }
     }
 
+    public int PopulateStringParameterOverridesFromModelDescription(bool resetExistingValues)
+    {
+        try
+        {
+            FmuModelDescription description = LoadModelDescriptionForInspector();
+            if (resetExistingValues)
+                stringParameterOverrides.Clear();
+
+            int added = 0;
+            int updated = 0;
+
+            for (int i = 0; i < description.variables.Count; i++)
+            {
+                FmuVariableInfo variable = description.variables[i];
+                if (!IsStringParameter(variable))
+                    continue;
+
+                FmuStringParameterOverride parameter = FindStringParameterOverride(variable.name);
+                if (parameter == null)
+                {
+                    parameter = new FmuStringParameterOverride
+                    {
+                        enabled = true,
+                        variableName = variable.name,
+                        value = variable.hasStartString ? variable.startString : string.Empty,
+                        rewriteModelDescriptionStart = true
+                    };
+                    stringParameterOverrides.Add(parameter);
+                    added++;
+                }
+                else if (resetExistingValues)
+                {
+                    parameter.value = variable.hasStartString ? variable.startString : string.Empty;
+                    updated++;
+                }
+
+                parameter.status = BuildVariableStatus(variable, "Loaded default");
+            }
+
+            parameterStatus =
+                $"Loaded String parameter defaults from {description.modelName}. added={added}, updated={updated}.";
+            lastStatus = parameterStatus;
+            Debug.Log($"[CoSimulation][{ModelId}] {parameterStatus}");
+            return added + updated;
+        }
+        catch (Exception ex)
+        {
+            parameterStatus = $"Could not load FMU String parameter defaults: {ex.Message}";
+            lastStatus = parameterStatus;
+            Debug.LogWarning($"[CoSimulation][{ModelId}] {parameterStatus}");
+            return 0;
+        }
+    }
     [ContextMenu("Initialize FMU")]
     public void InitializeFromInspector()
     {
@@ -351,7 +484,8 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         runtimeMode = mode;
         lastStatus =
             $"{mode} runtime initialized. source={resolvedSourcePath}, unzip={resolvedUnzipDirectory}, " +
-            $"modelName={parsedModelName}, variables={parsedVariableCount}, parameters={appliedParameterCount}";
+            $"modelName={parsedModelName}, variables={parsedVariableCount}, parameters={appliedParameterCount}, " +
+            $"stringParameters={appliedStringParameterCount}";
 
         if (logging)
             Debug.Log($"[CoSimulation][{ModelId}] {lastStatus}");
@@ -464,6 +598,115 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         return applied;
     }
 
+    private int ApplyStringParameterOverridesToModelDescription(string unzipDirectory, bool logWarnings)
+    {
+        if (stringParameterOverrides == null || stringParameterOverrides.Count == 0)
+            return 0;
+
+        string xmlPath = Path.Combine(unzipDirectory, "modelDescription.xml");
+        if (!File.Exists(xmlPath))
+            throw new FileNotFoundException("modelDescription.xml was not found for String parameter override.", xmlPath);
+
+        XDocument document = XDocument.Load(xmlPath);
+        int applied = 0;
+        int skipped = 0;
+
+        for (int i = 0; i < stringParameterOverrides.Count; i++)
+        {
+            FmuStringParameterOverride parameter = stringParameterOverrides[i];
+            if (parameter == null || !parameter.enabled)
+            {
+                skipped++;
+                continue;
+            }
+
+            if (!parameter.rewriteModelDescriptionStart)
+            {
+                parameter.status = "Skipped: modelDescription rewrite is disabled.";
+                skipped++;
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(parameter.variableName))
+            {
+                parameter.status = "Skipped: variable name is empty.";
+                skipped++;
+                continue;
+            }
+
+            XElement scalar = FindScalarVariable(document, parameter.variableName);
+            XElement stringElement = scalar != null ? FindValueTypeElement(scalar, "String") : null;
+            if (scalar == null || stringElement == null)
+            {
+                parameter.status = "Skipped: String parameter not found in modelDescription.";
+                if (logWarnings)
+                    Debug.LogWarning($"[CoSimulation][{ModelId}] {parameter.status} variable={parameter.variableName}");
+                skipped++;
+                continue;
+            }
+
+            string resolvedValue = ResolveStringParameterValue(parameter.value);
+            stringElement.SetAttributeValue("start", resolvedValue);
+            parameter.status = $"Rewrote modelDescription start: {resolvedValue}";
+            applied++;
+        }
+
+        if (applied > 0)
+            document.Save(xmlPath);
+
+        if (applied > 0 || skipped > 0)
+            parameterStatus = $"String parameter modelDescription rewrite: applied={applied}, skipped={skipped}.";
+
+        return applied;
+    }
+
+    private string ResolveStringParameterValue(string value)
+    {
+        string resolved = value ?? string.Empty;
+        string streamingAssets = Application.streamingAssetsPath.Replace('\\', '/');
+        string fmuRoot = Path.Combine(Application.streamingAssetsPath, "FMU").Replace('\\', '/');
+
+        resolved = resolved.Replace("{StreamingAssets}", streamingAssets)
+                           .Replace("{STREAMING_ASSETS}", streamingAssets)
+                           .Replace("{FMU_ROOT}", fmuRoot);
+
+        if (!string.IsNullOrWhiteSpace(resolved) && !Path.IsPathRooted(resolved))
+            resolved = Path.Combine(fmuRoot, resolved);
+
+        return resolved.Replace('\\', '/');
+    }
+
+    private static XElement FindScalarVariable(XDocument document, string variableName)
+    {
+        if (document == null)
+            return null;
+
+        foreach (XElement element in document.Descendants())
+        {
+            if (element.Name.LocalName != "ScalarVariable")
+                continue;
+
+            XAttribute name = element.Attribute("name");
+            if (name != null && string.Equals(name.Value, variableName, StringComparison.Ordinal))
+                return element;
+        }
+
+        return null;
+    }
+
+    private static XElement FindValueTypeElement(XElement scalar, string localName)
+    {
+        if (scalar == null)
+            return null;
+
+        foreach (XElement child in scalar.Elements())
+        {
+            if (child.Name.LocalName == localName)
+                return child;
+        }
+
+        return null;
+    }
     private FmuModelDescription LoadModelDescriptionForInspector()
     {
         string root = Path.Combine(Application.streamingAssetsPath, "FMU");
@@ -492,6 +735,21 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         return description;
     }
 
+    private FmuStringParameterOverride FindStringParameterOverride(string variableName)
+    {
+        if (stringParameterOverrides == null)
+            stringParameterOverrides = new List<FmuStringParameterOverride>();
+
+        for (int i = 0; i < stringParameterOverrides.Count; i++)
+        {
+            FmuStringParameterOverride parameter = stringParameterOverrides[i];
+            if (parameter != null && string.Equals(parameter.variableName, variableName, StringComparison.Ordinal))
+                return parameter;
+        }
+
+        return null;
+    }
+
     private FmuRealParameterOverride FindParameterOverride(string variableName)
     {
         if (realParameterOverrides == null)
@@ -507,6 +765,12 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         return null;
     }
 
+    private static bool IsStringParameter(FmuVariableInfo variable)
+    {
+        return variable != null &&
+               variable.valueType == SignalValueType.String &&
+               variable.causality == SignalDirection.Parameter;
+    }
     private static bool IsRealParameter(FmuVariableInfo variable)
     {
         return variable != null &&
@@ -525,7 +789,9 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         if (variable == null)
             return prefix;
 
-        string start = variable.hasStartReal ? $", start={variable.startReal:G6}" : string.Empty;
+        string start = variable.hasStartReal
+            ? $", start={variable.startReal:G6}"
+            : (variable.hasStartString ? $", start={variable.startString}" : string.Empty);
         return $"{prefix}: vr={variable.valueReference}, causality={variable.causality}, " +
                $"variability={variable.variability}{start}";
     }

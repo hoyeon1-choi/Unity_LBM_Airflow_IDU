@@ -15,6 +15,8 @@ public class FmuVariableInfo
     public SignalValueType valueType;
     public bool hasStartReal;
     public double startReal;
+    public bool hasStartString;
+    public string startString = string.Empty;
 }
 
 public class FmuModelDescription
@@ -253,6 +255,11 @@ public static class FmuModelDescriptionParser
                     variable.hasStartReal = true;
                     variable.startReal = startReal;
                 }
+            }
+            else if (typeElement != null && valueType == SignalValueType.String)
+            {
+                variable.startString = ReadAttribute(typeElement, "start");
+                variable.hasStartString = !string.IsNullOrEmpty(variable.startString);
             }
 
             description.variables.Add(variable);

@@ -71,6 +71,27 @@ Assets/Plugins/x86_64/*.dll
 
 Before running a product profile, confirm the FMU `modelDescription.xml` variables, selected LBM sensor source, product output boundary target, and required co-simulation step size.
 
+Current MultiV draft assets detected under `Assets/StreamingAssets/FMU`:
+
+```text
+Multi_V_S__Set_CFMU.fmu
+MULTIV_FMU_WARPPER.fmu
+Simple_Chamber_R1.fmu ... Simple_Chamber_R5.fmu
+Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex
+RNW145CA2S_SAA41266513_3EF2_0x424E1055_MP_221110.hex
+S_SAA37571716_RPUW100S9S_141016_0456.hex
+```
+
+A draft profile for this topology can be created with:
+
+```text
+Tools > Co-Simulation > Create MultiV Product Draft Profile Asset
+```
+
+The draft profile assumes a 5-IDU controller/product/chamber topology and uses profile constants for command values such as on/off, set mode, set temperature, fan setting, humidity, and outdoor temperature. Closed-loop FMU feedback is handled with one-step delayed signal seeding.
+
+The current native plugin exports Real setters/getters only. EEPROM String parameters are therefore applied by rewriting the unzipped FMU cache `modelDescription.xml` String `start` values before native initialization. Confirm this behavior with the actual Controller FMU owner if the FMU requires `fmi2SetString` instead of start-value initialization.
+
 ## Required FMU and native plugin files
 
 Native runtime plugin:
