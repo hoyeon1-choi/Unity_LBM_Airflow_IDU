@@ -1,0 +1,1314 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3714ec1a5227bd84cbe8c9877bc87348, type: 3}
+  m_Name: MultiV_Product_Draft_Profile
+  m_EditorClassIdentifier: 
+  profileName: MultiV_Product_Draft
+  csvFilePrefix: multi_v_product_co_simulation
+  coSimStepSizeSeconds: 1
+  useLbmSimulatedTime: 1
+  runFmuBeforeLbmStep: 0
+  logEveryCoSimStep: 1
+  airflowModelId: airflow
+  sensorSignalName: T_sensor
+  dischargeSignalName: T_discharge
+  sensorSource: 0
+  fallbackTemperatureDegC: 20
+  syncControllerAfterSet: 0
+  fmuModels:
+  - childObjectName: MultiV_Controller_Model
+    modelId: Multi_V_S__Set_CFMU_CS
+    fmuFileName: controller/Multi_V_S__Set_CFMU_CS.fmu
+    useMockRuntime: 0
+    fallbackToMockOnNativeFailure: 1
+    logging: 1
+    defaultStepSize: 1
+    loadMissingRealParametersFromFmu: 0
+    realParameterOverrides: []
+    stringParameterOverrides: []
+  - childObjectName: MultiV_Product_Model
+    modelId: MULTIV_FMU_WARPPER
+    fmuFileName: product/MULTIV_FMU_WARPPER.fmu
+    useMockRuntime: 0
+    fallbackToMockOnNativeFailure: 1
+    logging: 1
+    defaultStepSize: 1
+    loadMissingRealParametersFromFmu: 0
+    realParameterOverrides: []
+    stringParameterOverrides: []
+  - childObjectName: Simple_Chamber_R1_Model
+    modelId: Simple_Chamber_R1
+    fmuFileName: plant/Simple_Chamber_R1.fmu
+    useMockRuntime: 0
+    fallbackToMockOnNativeFailure: 1
+    logging: 1
+    defaultStepSize: 1
+    loadMissingRealParametersFromFmu: 0
+    realParameterOverrides: []
+    stringParameterOverrides: []
+  - childObjectName: Simple_Chamber_R2_Model
+    modelId: Simple_Chamber_R2
+    fmuFileName: plant/Simple_Chamber_R2.fmu
+    useMockRuntime: 0
+    fallbackToMockOnNativeFailure: 1
+    logging: 1
+    defaultStepSize: 1
+    loadMissingRealParametersFromFmu: 0
+    realParameterOverrides: []
+    stringParameterOverrides: []
+  - childObjectName: Simple_Chamber_R3_Model
+    modelId: Simple_Chamber_R3
+    fmuFileName: plant/Simple_Chamber_R3.fmu
+    useMockRuntime: 0
+    fallbackToMockOnNativeFailure: 1
+    logging: 1
+    defaultStepSize: 1
+    loadMissingRealParametersFromFmu: 0
+    realParameterOverrides: []
+    stringParameterOverrides: []
+  - childObjectName: Simple_Chamber_R4_Model
+    modelId: Simple_Chamber_R4
+    fmuFileName: plant/Simple_Chamber_R4.fmu
+    useMockRuntime: 0
+    fallbackToMockOnNativeFailure: 1
+    logging: 1
+    defaultStepSize: 1
+    loadMissingRealParametersFromFmu: 0
+    realParameterOverrides: []
+    stringParameterOverrides: []
+  - childObjectName: Simple_Chamber_R5_Model
+    modelId: Simple_Chamber_R5
+    fmuFileName: plant/Simple_Chamber_R5.fmu
+    useMockRuntime: 0
+    fallbackToMockOnNativeFailure: 1
+    logging: 1
+    defaultStepSize: 1
+    loadMissingRealParametersFromFmu: 0
+    realParameterOverrides: []
+    stringParameterOverrides: []
+  connections:
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: idu_on
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_01_FOnOff
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit on command.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_mode
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_01_SetMode
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit mode command.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_temp
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_01_SetTemp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit set temperature.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_fan
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_01_SetFan
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit fan command.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R1
+    sourceVariableName: T_air_suc
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_01_Room_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction temperature to controller room sensor.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_01_Sensor_Temp_Pipe_In
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_01_Pipe_In_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product pipe-in temperature to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_01_Sensor_Temp_Pipe_Out
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_01_Pipe_Out_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product pipe-out temperature to controller.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: room_humidity_percent
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_01_Humidity
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor humidity default.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: idu_on
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_01_onoff
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit on command to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: IDU_01_CurSetFan
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_01_fan_mode
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller fan mode to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: IDU_01_EEV_TarPulse
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_01_pulse
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller EEV target pulse to product.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R1
+    sourceVariableName: T_air_suc
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_01_temp_air
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction temperature to product indoor inlet air.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R1
+    sourceVariableName: RH_air_suc
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_01_RH_air
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction RH to product indoor inlet air.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_01_Air_Temp_Discharge
+    targetModelId: Simple_Chamber_R1
+    targetVariableName: T_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge temperature to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_01_Air_RH_Discharge
+    targetModelId: Simple_Chamber_R1
+    targetVariableName: RH_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge RH to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_01_Air_mfr_Discharge
+    targetModelId: Simple_Chamber_R1
+    targetVariableName: mfr_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge mass flow to chamber.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: idu_on
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_02_FOnOff
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit on command.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_mode
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_02_SetMode
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit mode command.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_temp
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_02_SetTemp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit set temperature.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_fan
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_02_SetFan
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit fan command.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R2
+    sourceVariableName: T_air_suc
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_02_Room_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction temperature to controller room sensor.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_02_Sensor_Temp_Pipe_In2
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_02_Pipe_In_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product pipe-in temperature to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_02_Sensor_Temp_Pipe_Out
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_02_Pipe_Out_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product pipe-out temperature to controller.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: room_humidity_percent
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_02_Humidity
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor humidity default.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: idu_on
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_02_onoff
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit on command to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: IDU_02_CurSetFan
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_02_fan_mode
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller fan mode to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: IDU_02_EEV_TarPulse
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_02_pulse
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller EEV target pulse to product.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R2
+    sourceVariableName: T_air_suc
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_02_temp_air
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction temperature to product indoor inlet air.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R2
+    sourceVariableName: RH_air_suc
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_02_RH_air
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction RH to product indoor inlet air.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_02_Air_Temp_Discharge
+    targetModelId: Simple_Chamber_R2
+    targetVariableName: T_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge temperature to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_02_Air_RH_Discharge
+    targetModelId: Simple_Chamber_R2
+    targetVariableName: RH_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge RH to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_02_Air_mfr_Discharge
+    targetModelId: Simple_Chamber_R2
+    targetVariableName: mfr_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge mass flow to chamber.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: idu_on
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_03_FOnOff
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit on command.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_mode
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_03_SetMode
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit mode command.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_temp
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_03_SetTemp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit set temperature.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_fan
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_03_SetFan
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit fan command.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R3
+    sourceVariableName: T_air_suc
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_03_Room_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction temperature to controller room sensor.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_03_Sensor_Temp_Pipe_In
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_03_Pipe_In_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product pipe-in temperature to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_03_Sensor_Temp_Pipe_Out
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_03_Pipe_Out_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product pipe-out temperature to controller.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: room_humidity_percent
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_03_Humidity
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor humidity default.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: idu_on
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_03_onoff
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit on command to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: IDU_03_CurSetFan
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_03_fan_mode
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller fan mode to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: IDU_03_EEV_TarPulse
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_03_pulse
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller EEV target pulse to product.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R3
+    sourceVariableName: T_air_suc
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_03_temp_air
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction temperature to product indoor inlet air.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R3
+    sourceVariableName: RH_air_suc
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_03_RH_air
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction RH to product indoor inlet air.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_03_Air_Temp_Discharge
+    targetModelId: Simple_Chamber_R3
+    targetVariableName: T_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge temperature to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_03_Air_RH_Discharge
+    targetModelId: Simple_Chamber_R3
+    targetVariableName: RH_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge RH to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_03_Air_mfr_Discharge
+    targetModelId: Simple_Chamber_R3
+    targetVariableName: mfr_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge mass flow to chamber.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: idu_on
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_04_FOnOff
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit on command.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_mode
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_04_SetMode
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit mode command.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_temp
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_04_SetTemp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit set temperature.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_fan
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_04_SetFan
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit fan command.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R4
+    sourceVariableName: T_air_suc
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_04_Room_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction temperature to controller room sensor.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_04_Sensor_Temp_Pipe_In
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_04_Pipe_In_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product pipe-in temperature to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_04_Sensor_Temp_Pipe_Out
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_04_Pipe_Out_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product pipe-out temperature to controller.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: room_humidity_percent
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_04_Humidity
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor humidity default.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: idu_on
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_04_onoff
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit on command to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: IDU_04_CurSetFan
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_04_fan_mode
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller fan mode to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: IDU_04_EEV_TarPulse
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_04_pulse
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller EEV target pulse to product.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R4
+    sourceVariableName: T_air_suc
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_04_temp_air
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction temperature to product indoor inlet air.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R4
+    sourceVariableName: RH_air_suc
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_04_RH_air
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction RH to product indoor inlet air.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_04_Air_Temp_Discharge
+    targetModelId: Simple_Chamber_R4
+    targetVariableName: T_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge temperature to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_04_Air_RH_Discharge
+    targetModelId: Simple_Chamber_R4
+    targetVariableName: RH_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge RH to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_04_Air_mfr_Discharge
+    targetModelId: Simple_Chamber_R4
+    targetVariableName: mfr_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge mass flow to chamber.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: idu_on
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_05_FOnOff
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit on command.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_mode
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_05_SetMode
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit mode command.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_temp
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_05_SetTemp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit set temperature.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: set_fan
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_05_SetFan
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit fan command.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R5
+    sourceVariableName: T_air_suc
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_05_Room_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction temperature to controller room sensor.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_05_Sensor_Temp_Pipe_In
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_05_Pipe_In_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product pipe-in temperature to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_05_Sensor_Temp_Pipe_Out
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_05_Pipe_Out_Temp
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product pipe-out temperature to controller.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: room_humidity_percent
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: IDU_05_Humidity
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor humidity default.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: idu_on
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_05_onoff
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Indoor unit on command to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: IDU_05_CurSetFan
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_05_fan_mode
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller fan mode to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: IDU_05_EEV_TarPulse
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_05_pulse
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller EEV target pulse to product.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R5
+    sourceVariableName: T_air_suc
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_05_temp_air
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction temperature to product indoor inlet air.
+  - enabled: 1
+    sourceModelId: Simple_Chamber_R5
+    sourceVariableName: RH_air_suc
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: idu_05_RH_air
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Chamber suction RH to product indoor inlet air.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_05_Air_Temp_Discharge
+    targetModelId: Simple_Chamber_R5
+    targetVariableName: T_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge temperature to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_05_Air_RH_Discharge
+    targetModelId: Simple_Chamber_R5
+    targetVariableName: RH_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge RH to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_05_Air_mfr_Discharge
+    targetModelId: Simple_Chamber_R5
+    targetVariableName: mfr_air_dis
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge mass flow to chamber.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: ODU_Sensor_Pressure_HI
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: Multi_V_S_Sensor__Pressure_HI
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product high pressure sensor to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: ODU_Sensor_Pressure_LO
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: Multi_V_S_Sensor__Pressure_LO
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product low pressure sensor to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: ODU_Sensor_Temp_SC_Out
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: Multi_V_S_Sensor__Temp_SC_Out
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product subcooling outlet temperature to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: ODU_Sensor_Temp_SC_In
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: Multi_V_S_Sensor__Temp_SC_In
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product subcooling inlet temperature to controller.
+  - enabled: 1
+    sourceModelId: profile
+    sourceVariableName: outdoor_temp_c
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: Multi_V_S_Sensor__Temp_OutAir
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Outdoor air temperature default.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: ODU_Sensor_Temp_Liquid
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: Multi_V_S_Sensor__Temp_Liquid
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product liquid temperature to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: ODU_Sensor_Temp_HEXPipe
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: Multi_V_S_Sensor__Temp_HEXPipe
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product HEX pipe temperature to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: ODU_Sensor_Temp_Discharge
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: Multi_V_S_Sensor__Temp_Discharge
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product discharge temperature to controller.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: ODU_Sensor_Temp_Suction
+    targetModelId: Multi_V_S__Set_CFMU_CS
+    targetVariableName: Multi_V_S_Sensor__Temp_Suction
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Product suction temperature to controller.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: Multi_V_S_Comp__TarFreq
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: Comp_CurFreq
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller compressor target frequency to product compressor input.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: Multi_V_S_Fan1__TarRPM
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: Fan_CurRPM
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller fan target RPM to product fan input.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: Multi_V_S_4Way_Valve__OnOff
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: reversing_valve_mode_flag
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller reversing valve output to product.
+  - enabled: 1
+    sourceModelId: Multi_V_S__Set_CFMU_CS
+    sourceVariableName: Multi_V_S_MAIN_EEV__CurPulse
+    targetModelId: MULTIV_FMU_WARPPER
+    targetVariableName: MAIN_EEV_CurPulse
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: Controller main EEV current pulse to product.
+  - enabled: 1
+    sourceModelId: MULTIV_FMU_WARPPER
+    sourceVariableName: IDU_01_Air_Temp_Discharge
+    targetModelId: airflow
+    targetVariableName: T_discharge
+    scale: 1
+    offset: 0
+    useClampMin: 0
+    clampMin: 0
+    useClampMax: 0
+    clampMax: 0
+    description: First IDU discharge temperature to LBM inlet boundary.
+  constantSignals:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_on
+    valueType: 0
+    realValue: 1
+    intValue: 0
+    boolValue: 0
+    stringValue: 
+  - enabled: 1
+    modelId: profile
+    variableName: set_mode
+    valueType: 0
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue: 
+  - enabled: 1
+    modelId: profile
+    variableName: set_temp
+    valueType: 0
+    realValue: 28
+    intValue: 0
+    boolValue: 0
+    stringValue: 
+  - enabled: 1
+    modelId: profile
+    variableName: set_fan
+    valueType: 0
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue: 
+  - enabled: 1
+    modelId: profile
+    variableName: room_humidity_percent
+    valueType: 0
+    realValue: 40
+    intValue: 0
+    boolValue: 0
+    stringValue: 
+  - enabled: 1
+    modelId: profile
+    variableName: outdoor_temp_c
+    valueType: 0
+    realValue: 35
+    intValue: 0
+    boolValue: 0
+    stringValue: 
+  - enabled: 1
+    modelId: profile
+    variableName: zero
+    valueType: 0
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue: 
+  controllerSetpointSignal:
+    modelId: profile
+    variableName: set_temp
+  controllerOutputSignal:
+    modelId: Multi_V_S__Set_CFMU_CS
+    variableName: Multi_V_S_Comp__TarFreq
+  plantInputSignal:
+    modelId: MULTIV_FMU_WARPPER
+    variableName: Comp_CurFreq
+  dischargeOutputSignal:
+    modelId: MULTIV_FMU_WARPPER
+    variableName: IDU_01_Air_Temp_Discharge
+  debugSignals:
+  - label: LBM_T_sensor
+    modelId: airflow
+    variableName: T_sensor
+  - label: SetTemp
+    modelId: profile
+    variableName: set_temp
+  - label: CompTarFreq
+    modelId: Multi_V_S__Set_CFMU_CS
+    variableName: Multi_V_S_Comp__TarFreq
+  - label: FanTarRPM
+    modelId: Multi_V_S__Set_CFMU_CS
+    variableName: Multi_V_S_Fan1__TarRPM
+  - label: IDU01_T_dis
+    modelId: MULTIV_FMU_WARPPER
+    variableName: IDU_01_Air_Temp_Discharge
+  - label: IDU01_T_suc
+    modelId: Simple_Chamber_R1
+    variableName: T_air_suc

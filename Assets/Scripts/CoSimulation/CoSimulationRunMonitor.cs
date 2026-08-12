@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using UnityEngine;
 
 [AddComponentMenu("Co-Simulation/Run Monitor")]
@@ -182,6 +183,8 @@ public class CoSimulationRunMonitor : MonoBehaviour
             $"debug={Safe(debugSignals)}, " +
             $"status={Safe(orchestrator != null ? orchestrator.LastStatus : null)}";
 
+        WriteLastRunSummaryFile();
+
         if (logSummaryWhenSimulationStops)
         {
             if (lastRunHealthy)
@@ -202,6 +205,23 @@ public class CoSimulationRunMonitor : MonoBehaviour
             enabled = false;
     }
 
+    private void WriteLastRunSummaryFile()
+    {
+#if UNITY_EDITOR
+        try
+        {
+            string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            string outputDirectory = Path.Combine(projectRoot, "Temp", "CoSimulationTests");
+            Directory.CreateDirectory(outputDirectory);
+            string outputPath = Path.Combine(outputDirectory, "last_co_simulation_run_summary.txt");
+            File.WriteAllText(outputPath, lastSummary);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[CoSimulation] Failed to write run summary file: {ex.Message}");
+        }
+#endif
+    }
     private void ResolveReferences()
     {
         if (simulationController == null)

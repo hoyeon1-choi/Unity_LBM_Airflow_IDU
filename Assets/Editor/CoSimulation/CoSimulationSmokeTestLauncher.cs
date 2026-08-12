@@ -9,4 +9,16 @@ public static class CoSimulationSmokeTestLauncher
             targetSimulationTimeSeconds: 50.0f,
             quitEditorWhenComplete: true);
     }
+
+    public static void Run50SecondMultiVProductTest()
+    {
+        CoSimulationSceneConfigurator.RunMultiVProductDraftTest(
+            targetSimulationTimeSeconds: 50.0f,
+            quitEditorWhenComplete: true);
+    }
+
+    public static void ProbeMultiVProductNativeInitialization()
+    {
+        CoSimulationSceneConfigurator.ProbeMultiVProductNativeInitialization(true);
+    }
 }

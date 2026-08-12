@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -9,10 +10,11 @@ using UnityEngine.SceneManagement;
 
 public static class CoSimulationSceneConfigurator
 {
-    private const string PreferredScenePath = "Assets/Prefabs/Scenes/LBMScenes/LBM_1wayCST.unity";
-    private const string LegacyScenePath = "Assets/Scenes/LBMScenes/LBM_1wayCST.unity";
+    private const string PreferredScenePath = "Assets/Scenes/LBMScenes/LBM_1wayCST.unity";
+    private const string LegacyScenePath = "Assets/Prefabs/Scenes/LBMScenes/LBM_1wayCST.unity";
     private const string HarnessName = "__CoSimulationHarness";
     private const string LegacyHarnessName = "__CoSimulationSmokeHarness";
+    private const string HistoricHarnessName = "CoSimulationHarness";
 
     [MenuItem("Tools/Co-Simulation/Apply Production Harness To Open Scene")]
     public static void ApplyProductionHarnessToOpenScene()
@@ -42,6 +44,86 @@ public static class CoSimulationSceneConfigurator
         RunShortIntegrationTest(50.0f, false);
     }
 
+    [MenuItem("Tools/Co-Simulation/Run MultiV Product Draft Test (50s)")]
+    public static void RunMultiVProductDraftTest50s()
+    {
+        RunMultiVProductDraftTest(50.0f, false);
+    }
+
+    [MenuItem("Tools/Co-Simulation/Probe MultiV Product Native Initialization")]
+    public static void ProbeMultiVProductNativeInitializationMenu()
+    {
+        ProbeMultiVProductNativeInitialization(false);
+    }
+
+    public static void ProbeMultiVProductNativeInitialization(bool quitEditorWhenComplete)
+    {
+        if (!EnsureSceneLoaded())
+        {
+            if (quitEditorWhenComplete)
+                EditorApplication.Exit(1);
+
+            return;
+        }
+
+        CoSimulationProfile profile = CoSimulationProfile.CreateDefaultMultiVProductProfile();
+        ConfigurationResult result = ConfigureOpenScene(
+            profile,
+            targetSimulationTimeSeconds: 50.0f,
+            overrideTargetSimulationTime: true,
+            quitEditorWhenComplete: false);
+
+        if (!result.IsValid)
+        {
+            if (quitEditorWhenComplete)
+                EditorApplication.Exit(1);
+
+            return;
+        }
+
+        Debug.Log($"[CoSimulation] MultiV native initialization probe configured. profile={profile.ProfileName}, fmus={result.FmuModels.Count}");
+
+        bool allNative = true;
+        StringBuilder summary = new StringBuilder(256);
+        double stepSize = Math.Max(profile.CoSimStepSizeSeconds, 1.0e-6);
+
+        for (int i = 0; i < result.FmuModels.Count; i++)
+        {
+            FmuCoSimulationModel model = result.FmuModels[i];
+            if (model == null)
+                continue;
+
+            try
+            {
+                Debug.Log($"[CoSimulation] Native probe initializing {model.ModelId} from {model.name}...");
+                model.Initialize(0.0, 50.0, stepSize);
+                Debug.Log($"[CoSimulation] Native probe initialized {model.ModelId}. runtime={model.RuntimeMode}");
+                if (summary.Length > 0)
+                    summary.Append("; ");
+
+                summary.Append(model.ModelId).Append(':').Append(model.RuntimeMode);
+                if (model.NativeFallbackActive || !string.Equals(model.RuntimeMode, "Native", StringComparison.Ordinal))
+                    allNative = false;
+            }
+            catch (Exception ex)
+            {
+                if (summary.Length > 0)
+                    summary.Append("; ");
+
+                summary.Append(model.ModelId).Append(":Failed(").Append(ex.Message).Append(')');
+                allNative = false;
+            }
+        }
+
+        string message = $"[CoSimulation] MultiV native initialization probe completed={(allNative ? "OK" : "Check")}, profile={profile.ProfileName}, runtime={summary}";
+        if (allNative)
+            Debug.Log(message);
+        else
+            Debug.LogWarning(message);
+
+        if (quitEditorWhenComplete)
+            EditorApplication.Exit(allNative ? 0 : 1);
+    }
     [MenuItem("Tools/Co-Simulation/Create Simple Controller-Plant Profile Asset")]
     public static void CreateSimpleControllerPlantProfileAsset()
     {
@@ -73,6 +155,36 @@ public static class CoSimulationSceneConfigurator
     }
     public static void RunShortIntegrationTest(float targetSimulationTimeSeconds, bool quitEditorWhenComplete)
     {
+        RunShortIntegrationTest(
+            GetSelectedProfileOrDefault,
+            targetSimulationTimeSeconds,
+            quitEditorWhenComplete);
+    }
+
+    public static void RunMultiVProductDraftTest(float targetSimulationTimeSeconds, bool quitEditorWhenComplete)
+    {
+        RunShortIntegrationTest(
+            CoSimulationProfile.CreateDefaultMultiVProductProfile,
+            targetSimulationTimeSeconds,
+            quitEditorWhenComplete);
+    }
+
+    public static void RunShortIntegrationTest(
+        CoSimulationProfile profile,
+        float targetSimulationTimeSeconds,
+        bool quitEditorWhenComplete)
+    {
+        RunShortIntegrationTest(
+            () => profile != null ? profile : GetSelectedProfileOrDefault(),
+            targetSimulationTimeSeconds,
+            quitEditorWhenComplete);
+    }
+
+    private static void RunShortIntegrationTest(
+        Func<CoSimulationProfile> profileFactory,
+        float targetSimulationTimeSeconds,
+        bool quitEditorWhenComplete)
+    {
         if (!EnsureSceneLoaded())
         {
             if (quitEditorWhenComplete)
@@ -81,7 +193,13 @@ public static class CoSimulationSceneConfigurator
             return;
         }
 
-        CoSimulationProfile profile = GetSelectedProfileOrDefault();
+        CoSimulationProfile profile = profileFactory != null
+            ? profileFactory()
+            : GetSelectedProfileOrDefault();
+
+        if (profile == null)
+            profile = CoSimulationProfile.CreateDefaultSimpleProfile();
+
         ConfigurationResult result = ConfigureOpenScene(
             profile,
             targetSimulationTimeSeconds,
@@ -103,7 +221,7 @@ public static class CoSimulationSceneConfigurator
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
 
         Debug.Log(
-            $"[CoSimulation] Short integration test configured. target={targetSimulationTimeSeconds:F3}s, " +
+            $"[CoSimulation] Short integration test configured. profile={profile.ProfileName}, target={targetSimulationTimeSeconds:F3}s, " +
             $"quitEditorWhenComplete={quitEditorWhenComplete}");
 
         EditorApplication.isPlaying = true;
@@ -130,6 +248,7 @@ public static class CoSimulationSceneConfigurator
         }
 
         GameObject harness = GetOrCreateHarness();
+        DisableOtherCoSimulationRunners(harness);
 
         RemoveLegacySmokeDriver(harness);
 
@@ -137,6 +256,8 @@ public static class CoSimulationSceneConfigurator
         CoSimulationCsvLogger csvLogger = GetOrAdd<CoSimulationCsvLogger>(harness);
         CoSimulationOrchestrator orchestrator = GetOrAdd<CoSimulationOrchestrator>(harness);
         CoSimulationRunMonitor monitor = GetOrAdd<CoSimulationRunMonitor>(harness);
+        orchestrator.enabled = true;
+        monitor.enabled = true;
 
         List<FmuCoSimulationModel> configuredFmus = ConfigureFmuModels(harness.transform, profile);
 
@@ -210,6 +331,7 @@ public static class CoSimulationSceneConfigurator
     private static List<FmuCoSimulationModel> ConfigureFmuModels(Transform harnessRoot, CoSimulationProfile profile)
     {
         List<FmuCoSimulationModel> configured = new List<FmuCoSimulationModel>();
+        RemoveUnusedFmuChildren(harnessRoot, profile);
         IReadOnlyList<CoSimulationFmuModelConfig> fmuConfigs = profile.FmuModels;
 
         for (int i = 0; i < fmuConfigs.Count; i++)
@@ -280,6 +402,14 @@ public static class CoSimulationSceneConfigurator
             return harness;
         }
 
+        harness = GameObject.Find(HistoricHarnessName);
+        if (harness != null)
+        {
+            Undo.RecordObject(harness, "Rename Co-Simulation Harness");
+            harness.name = HarnessName;
+            return harness;
+        }
+
         harness = new GameObject(HarnessName);
         Undo.RegisterCreatedObjectUndo(harness, "Create Co-Simulation Harness");
         return harness;
@@ -294,6 +424,78 @@ public static class CoSimulationSceneConfigurator
             return;
 
         Undo.DestroyObjectImmediate(legacy);
+    }
+
+
+    private static void RemoveUnusedFmuChildren(Transform harnessRoot, CoSimulationProfile profile)
+    {
+        if (harnessRoot == null || profile == null)
+            return;
+
+        HashSet<string> expectedChildNames = new HashSet<string>(StringComparer.Ordinal);
+        IReadOnlyList<CoSimulationFmuModelConfig> configs = profile.FmuModels;
+        for (int i = 0; i < configs.Count; i++)
+        {
+            CoSimulationFmuModelConfig config = configs[i];
+            if (config == null || string.IsNullOrWhiteSpace(config.modelId))
+                continue;
+
+            string childName = string.IsNullOrWhiteSpace(config.childObjectName)
+                ? $"{config.modelId}_Model"
+                : config.childObjectName.Trim();
+            expectedChildNames.Add(childName);
+        }
+
+        for (int i = harnessRoot.childCount - 1; i >= 0; i--)
+        {
+            Transform child = harnessRoot.GetChild(i);
+            if (child == null || expectedChildNames.Contains(child.name))
+                continue;
+
+            if (child.GetComponent<FmuCoSimulationModel>() == null)
+                continue;
+
+            Undo.DestroyObjectImmediate(child.gameObject);
+        }
+    }
+
+    private static void DisableOtherCoSimulationRunners(GameObject activeHarness)
+    {
+        if (activeHarness == null)
+            return;
+
+        CoSimulationOrchestrator[] orchestrators = FindSceneComponents<CoSimulationOrchestrator>();
+        for (int i = 0; i < orchestrators.Length; i++)
+        {
+            CoSimulationOrchestrator candidate = orchestrators[i];
+            if (candidate == null || BelongsToHarness(candidate.transform, activeHarness.transform))
+                continue;
+
+            Undo.RecordObject(candidate, "Disable inactive co-simulation orchestrator");
+            candidate.enabled = false;
+            EditorUtility.SetDirty(candidate);
+        }
+
+        CoSimulationRunMonitor[] monitors = FindSceneComponents<CoSimulationRunMonitor>();
+        for (int i = 0; i < monitors.Length; i++)
+        {
+            CoSimulationRunMonitor candidate = monitors[i];
+            if (candidate == null || BelongsToHarness(candidate.transform, activeHarness.transform))
+                continue;
+
+            Undo.RecordObject(candidate, "Disable inactive co-simulation monitor");
+            candidate.enabled = false;
+            EditorUtility.SetDirty(candidate);
+        }
+    }
+
+
+    private static bool BelongsToHarness(Transform candidate, Transform harnessRoot)
+    {
+        if (candidate == null || harnessRoot == null)
+            return false;
+
+        return candidate == harnessRoot || candidate.IsChildOf(harnessRoot);
     }
 
     private static T GetOrAdd<T>(GameObject go) where T : Component

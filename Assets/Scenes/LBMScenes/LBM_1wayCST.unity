@@ -738,9 +738,9 @@ MonoBehaviour:
   prandtlTarget: 0.71
   beta: 0.00001901
   gravity_y: -9.81
-  tempPhysMinDegC: 5
+  tempPhysMinDegC: 0
   tempPhysMaxDegC: 30
-  referenceTemperatureDegCInput: 35
+  referenceTemperatureDegCInput: 30
   maxMach: 0.25
   tauFluidMin: 0.56
   tauThermalMin: 0.56
@@ -792,7 +792,7 @@ MonoBehaviour:
   contourPlotUpdateIntervalSeconds: 1
   contourPlotUpdateIntervalSteps: 1
   readOnlyInspectorUpdateStatus: Not updated
-  useTargetSimulationTime: 1
+  useTargetSimulationTime: 0
   targetSimulationTimeSeconds: 600
   targetTimeReached: 0
   logTimeConsistency: 1
@@ -995,9 +995,9 @@ MonoBehaviour:
   timeSeriesPrefix: lbm_timeseries
   summaryFilePrefix: lbm_summary
   schemaMismatchHandling: 0
-  resolvedBaseFolder: D:\2_FFD\0_Unity\LBMUnity_1wayCST_260501_SolverUpdate_v2\LBMResults_test
-  timeSeriesFilePath: D:\2_FFD\0_Unity\LBMUnity_1wayCST_260501_SolverUpdate_v2\LBMResults_test\lbm_timeseries_baseline.csv
-  summaryFilePath: D:\2_FFD\0_Unity\LBMUnity_1wayCST_260501_SolverUpdate_v2\LBMResults_test\lbm_summary_baseline.csv
+  resolvedBaseFolder: D:\2_FFD\0_Unity\LBMUnity_1wayCST_FMU_Interagtion_PlatForm\LBMResults_test
+  timeSeriesFilePath: D:\2_FFD\0_Unity\LBMUnity_1wayCST_FMU_Interagtion_PlatForm\LBMResults_test\lbm_timeseries_baseline.csv
+  summaryFilePath: D:\2_FFD\0_Unity\LBMUnity_1wayCST_FMU_Interagtion_PlatForm\LBMResults_test\lbm_summary_baseline.csv
   lastWrittenSimTime: -1
   nextScheduledSimTime: 0
   lastWriteStatus: Idle
@@ -1479,7 +1479,7 @@ MonoBehaviour:
     : -0.113120 m^3/s\n  Velocity (lattice) : (0.000000, -0.061228, -0.061228)\n 
     Flow direction     : (0.0000, -0.7071, -0.7071)\n  Tangential axes    : A=+X,
     B=+Z\n  Tangential angles  : A=0.00 deg, B=0.00 deg\n  Inlet temp (degC)  : 10.00\n 
-    Inlet temp (LBM)   : 0.200000\n  Warning            : None\n  Cell bounds       
+    Inlet temp (LBM)   : 0.333333\n  Warning            : None\n  Cell bounds       
     : x:[50,74] y:[49,49] z:[139,140]"
   windSpeedPhys: {x: 0, y: -1.414, z: -1.414}
   volumeFlowRateUnit: 1
@@ -1489,7 +1489,7 @@ MonoBehaviour:
   volumeFlowTangentialAngleBdeg: 0
   volumeFlowDirectionWorld: {x: 0, y: -0.70710677, z: -0.70710677}
   inletTemperatureDegC: 10
-  inletTemperatureLBM: 0.2
+  inletTemperatureLBM: 0.33333334
   rhoOut: 1
   adaptiveRhoOutOffset: 0
   enableMassFluxCorrection: 1
@@ -1552,7 +1552,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 201009856}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5d9c5316ca764db4ab7c000f51dd5136, type: 3}
   m_Name: 
@@ -4070,7 +4070,7 @@ MonoBehaviour:
     : -0.001280 m^3/s\n  Velocity (lattice) : (0.000000, 0.000000, -0.034641)\n 
     Flow direction     : (0.0000, 0.0000, -1.0000)\n  Tangential axes    : A=+X,
     B=+Y\n  Tangential angles  : A=0.00 deg, B=0.00 deg\n  Inlet temp (degC)  : 20.00\n 
-    Inlet temp (LBM)   : 0.600000\n  Warning            : None\n  Cell bounds       
+    Inlet temp (LBM)   : 0.666667\n  Warning            : None\n  Cell bounds       
     : x:[137,137] y:[21,21] z:[203,203]"
   windSpeedPhys: {x: 0, y: 0, z: -0.8}
   volumeFlowRateUnit: 1
@@ -4080,7 +4080,7 @@ MonoBehaviour:
   volumeFlowTangentialAngleBdeg: 0
   volumeFlowDirectionWorld: {x: 0, y: 0, z: -1}
   inletTemperatureDegC: 20
-  inletTemperatureLBM: 0.6
+  inletTemperatureLBM: 0.6666667
   rhoOut: 1
   adaptiveRhoOutOffset: 0
   enableMassFluxCorrection: 1
@@ -9479,6 +9479,328 @@ Transform:
   m_Children: []
   m_Father: {fileID: 748952144}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &730100000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730100000002}
+  - component: {fileID: 730100000003}
+  - component: {fileID: 730100000004}
+  - component: {fileID: 730100000005}
+  - component: {fileID: 730100000006}
+  m_Layer: 0
+  m_Name: CoSimulationHarness
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &730100000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730100000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 730100000102}
+  - {fileID: 730100000202}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &730100000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730100000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55e28e341b6143b2bcd7c9b3076fb496, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelId: airflow
+  sensorSignalName: T_sensor
+  dischargeSignalName: T_discharge
+  simulationController: {fileID: 101745640}
+  resultSampler: {fileID: 101745642}
+  inletTargets:
+  - {fileID: 183542629}
+  - {fileID: 650418473}
+  sensorSource: 0
+  fallbackTemperatureDegC: 30
+  logInvalidMetricWarning: 1
+  syncControllerAfterSet: 0
+  latestSensorTemperatureDegC: 0
+  latestAppliedDischargeTemperatureDegC: 0
+  targetInletCount: 2
+  targetInletNames: InletBox, inletBox (1)
+  lastStatus: Production co-simulation settings applied.
+--- !u!114 &730100000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730100000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c01ef4f69ca49f8a020f07b26cf8073, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  metricsFileLogger: {fileID: 101745641}
+  enableLogging: 1
+  filePrefix: co_simulation
+  flushEveryRow: 1
+  resolvedDirectory: 
+  currentFilePath: 
+  rowsWritten: 0
+  lastStatus: Not opened.
+--- !u!114 &730100000005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730100000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d3cfb7b48bab44ff80452e5acf0f67a9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  enableCoSimulation: 1
+  coSimStepSizeSeconds: 2
+  useLbmSimulatedTime: 1
+  runFmuBeforeLbmStep: 0
+  logEveryCoSimStep: 1
+  connectionMap: {fileID: 0}
+  airflowAdapter: {fileID: 730100000003}
+  fmuModels:
+  - {fileID: 730100000103}
+  - {fileID: 730100000203}
+  csvLogger: {fileID: 730100000004}
+  debugHzModelId: Simple_CFMU
+  debugHzVariableName: Hz
+  debugControllerSetpointModelId: Simple_CFMU
+  debugControllerSetpointVariableName: T_set
+  debugPlantHzInputModelId: Simple_Plant
+  debugPlantHzInputVariableName: hz_Plant
+  debugDischargeModelId: Simple_Plant
+  debugDischargeVariableName: T_dis_Plant
+  currentCoSimTime: 0
+  nextCoSimTime: 0
+  coSimStepIndex: 0
+  latestSensorTemperatureDegC: 0
+  latestControllerSetpointDegC: NaN
+  latestHz: 0
+  latestPlantHzInput: NaN
+  latestDischargeTemperatureDegC: 0
+  latestAppliedInletTemperatureDegC: 0
+  latestTargetInletCount: 0
+  nativeFallbackActive: 0
+  runtimeModeSummary: Not initialized.
+  lastStatus: Production co-simulation settings applied.
+--- !u!114 &730100000006
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730100000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b9c75540d7be4a4b8a6f88df11c2cbb8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  startSimulationOnPlay: 1
+  runInitialCoSimStepOnStart: 1
+  minimumHealthyCoSimSteps: 1
+  requireAppliedInletTarget: 1
+  logSummaryWhenSimulationStops: 1
+  disableWhenComplete: 1
+  quitEditorWhenComplete: 0
+  orchestrator: {fileID: 730100000005}
+  airflowAdapter: {fileID: 730100000003}
+  simulationController: {fileID: 101745640}
+  runStarted: 0
+  runFinished: 0
+  lastRunHealthy: 0
+  elapsedRealtimeSeconds: 0
+  lastSummary: Production co-simulation run monitor configured.
+--- !u!1 &730100000101
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730100000102}
+  - component: {fileID: 730100000103}
+  m_Layer: 0
+  m_Name: Simple_CFMU_Model
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &730100000102
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730100000101}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 730100000002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &730100000103
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730100000101}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0ff32639a5645deb3901048f9bd84ae, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelId: Simple_CFMU
+  fmuFileName: controller/Simple_CFMU.fmu
+  useMockRuntime: 0
+  fallbackToMockOnNativeFailure: 1
+  logging: 1
+  startTime: 0
+  stopTime: 0
+  defaultStepSize: 2
+  applyParameterOverridesOnInitialize: 1
+  applyTunableParameterOverridesBeforeEachStep: 1
+  realParameterOverrides: []
+  isInitialized: 0
+  nativeFallbackActive: 0
+  runtimeMode: Not initialized
+  resolvedSourcePath: 
+  resolvedUnzipDirectory: 
+  parsedModelName: 
+  parsedVariableCount: 0
+  appliedParameterCount: 0
+  parameterStatus: No parameters applied.
+  lastStatus: Not initialized.
+--- !u!1 &730100000201
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730100000202}
+  - component: {fileID: 730100000203}
+  m_Layer: 0
+  m_Name: Simple_Plant_Model
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &730100000202
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730100000201}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 730100000002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &730100000203
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730100000201}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0ff32639a5645deb3901048f9bd84ae, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  modelId: Simple_Plant
+  fmuFileName: plant/Simple_Plant.fmu
+  useMockRuntime: 0
+  fallbackToMockOnNativeFailure: 1
+  logging: 1
+  startTime: 0
+  stopTime: 0
+  defaultStepSize: 2
+  applyParameterOverridesOnInitialize: 1
+  applyTunableParameterOverridesBeforeEachStep: 1
+  realParameterOverrides:
+  - enabled: 1
+    variableName: T_sensor_start
+    value: 30
+    status: 'Loaded default: vr=16777216, causality=Parameter, variability=fixed,
+      start=30'
+  - enabled: 1
+    variableName: coolingGain
+    value: 0.12
+    status: 'Loaded default: vr=16777217, causality=Parameter, variability=tunable,
+      start=0.12'
+  - enabled: 1
+    variableName: deltaT_max
+    value: 15
+    status: 'Loaded default: vr=16777218, causality=Parameter, variability=tunable,
+      start=15'
+  - enabled: 1
+    variableName: deltaT_min
+    value: 0
+    status: 'Loaded default: vr=16777219, causality=Parameter, variability=tunable,
+      start=0'
+  - enabled: 1
+    variableName: tau
+    value: 30
+    status: 'Loaded default: vr=16777220, causality=Parameter, variability=tunable,
+      start=30'
+  - enabled: 1
+    variableName: T_dis_abs_min
+    value: 5
+    status: 'Loaded default: vr=16777221, causality=Parameter, variability=tunable,
+      start=5'
+  - enabled: 1
+    variableName: T_dis_abs_max
+    value: 60
+    status: 'Loaded default: vr=16777222, causality=Parameter, variability=tunable,
+      start=60'
+  isInitialized: 0
+  nativeFallbackActive: 0
+  runtimeMode: Not initialized
+  resolvedSourcePath: D:/2_FFD/0_Unity/LBMUnity_1wayCST_FMU_Interagtion_PlatForm/Assets/StreamingAssets\FMU\plant\Simple_Plant.fmu
+  resolvedUnzipDirectory: C:/Users/hoyeon1.choi/AppData/LocalLow/DefaultCompany/MyLBM\FMUCache\Simple_Plant_1449980_8ded7101bb41c72
+  parsedModelName: Simple_Plant
+  parsedVariableCount: 17
+  appliedParameterCount: 0
+  parameterStatus: Loaded Real parameter defaults from Simple_Plant. added=7, updated=0.
+  lastStatus: Loaded Real parameter defaults from Simple_Plant. added=7, updated=0.
 --- !u!4 &50216752736013305
 Transform:
   m_ObjectHideFlags: 0
@@ -23126,3 +23448,4 @@ SceneRoots:
   - {fileID: 292170725}
   - {fileID: 906129461}
   - {fileID: 201009858}
+  - {fileID: 730100000002}

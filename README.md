@@ -63,9 +63,10 @@ Select a product profile asset before running `Tools > Co-Simulation > Apply Pro
 Real product FMUs should follow the same binary policy as the Simple FMUs:
 
 ```text
-Assets/StreamingAssets/FMU/<controller-or-product>/<ProductController>.fmu
-Assets/StreamingAssets/FMU/<controller-or-product>/<ProductPlant>.fmu
-Assets/StreamingAssets/FMU/<controller-or-product>/binaries/win64/*.dll
+Assets/StreamingAssets/FMU/controller/<ProductController>.fmu
+Assets/StreamingAssets/FMU/product/<ProductModel>.fmu
+Assets/StreamingAssets/FMU/plant/<PlantModel>.fmu
+Assets/StreamingAssets/FMU/<controller-or-product-or-plant>/binaries/win64/*.dll
 Assets/Plugins/x86_64/*.dll
 ```
 
@@ -74,9 +75,9 @@ Before running a product profile, confirm the FMU `modelDescription.xml` variabl
 Current MultiV draft assets detected under `Assets/StreamingAssets/FMU`:
 
 ```text
-Multi_V_S__Set_CFMU.fmu
-MULTIV_FMU_WARPPER.fmu
-Simple_Chamber_R1.fmu ... Simple_Chamber_R5.fmu
+controller/Multi_V_S__Set_CFMU_CS.fmu
+product/MULTIV_FMU_WARPPER.fmu
+plant/Simple_Chamber_R1.fmu ... plant/Simple_Chamber_R5.fmu
 Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex
 RNW145CA2S_SAA41266513_3EF2_0x424E1055_MP_221110.hex
 S_SAA37571716_RPUW100S9S_141016_0456.hex
