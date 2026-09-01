@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -32,7 +32,9 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
 
     [Header("Runtime")]
     [SerializeField] private bool useMockRuntime = false;
+    [SerializeField] private bool useExternalRuntime = false;
     [SerializeField] private bool fallbackToMockOnNativeFailure = true;
+    [SerializeField] private int externalCommandTimeoutMs = 30000;
     [SerializeField] private bool logging = true;
 
     [Header("Experiment")]
@@ -83,7 +85,9 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
             config.modelId,
             config.fmuFileName,
             config.useMockRuntime,
+            config.useExternalRuntime,
             config.fallbackToMockOnNativeFailure,
+            config.externalCommandTimeoutMs,
             config.logging,
             config.defaultStepSize);
         ConfigureParameterOverrides(config);
@@ -93,7 +97,9 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         string modelId,
         string fmuFileName,
         bool useMockRuntime,
+        bool useExternalRuntime,
         bool fallbackToMockOnNativeFailure,
+        int externalCommandTimeoutMs,
         bool logging,
         double defaultStepSize)
     {
@@ -103,7 +109,9 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         this.modelId = string.IsNullOrWhiteSpace(modelId) ? name : modelId.Trim();
         this.fmuFileName = string.IsNullOrWhiteSpace(fmuFileName) ? $"{this.modelId}.fmu" : fmuFileName.Trim();
         this.useMockRuntime = useMockRuntime;
+        this.useExternalRuntime = useExternalRuntime;
         this.fallbackToMockOnNativeFailure = fallbackToMockOnNativeFailure;
+        this.externalCommandTimeoutMs = Math.Max(1000, externalCommandTimeoutMs);
         this.logging = logging;
         this.defaultStepSize = Math.Max(defaultStepSize, 1.0e-6);
         lastStatus = $"Configured FMU model. modelId={this.modelId}, fmuFileName={this.fmuFileName}";
@@ -202,7 +210,10 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
 
         try
         {
-            InitializeRuntime(new NativeFmi2Runtime(), "Native");
+            if (useExternalRuntime)
+                InitializeRuntime(new ExternalFmi2Runtime(externalCommandTimeoutMs), "External");
+            else
+                InitializeRuntime(new NativeFmi2Runtime(), "Native");
         }
         catch (Exception ex)
         {
@@ -210,13 +221,13 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
 
             if (!fallbackToMockOnNativeFailure)
             {
-                lastStatus = $"Native FMU initialization failed and fallback is disabled: {ex.Message}";
+                lastStatus = $"FMU runtime initialization failed and fallback is disabled: {ex.Message}";
                 throw;
             }
 
             nativeFallbackActive = true;
             Debug.LogWarning(
-                $"[CoSimulation][{ModelId}] Native FMU initialization failed. Falling back to mock runtime. " +
+                $"[CoSimulation][{ModelId}] FMU runtime initialization failed. Falling back to mock runtime. " +
                 $"Reason: {ex.Message}");
 
             InitializeRuntime(new MockFmi2Runtime(), "MockFallback");
@@ -799,3 +810,5 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
                $"variability={variable.variability}{start}";
     }
 }
+
+

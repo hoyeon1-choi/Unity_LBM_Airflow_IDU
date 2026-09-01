@@ -1,0 +1,56 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XCharts.Runtime", "XCharts.Runtime.csproj", "{61B79AA1-4A1F-4486-C720-4BE81F3FB057}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp", "Assembly-CSharp.csproj", "{FB06E732-70AB-19F3-845E-7AB88290E555}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XCharts.Editor", "XCharts.Editor.csproj", "{36BDE04F-3709-60EA-E2E6-4596F633AE4C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Assembly-CSharp-Editor", "Assembly-CSharp-Editor.csproj", "{80000BFF-4108-F492-5017-4D63B17F51D1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XCharts.Examples", "XCharts.Examples.csproj", "{041C3086-A963-6FF4-1153-5646EE0CD9EA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExportProjectToZip", "ExportProjectToZip.csproj", "{C5F91276-4054-5DDA-8A67-685BA5E7D85E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FmuHost", "FmuHost\FmuHost.csproj", "{085072A1-540B-4EC2-A0F3-504A7EFBC152}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{61B79AA1-4A1F-4486-C720-4BE81F3FB057}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{61B79AA1-4A1F-4486-C720-4BE81F3FB057}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{61B79AA1-4A1F-4486-C720-4BE81F3FB057}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{61B79AA1-4A1F-4486-C720-4BE81F3FB057}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FB06E732-70AB-19F3-845E-7AB88290E555}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FB06E732-70AB-19F3-845E-7AB88290E555}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FB06E732-70AB-19F3-845E-7AB88290E555}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FB06E732-70AB-19F3-845E-7AB88290E555}.Release|Any CPU.Build.0 = Release|Any CPU
+		{36BDE04F-3709-60EA-E2E6-4596F633AE4C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{36BDE04F-3709-60EA-E2E6-4596F633AE4C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{36BDE04F-3709-60EA-E2E6-4596F633AE4C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{36BDE04F-3709-60EA-E2E6-4596F633AE4C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{80000BFF-4108-F492-5017-4D63B17F51D1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{80000BFF-4108-F492-5017-4D63B17F51D1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{80000BFF-4108-F492-5017-4D63B17F51D1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{80000BFF-4108-F492-5017-4D63B17F51D1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{041C3086-A963-6FF4-1153-5646EE0CD9EA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{041C3086-A963-6FF4-1153-5646EE0CD9EA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{041C3086-A963-6FF4-1153-5646EE0CD9EA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{041C3086-A963-6FF4-1153-5646EE0CD9EA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C5F91276-4054-5DDA-8A67-685BA5E7D85E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C5F91276-4054-5DDA-8A67-685BA5E7D85E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C5F91276-4054-5DDA-8A67-685BA5E7D85E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C5F91276-4054-5DDA-8A67-685BA5E7D85E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{085072A1-540B-4EC2-A0F3-504A7EFBC152}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{085072A1-540B-4EC2-A0F3-504A7EFBC152}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{085072A1-540B-4EC2-A0F3-504A7EFBC152}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{085072A1-540B-4EC2-A0F3-504A7EFBC152}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

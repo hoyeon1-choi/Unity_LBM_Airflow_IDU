@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -180,18 +180,21 @@ public class CoSimulationProfile : ScriptableObject
             "Multi_V_S__Set_CFMU_CS",
             "controller/Multi_V_S__Set_CFMU_CS.fmu");
         controller.defaultStepSize = 1.0;
+        controller.useExternalRuntime = true;
+        controller.fallbackToMockOnNativeFailure = false;
+        controller.externalCommandTimeoutMs = 30000;
         controller.loadMissingRealParametersFromFmu = false;
         controller.stringParameterOverrides = new List<CoSimulationStringParameterPreset>();
 
         fmuModels = new List<CoSimulationFmuModelConfig>
         {
             controller,
-            new CoSimulationFmuModelConfig("MultiV_Product_Model", "MULTIV_FMU_WARPPER", "product/MULTIV_FMU_WARPPER.fmu") { defaultStepSize = 1.0, loadMissingRealParametersFromFmu = false },
-            new CoSimulationFmuModelConfig("Simple_Chamber_R1_Model", "Simple_Chamber_R1", "plant/Simple_Chamber_R1.fmu") { defaultStepSize = 1.0, loadMissingRealParametersFromFmu = false },
-            new CoSimulationFmuModelConfig("Simple_Chamber_R2_Model", "Simple_Chamber_R2", "plant/Simple_Chamber_R2.fmu") { defaultStepSize = 1.0, loadMissingRealParametersFromFmu = false },
-            new CoSimulationFmuModelConfig("Simple_Chamber_R3_Model", "Simple_Chamber_R3", "plant/Simple_Chamber_R3.fmu") { defaultStepSize = 1.0, loadMissingRealParametersFromFmu = false },
-            new CoSimulationFmuModelConfig("Simple_Chamber_R4_Model", "Simple_Chamber_R4", "plant/Simple_Chamber_R4.fmu") { defaultStepSize = 1.0, loadMissingRealParametersFromFmu = false },
-            new CoSimulationFmuModelConfig("Simple_Chamber_R5_Model", "Simple_Chamber_R5", "plant/Simple_Chamber_R5.fmu") { defaultStepSize = 1.0, loadMissingRealParametersFromFmu = false }
+            new CoSimulationFmuModelConfig("MultiV_Product_Model", "MULTIV_FMU_WARPPER", "product/MULTIV_FMU_WARPPER.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
+            new CoSimulationFmuModelConfig("Simple_Chamber_R1_Model", "Simple_Chamber_R1", "plant/Simple_Chamber_R1.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
+            new CoSimulationFmuModelConfig("Simple_Chamber_R2_Model", "Simple_Chamber_R2", "plant/Simple_Chamber_R2.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
+            new CoSimulationFmuModelConfig("Simple_Chamber_R3_Model", "Simple_Chamber_R3", "plant/Simple_Chamber_R3.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
+            new CoSimulationFmuModelConfig("Simple_Chamber_R4_Model", "Simple_Chamber_R4", "plant/Simple_Chamber_R4.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
+            new CoSimulationFmuModelConfig("Simple_Chamber_R5_Model", "Simple_Chamber_R5", "plant/Simple_Chamber_R5.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false }
         };
 
         constantSignals = new List<CoSimConstantSignal>
@@ -309,7 +312,9 @@ public class CoSimulationFmuModelConfig
     public string modelId = "FMU";
     public string fmuFileName = "model.fmu";
     public bool useMockRuntime = false;
+    public bool useExternalRuntime = false;
     public bool fallbackToMockOnNativeFailure = true;
+    public int externalCommandTimeoutMs = 30000;
     public bool logging = true;
     public double defaultStepSize = 2.0;
     public bool loadMissingRealParametersFromFmu = true;
