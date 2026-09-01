@@ -294,7 +294,8 @@ public static class CoSimulationSceneConfigurator
             minimumHealthyCoSimSteps: 1,
             startSimulationOnPlay: true,
             runInitialCoSimStepOnStart: true,
-            quitEditorWhenComplete: quitEditorWhenComplete);
+            quitEditorWhenComplete: quitEditorWhenComplete,
+            exitPlayModeWhenComplete: overrideTargetSimulationTime && !quitEditorWhenComplete);
 
         if (!overrideTargetSimulationTime)
         {

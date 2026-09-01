@@ -1,4 +1,4 @@
-﻿// FmuNativePlugin.cpp
+// FmuNativePlugin.cpp
 // Build as x64 DLL
 // Put output DLL into Assets/Plugins/x86_64/
 
@@ -13,6 +13,7 @@
 #include <memory>
 #include <cstdio>
 #include <cstdlib>
+#include <cstdarg>
 
 #define DLL_EXPORT extern "C" __declspec(dllexport)
 
@@ -127,11 +128,53 @@ struct FmuFunctions
 };
 
 static std::string g_lastError;
+static std::string g_debugLogPath;
+
+static void AppendLogLine(const std::string& msg)
+{
+    if (msg.empty())
+    {
+        return;
+    }
+
+    OutputDebugStringA((msg + "\n").c_str());
+
+    if (!g_debugLogPath.empty())
+    {
+        std::ofstream ofs(g_debugLogPath.c_str(), std::ios::out | std::ios::app | std::ios::binary);
+        if (ofs.is_open())
+        {
+            ofs << msg << "\n";
+        }
+    }
+}
+
+static const char* StatusName(fmi2Status status)
+{
+    switch (status)
+    {
+        case fmi2OK: return "fmi2OK";
+        case fmi2Warning: return "fmi2Warning";
+        case fmi2Discard: return "fmi2Discard";
+        case fmi2Error: return "fmi2Error";
+        case fmi2Fatal: return "fmi2Fatal";
+        case fmi2Pending: return "fmi2Pending";
+        default: return "unknown";
+    }
+}
 
 static void SetLastErrorMsg(const std::string& msg)
 {
     g_lastError = msg;
-    OutputDebugStringA((msg + "\n").c_str());
+    if (!msg.empty())
+    {
+        AppendLogLine("[FmuNativePlugin][ERROR] " + msg);
+    }
+}
+
+static void SetFmiStatusError(const std::string& operation, fmi2Status status)
+{
+    SetLastErrorMsg(operation + " returned " + std::to_string((int)status) + " (" + StatusName(status) + ")");
 }
 
 static void fmuLogger(
@@ -142,16 +185,28 @@ static void fmuLogger(
     fmi2String message,
     ...)
 {
-    char buffer[2048];
+    char formatted[2048];
+    formatted[0] = '\0';
+
+    if (message)
+    {
+        va_list args;
+        va_start(args, message);
+        std::vsnprintf(formatted, sizeof(formatted), message, args);
+        va_end(args);
+    }
+
+    char buffer[4096];
     std::snprintf(
         buffer,
         sizeof(buffer),
-        "[FMU][%s][status=%d][%s] %s\n",
+        "[FMU][%s][%s:%d][%s] %s",
         instanceName ? instanceName : "unknown",
+        StatusName(status),
         (int)status,
         category ? category : "no-category",
-        message ? message : "no-message");
-    OutputDebugStringA(buffer);
+        formatted[0] != '\0' ? formatted : "no-message");
+    AppendLogLine(buffer);
 }
 
 static std::string ReadTextFile(const std::string& path)
@@ -202,6 +257,9 @@ struct FmuInstance
     double stopTime;
     bool hasStopTime;
     bool loggingOn;
+    bool experimentSetup;
+    bool inInitializationMode;
+    bool initialized;
 
     std::unordered_map<std::string, double> initialRealValues;
 
@@ -212,6 +270,9 @@ struct FmuInstance
         , stopTime(0.0)
         , hasStopTime(false)
         , loggingOn(true)
+        , experimentSetup(false)
+        , inInitializationMode(false)
+        , initialized(false)
     {
         callbacks.logger = &fmuLogger;
         callbacks.allocateMemory = std::calloc;
@@ -364,7 +425,7 @@ static bool SetRealByName(FmuInstance& fmu, const std::string& name, double valu
     fmi2Status s = fmu.fn.fmi2SetReal(fmu.component, &vr, 1, &v);
     if (s > fmi2Warning)
     {
-        SetLastErrorMsg("fmi2SetReal failed for variable: " + name);
+        SetFmiStatusError("fmi2SetReal(" + name + ")", s);
         return false;
     }
 
@@ -385,7 +446,7 @@ static bool GetRealByName(FmuInstance& fmu, const std::string& name, double& val
     fmi2Status s = fmu.fn.fmi2GetReal(fmu.component, &vr, 1, &v);
     if (s > fmi2Warning)
     {
-        SetLastErrorMsg("fmi2GetReal failed for variable: " + name);
+        SetFmiStatusError("fmi2GetReal(" + name + ")", s);
         return false;
     }
 
@@ -406,28 +467,72 @@ static bool ApplyInitialValues(FmuInstance& fmu)
     return true;
 }
 
-static bool InitializeFmu(FmuInstance& fmu)
+static bool SetupExperimentFmu(
+    FmuInstance& fmu,
+    double startTime,
+    double stopTime,
+    bool hasStopTime,
+    double tolerance,
+    bool toleranceDefined)
 {
-    fmi2Status s;
+    fmu.startTime = startTime;
+    fmu.stopTime = stopTime;
+    fmu.hasStopTime = hasStopTime;
 
-    s = fmu.fn.fmi2SetupExperiment(
+    fmi2Status s = fmu.fn.fmi2SetupExperiment(
         fmu.component,
-        0,
-        0.0,
+        toleranceDefined ? 1 : 0,
+        tolerance,
         fmu.startTime,
         fmu.hasStopTime ? 1 : 0,
         fmu.stopTime);
 
     if (s > fmi2Warning)
     {
-        SetLastErrorMsg("fmi2SetupExperiment failed");
+        SetFmiStatusError("fmi2SetupExperiment", s);
         return false;
     }
 
-    s = fmu.fn.fmi2EnterInitializationMode(fmu.component);
+    fmu.experimentSetup = true;
+    return true;
+}
+
+static bool EnterInitializationModeFmu(FmuInstance& fmu)
+{
+    if (fmu.initialized || fmu.inInitializationMode)
+    {
+        return true;
+    }
+
+    if (!fmu.experimentSetup)
+    {
+        if (!SetupExperimentFmu(fmu, fmu.startTime, fmu.stopTime, fmu.hasStopTime, 0.0, false))
+        {
+            return false;
+        }
+    }
+
+    fmi2Status s = fmu.fn.fmi2EnterInitializationMode(fmu.component);
     if (s > fmi2Warning)
     {
-        SetLastErrorMsg("fmi2EnterInitializationMode failed");
+        SetFmiStatusError("fmi2EnterInitializationMode", s);
+        return false;
+    }
+
+    fmu.inInitializationMode = true;
+    return true;
+}
+
+static bool ExitInitializationModeFmu(FmuInstance& fmu)
+{
+    if (fmu.initialized)
+    {
+        return true;
+    }
+
+    if (!fmu.inInitializationMode)
+    {
+        SetLastErrorMsg("fmi2ExitInitializationMode requested before entering initialization mode");
         return false;
     }
 
@@ -436,21 +541,42 @@ static bool InitializeFmu(FmuInstance& fmu)
         return false;
     }
 
-    s = fmu.fn.fmi2ExitInitializationMode(fmu.component);
+    fmi2Status s = fmu.fn.fmi2ExitInitializationMode(fmu.component);
     if (s > fmi2Warning)
     {
-        SetLastErrorMsg("fmi2ExitInitializationMode failed");
+        SetFmiStatusError("fmi2ExitInitializationMode", s);
         return false;
     }
 
+    fmu.inInitializationMode = false;
+    fmu.initialized = true;
     return true;
+}
+
+static bool InitializeFmu(FmuInstance& fmu)
+{
+    if (!SetupExperimentFmu(fmu, fmu.startTime, fmu.stopTime, fmu.hasStopTime, 0.0, false))
+    {
+        return false;
+    }
+
+    if (!EnterInitializationModeFmu(fmu))
+    {
+        return false;
+    }
+
+    return ExitInitializationModeFmu(fmu);
 }
 
 static void DestroyFmu(FmuInstance& fmu)
 {
-    if (fmu.component && fmu.fn.fmi2Terminate)
+    if (fmu.component && fmu.initialized && fmu.fn.fmi2Terminate)
     {
-        fmu.fn.fmi2Terminate(fmu.component);
+        fmi2Status s = fmu.fn.fmi2Terminate(fmu.component);
+        if (s > fmi2Warning)
+        {
+            AppendLogLine(std::string("[FmuNativePlugin][WARN] fmi2Terminate returned ") + StatusName(s));
+        }
     }
 
     if (fmu.component && fmu.fn.fmi2FreeInstance)
@@ -459,6 +585,9 @@ static void DestroyFmu(FmuInstance& fmu)
     }
 
     fmu.component = nullptr;
+    fmu.initialized = false;
+    fmu.inInitializationMode = false;
+    fmu.experimentSetup = false;
 
     if (fmu.dllHandle)
     {
@@ -472,6 +601,12 @@ DLL_EXPORT const char* Fmu_GetLastError()
     return g_lastError.c_str();
 }
 
+DLL_EXPORT int Fmu_SetDebugLogPath(const char* path)
+{
+    g_debugLogPath = path ? path : "";
+    return 1;
+}
+
 DLL_EXPORT void* Fmu_Load(const char* unzipDir, const char* instanceName, int loggingOn)
 {
     if (!unzipDir || !instanceName)
@@ -480,10 +615,19 @@ DLL_EXPORT void* Fmu_Load(const char* unzipDir, const char* instanceName, int lo
         return nullptr;
     }
 
+    g_lastError.clear();
+
     std::unique_ptr<FmuInstance> fmu(new FmuInstance());
     fmu->unzipDir = unzipDir;
     fmu->instanceName = instanceName;
     fmu->loggingOn = (loggingOn != 0);
+
+    if (g_debugLogPath.empty())
+    {
+        g_debugLogPath = fmu->unzipDir + "\\FmuNativePlugin.log";
+    }
+
+    AppendLogLine("[FmuNativePlugin] Loading FMU instance=" + fmu->instanceName + " unzip=" + fmu->unzipDir);
 
     const std::string xmlPath = fmu->unzipDir + "\\modelDescription.xml";
     if (!ParseModelDescription(xmlPath, fmu->guid, fmu->modelIdentifier, fmu->vars))
@@ -494,10 +638,13 @@ DLL_EXPORT void* Fmu_Load(const char* unzipDir, const char* instanceName, int lo
     const std::string dllDir = fmu->unzipDir + "\\binaries\\win64";
     const std::string dllPath = dllDir + "\\" + fmu->modelIdentifier + ".dll";
 
-    fmu->dllHandle = LoadLibraryA(dllPath.c_str());
+    SetDllDirectoryA(dllDir.c_str());
+    fmu->dllHandle = LoadLibraryExA(dllPath.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
     if (!fmu->dllHandle)
     {
-        SetLastErrorMsg("Failed to load FMU DLL: " + dllPath);
+        DWORD errorCode = GetLastError();
+        SetLastErrorMsg(
+            "Failed to load FMU DLL: " + dllPath + " (Win32=" + std::to_string((unsigned long)errorCode) + ")");
         return nullptr;
     }
 
@@ -509,6 +656,7 @@ DLL_EXPORT void* Fmu_Load(const char* unzipDir, const char* instanceName, int lo
 
     const std::string resourcePath = fmu->unzipDir + "\\resources";
     const std::string resourceUri = ToFileUri(resourcePath);
+    fmu->callbacks.componentEnvironment = fmu.get();
 
     fmu->component = fmu->fn.fmi2Instantiate(
         fmu->instanceName.c_str(),
@@ -527,6 +675,51 @@ DLL_EXPORT void* Fmu_Load(const char* unzipDir, const char* instanceName, int lo
     }
 
     return fmu.release();
+}
+
+DLL_EXPORT int Fmu_SetupExperiment(
+    void* handle,
+    double startTime,
+    double stopTime,
+    int hasStopTime,
+    double tolerance,
+    int toleranceDefined)
+{
+    if (!handle)
+    {
+        return 0;
+    }
+
+    FmuInstance* fmu = reinterpret_cast<FmuInstance*>(handle);
+    return SetupExperimentFmu(
+        *fmu,
+        startTime,
+        stopTime,
+        hasStopTime != 0,
+        tolerance,
+        toleranceDefined != 0) ? 1 : 0;
+}
+
+DLL_EXPORT int Fmu_EnterInitializationMode(void* handle)
+{
+    if (!handle)
+    {
+        return 0;
+    }
+
+    FmuInstance* fmu = reinterpret_cast<FmuInstance*>(handle);
+    return EnterInitializationModeFmu(*fmu) ? 1 : 0;
+}
+
+DLL_EXPORT int Fmu_ExitInitializationMode(void* handle)
+{
+    if (!handle)
+    {
+        return 0;
+    }
+
+    FmuInstance* fmu = reinterpret_cast<FmuInstance*>(handle);
+    return ExitInitializationModeFmu(*fmu) ? 1 : 0;
 }
 
 DLL_EXPORT int Fmu_Initialize(void* handle, double startTime, double stopTime, int hasStopTime)
@@ -597,7 +790,7 @@ DLL_EXPORT int Fmu_DoStep(void* handle, double currentTime, double stepSize)
 
     if (s > fmi2Warning)
     {
-        SetLastErrorMsg("fmi2DoStep failed");
+        SetFmiStatusError("fmi2DoStep", s);
         return 0;
     }
 
@@ -616,10 +809,13 @@ DLL_EXPORT int Fmu_Reset(void* handle)
 
     if (s > fmi2Warning)
     {
-        SetLastErrorMsg("fmi2Reset failed");
+        SetFmiStatusError("fmi2Reset", s);
         return 0;
     }
 
+    fmu->experimentSetup = false;
+    fmu->inInitializationMode = false;
+    fmu->initialized = false;
     return InitializeFmu(*fmu) ? 1 : 0;
 }
 

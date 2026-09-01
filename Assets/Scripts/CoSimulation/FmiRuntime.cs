@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using UnityEngine;
 
 public interface IFmi2Runtime : IDisposable
 {
@@ -22,6 +23,23 @@ internal static class FmuNative
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "Fmu_Load")]
     public static extern IntPtr Load(string unzipDir, string instanceName, int loggingOn);
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "Fmu_SetDebugLogPath")]
+    public static extern int SetDebugLogPath(string path);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "Fmu_SetupExperiment")]
+    public static extern int SetupExperiment(
+        IntPtr handle,
+        double startTime,
+        double stopTime,
+        int hasStopTime,
+        double tolerance,
+        int toleranceDefined);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "Fmu_EnterInitializationMode")]
+    public static extern int EnterInitializationMode(IntPtr handle);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "Fmu_ExitInitializationMode")]
+    public static extern int ExitInitializationMode(IntPtr handle);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "Fmu_Initialize")]
     public static extern int Initialize(IntPtr handle, double startTime, double stopTime, int hasStopTime);
@@ -61,11 +79,18 @@ public class NativeFmi2Runtime : IFmi2Runtime
     private readonly Dictionary<uint, string> variableNameByValueReference = new Dictionary<uint, string>();
     private double startTime;
     private double stopTime;
+    private double tolerance;
     private bool hasStopTime;
+    private bool enteredInitializationMode;
+    private bool splitInitializationAvailable = true;
     private bool initialized;
+    private string instanceName = string.Empty;
+    private bool logging;
 
     public void Load(string fmuPath, string unzipDirectory, string instanceName, bool logging)
     {
+        this.instanceName = instanceName;
+        this.logging = logging;
         if (string.IsNullOrEmpty(unzipDirectory) || !Directory.Exists(unzipDirectory))
             throw new DirectoryNotFoundException($"FMU unzip directory not found: {unzipDirectory}");
 
@@ -79,6 +104,8 @@ public class NativeFmi2Runtime : IFmi2Runtime
                 variableNameByValueReference.Add(variable.valueReference, variable.name);
         }
 
+        TrySetNativeDebugLogPath(Path.Combine(unzipDirectory, "FmuNativePlugin.log"));
+
         handle = FmuNative.Load(unzipDirectory, instanceName, logging ? 1 : 0);
         if (handle == IntPtr.Zero)
             throw new InvalidOperationException($"Fmu_Load failed: {ReadNativeError()}");
@@ -88,12 +115,38 @@ public class NativeFmi2Runtime : IFmi2Runtime
     {
         this.startTime = startTime;
         this.stopTime = stopTime;
+        this.tolerance = tolerance;
         hasStopTime = stopTime > startTime;
     }
 
     public void EnterInitializationMode()
     {
-        // The current native plugin wraps FMI setup, enter, and exit in Fmu_Initialize.
+        EnsureLoaded();
+        if (initialized || enteredInitializationMode || !splitInitializationAvailable)
+            return;
+
+        try
+        {
+            int ok = FmuNative.SetupExperiment(
+                handle,
+                startTime,
+                stopTime,
+                hasStopTime ? 1 : 0,
+                tolerance,
+                tolerance > 0.0 ? 1 : 0);
+            if (ok == 0)
+                throw new InvalidOperationException($"Fmu_SetupExperiment failed: {ReadNativeError()}");
+
+            ok = FmuNative.EnterInitializationMode(handle);
+            if (ok == 0)
+                throw new InvalidOperationException($"Fmu_EnterInitializationMode failed: {ReadNativeError()}");
+
+            enteredInitializationMode = true;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            splitInitializationAvailable = false;
+        }
     }
 
     public void ExitInitializationMode()
@@ -102,10 +155,24 @@ public class NativeFmi2Runtime : IFmi2Runtime
         if (initialized)
             return;
 
-        int ok = FmuNative.Initialize(handle, startTime, stopTime, hasStopTime ? 1 : 0);
-        if (ok == 0)
-            throw new InvalidOperationException($"Fmu_Initialize failed: {ReadNativeError()}");
+        if (!splitInitializationAvailable)
+        {
+            int legacyOk = FmuNative.Initialize(handle, startTime, stopTime, hasStopTime ? 1 : 0);
+            if (legacyOk == 0)
+                throw new InvalidOperationException($"Fmu_Initialize failed: {ReadNativeError()}");
 
+            initialized = true;
+            return;
+        }
+
+        if (!enteredInitializationMode)
+            EnterInitializationMode();
+
+        int ok = FmuNative.ExitInitializationMode(handle);
+        if (ok == 0)
+            throw new InvalidOperationException($"Fmu_ExitInitializationMode failed: {ReadNativeError()}");
+
+        enteredInitializationMode = false;
         initialized = true;
     }
 
@@ -145,10 +212,19 @@ public class NativeFmi2Runtime : IFmi2Runtime
     public void DoStep(double currentTime, double stepSize)
     {
         EnsureLoaded();
+        long doStepStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+        if (logging)
+            Debug.Log($"[CoSimulation][{instanceName}] Native DoStep begin. t={currentTime:F3}s, h={stepSize:F3}s");
 
         int ok = FmuNative.DoStep(handle, currentTime, stepSize);
         if (ok == 0)
             throw new InvalidOperationException($"Fmu_DoStep failed: {ReadNativeError()}");
+
+        if (logging)
+        {
+            double elapsedMs = 1000.0 * (System.Diagnostics.Stopwatch.GetTimestamp() - doStepStartTimestamp) / System.Diagnostics.Stopwatch.Frequency;
+            Debug.Log($"[CoSimulation][{instanceName}] Native DoStep end. t={currentTime:F3}s, h={stepSize:F3}s, elapsed={elapsedMs:F1}ms");
+        }
     }
 
     public void Terminate()
@@ -164,6 +240,8 @@ public class NativeFmi2Runtime : IFmi2Runtime
             handle = IntPtr.Zero;
         }
 
+        enteredInitializationMode = false;
+        splitInitializationAvailable = true;
         initialized = false;
     }
 
@@ -192,6 +270,18 @@ public class NativeFmi2Runtime : IFmi2Runtime
         catch (Exception ex)
         {
             return $"Could not read native error text: {ex.Message}";
+        }
+    }
+
+    private static void TrySetNativeDebugLogPath(string path)
+    {
+        try
+        {
+            FmuNative.SetDebugLogPath(path);
+        }
+        catch (EntryPointNotFoundException)
+        {
+            // Older plugin DLLs do not expose file logging.
         }
     }
 }

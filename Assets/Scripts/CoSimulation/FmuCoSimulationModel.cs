@@ -469,7 +469,10 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
             appliedParameterCount = applyParameterOverridesOnInitialize
                 ? ApplyRealParameterOverrides(newRuntime, true, true)
                 : 0;
-            newRuntime.SetupExperiment(startTime, stopTime, 0.0);
+            double tolerance = modelDescription != null && modelDescription.hasDefaultExperimentTolerance
+                ? modelDescription.defaultExperimentTolerance
+                : 0.0;
+            newRuntime.SetupExperiment(startTime, stopTime, tolerance);
             newRuntime.EnterInitializationMode();
             newRuntime.ExitInitializationMode();
         }

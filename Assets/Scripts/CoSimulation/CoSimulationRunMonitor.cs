@@ -14,6 +14,7 @@ public class CoSimulationRunMonitor : MonoBehaviour
     [SerializeField] private bool requireAppliedInletTarget = true;
     [SerializeField] private bool logSummaryWhenSimulationStops = true;
     [SerializeField] private bool disableWhenComplete = true;
+    [SerializeField] private bool exitPlayModeWhenComplete = false;
     [SerializeField] private bool quitEditorWhenComplete = false;
 
     [Header("References")]
@@ -44,7 +45,8 @@ public class CoSimulationRunMonitor : MonoBehaviour
         int minimumHealthyCoSimSteps = 1,
         bool startSimulationOnPlay = true,
         bool runInitialCoSimStepOnStart = true,
-        bool quitEditorWhenComplete = false)
+        bool quitEditorWhenComplete = false,
+        bool exitPlayModeWhenComplete = false)
     {
         this.orchestrator = orchestrator;
         this.airflowAdapter = airflowAdapter;
@@ -53,6 +55,7 @@ public class CoSimulationRunMonitor : MonoBehaviour
         this.startSimulationOnPlay = startSimulationOnPlay;
         this.runInitialCoSimStepOnStart = runInitialCoSimStepOnStart;
         this.quitEditorWhenComplete = quitEditorWhenComplete;
+        this.exitPlayModeWhenComplete = exitPlayModeWhenComplete;
     }
 
     public void Configure(
@@ -197,6 +200,12 @@ public class CoSimulationRunMonitor : MonoBehaviour
         if (quitEditorWhenComplete)
         {
             UnityEditor.EditorApplication.Exit(lastRunHealthy ? 0 : 1);
+            return;
+        }
+
+        if (exitPlayModeWhenComplete && UnityEditor.EditorApplication.isPlaying)
+        {
+            UnityEditor.EditorApplication.isPlaying = false;
             return;
         }
 #endif

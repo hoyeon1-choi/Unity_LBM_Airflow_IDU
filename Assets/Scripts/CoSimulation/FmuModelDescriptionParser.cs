@@ -29,6 +29,8 @@ public class FmuModelDescription
     public string modelName = string.Empty;
     public string guid = string.Empty;
     public string modelIdentifier = string.Empty;
+    public bool hasDefaultExperimentTolerance = false;
+    public double defaultExperimentTolerance = 0.0;
     public readonly List<FmuVariableInfo> variables = new List<FmuVariableInfo>();
 
     public IReadOnlyList<FmuVariableInfo> Variables => variables;
@@ -220,6 +222,20 @@ public static class FmuModelDescriptionParser
             }
         }
 
+        foreach (XElement element in document.Descendants())
+        {
+            if (element.Name.LocalName != "DefaultExperiment")
+                continue;
+
+            string toleranceText = ReadAttribute(element, "tolerance");
+            double defaultTolerance;
+            if (double.TryParse(toleranceText, NumberStyles.Float, CultureInfo.InvariantCulture, out defaultTolerance))
+            {
+                description.hasDefaultExperimentTolerance = true;
+                description.defaultExperimentTolerance = defaultTolerance;
+            }
+            break;
+        }
         foreach (XElement scalar in document.Descendants())
         {
             if (scalar.Name.LocalName != "ScalarVariable")

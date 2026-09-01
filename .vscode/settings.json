@@ -66,5 +66,5 @@
     "explorer.fileNesting.patterns": {
         "*.sln": "*.csproj"
     },
-    "dotnet.defaultSolution": "LBMUnity_1wayCST_260501_SolverUpdate_v2.sln"
+    "dotnet.defaultSolution": "LBMUnity_1wayCST_FMU_Interagtion_PlatForm.sln"
 }
