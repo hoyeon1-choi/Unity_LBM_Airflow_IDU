@@ -37,6 +37,9 @@ public class CoSimulationOrchestrator : MonoBehaviour
     [SerializeField, ReadOnly] private double currentCoSimTime = 0.0;
     [SerializeField, ReadOnly] private double nextCoSimTime = 0.0;
     [SerializeField, ReadOnly] private ulong coSimStepIndex = 0;
+    [SerializeField, ReadOnly] private ulong completedCoSimStepCount = 0;
+    [SerializeField, ReadOnly] private bool coSimFailureObserved = false;
+    [SerializeField, ReadOnly] private string lastCoSimFailure = string.Empty;
     [SerializeField, ReadOnly] private double latestSensorTemperatureDegC = 0.0;
     [SerializeField, ReadOnly] private double latestControllerSetpointDegC = double.NaN;
     [SerializeField, ReadOnly] private double latestHz = double.NaN;
@@ -56,8 +59,18 @@ public class CoSimulationOrchestrator : MonoBehaviour
     private CoSimConnectionMap runtimeProfileConnectionMap;
     private SimulationController simulationController;
     private bool scheduleInitialized;
+    private bool coSimStepInProgress;
+    private CoSimConnectionMap activeStepMap;
+    private StringBuilder activeStepStatus;
+    private int activeStepModelIndex;
+    private double activeStepTime;
+    private FmuCoSimulationModel pendingStepModel;
 
     public ulong CoSimStepIndex => coSimStepIndex;
+    public ulong CompletedCoSimStepCount => completedCoSimStepCount;
+    public bool IsCoSimStepInProgress => coSimStepInProgress;
+    public bool CoSimFailureObserved => coSimFailureObserved;
+    public string LastCoSimFailure => lastCoSimFailure;
     public double CurrentCoSimTime => currentCoSimTime;
     public double LatestSensorTemperatureDegC => latestSensorTemperatureDegC;
     public double LatestControllerSetpointDegC => latestControllerSetpointDegC;
@@ -124,9 +137,9 @@ public class CoSimulationOrchestrator : MonoBehaviour
     {
         ResolveReferences();
         double time = GetCurrentTime();
-        DoCoSimulationStep(time);
         scheduleInitialized = true;
-        nextCoSimTime = time + GetSafeStepSize();
+        nextCoSimTime = time;
+        DoCoSimulationStep(time);
     }
 
     [ContextMenu("Auto Find References")]
@@ -138,9 +151,13 @@ public class CoSimulationOrchestrator : MonoBehaviour
     [ContextMenu("Reset Co-Sim Schedule")]
     public void ResetSchedule()
     {
+        CancelActiveStep();
         scheduleInitialized = false;
         nextCoSimTime = 0.0;
         coSimStepIndex = 0;
+        completedCoSimStepCount = 0;
+        coSimFailureObserved = false;
+        lastCoSimFailure = string.Empty;
         lastStatus = "Co-sim schedule reset.";
     }
 
@@ -148,6 +165,12 @@ public class CoSimulationOrchestrator : MonoBehaviour
     {
         if (!enableCoSimulation)
             return;
+
+        if (coSimStepInProgress)
+        {
+            ContinueCoSimulationStep();
+            return;
+        }
 
         ResolveReferences();
 
@@ -167,64 +190,151 @@ public class CoSimulationOrchestrator : MonoBehaviour
         if (currentTime + 1e-9 < nextCoSimTime)
             return;
 
-        DoCoSimulationStep(currentTime);
-
-        double step = GetSafeStepSize();
-        nextCoSimTime = Math.Max(nextCoSimTime + step, currentTime + step);
+        // LBM time only decides when the communication point is due. The FMU
+        // must receive the exact scheduled time reached by its previous step.
+        DoCoSimulationStep(nextCoSimTime);
     }
 
     private void DoCoSimulationStep(double currentTime)
     {
         try
         {
-            CoSimConnectionMap map = GetActiveConnectionMap();
+            activeStepMap = GetActiveConnectionMap();
             EnsureFmuModels();
-            SortFmuModelsForMap(map);
+            SortFmuModelsForMap(activeStepMap);
+            simulationController?.SetExternalStepPause(true, "Waiting for co-simulation FMU step.");
             EnsureModelsInitialized(currentTime);
 
             signalBus.Clear();
             currentCoSimTime = currentTime;
             coSimStepIndex++;
+            activeStepTime = currentTime;
+            activeStepModelIndex = 0;
+            activeStepStatus = new StringBuilder(512);
+            coSimStepInProgress = true;
 
-            StringBuilder status = new StringBuilder(512);
-            SeedBusWithPreviousStepSignals(status);
-            PublishProfileConstantSignals(status);
-            PublishProviderSources(map, airflowAdapter.ModelId, airflowAdapter, status);
-
-            for (int i = 0; i < fmuModels.Count; i++)
-            {
-                FmuCoSimulationModel model = fmuModels[i];
-                if (model == null)
-                    continue;
-
-                TransferConnectionsToModel(map, model, status);
-                model.DoStep(currentTime, GetSafeStepSize());
-                PublishModelOutputs(map, model, status);
-            }
-
-            bool appliedToAirflow = TransferConnectionsToReceiver(map, airflowAdapter.ModelId, airflowAdapter, status);
-            if (appliedToAirflow)
-                airflowAdapter.SyncDynamicBoundaryInputsNow();
-
-            RememberCurrentStepSignals();
-            UpdateReadOnlyDebugValues(status.ToString());
-            WriteCsvRow();
-
-            if (logEveryCoSimStep)
-            {
-                Debug.Log(
-                    $"[CoSimulation] step={coSimStepIndex}, t={currentCoSimTime:F3}s, " +
-                    $"T_sensor={latestSensorTemperatureDegC:F3}C, T_set={latestControllerSetpointDegC:F3}C, " +
-                    $"Hz={latestHz:F3}, plantHz={latestPlantHzInput:F3}, " +
-                    $"T_dis={latestDischargeTemperatureDegC:F3}C, applied={latestAppliedInletTemperatureDegC:F3}C, " +
-                    $"targets={latestTargetInletCount}, runtime={runtimeModeSummary}, status={lastStatus}");
-            }
+            SeedBusWithPreviousStepSignals(activeStepStatus);
+            PublishProfileConstantSignals(activeStepStatus);
+            PublishProviderSources(activeStepMap, airflowAdapter.ModelId, airflowAdapter, activeStepStatus);
+            ContinueCoSimulationStep();
         }
         catch (Exception ex)
         {
-            lastStatus = $"Co-sim step failed: {ex.Message}";
-            Debug.LogWarning($"[CoSimulation] {lastStatus}");
+            FailActiveStep(ex);
         }
+    }
+
+    private void ContinueCoSimulationStep()
+    {
+        try
+        {
+            if (pendingStepModel != null)
+            {
+                if (!pendingStepModel.TryCompleteStep())
+                    return;
+
+                PublishModelOutputs(activeStepMap, pendingStepModel, activeStepStatus);
+                pendingStepModel = null;
+                activeStepModelIndex++;
+            }
+
+            while (activeStepModelIndex < fmuModels.Count)
+            {
+                FmuCoSimulationModel model = fmuModels[activeStepModelIndex];
+                if (model == null)
+                {
+                    activeStepModelIndex++;
+                    continue;
+                }
+
+                TransferConnectionsToModel(activeStepMap, model, activeStepStatus);
+                model.BeginStep(activeStepTime, GetSafeStepSize());
+                if (!model.TryCompleteStep())
+                {
+                    pendingStepModel = model;
+                    lastStatus = $"External FMU step pending: {model.ModelId}.";
+                    return;
+                }
+
+                PublishModelOutputs(activeStepMap, model, activeStepStatus);
+                activeStepModelIndex++;
+            }
+
+            CompleteActiveStep();
+        }
+        catch (Exception ex)
+        {
+            FailActiveStep(ex);
+        }
+    }
+
+    private void CompleteActiveStep()
+    {
+        bool appliedToAirflow = TransferConnectionsToReceiver(
+            activeStepMap, airflowAdapter.ModelId, airflowAdapter, activeStepStatus);
+        if (appliedToAirflow)
+            airflowAdapter.SyncDynamicBoundaryInputsNow();
+
+        RememberCurrentStepSignals();
+        UpdateReadOnlyDebugValues(activeStepStatus.ToString());
+        WriteCsvRow();
+        completedCoSimStepCount++;
+
+        if (logEveryCoSimStep)
+        {
+            Debug.Log(
+                $"[CoSimulation] step={coSimStepIndex}, t={currentCoSimTime:F3}s, " +
+                $"T_sensor={latestSensorTemperatureDegC:F3}C, T_set={latestControllerSetpointDegC:F3}C, " +
+                $"Hz={latestHz:F3}, plantHz={latestPlantHzInput:F3}, " +
+                $"T_dis={latestDischargeTemperatureDegC:F3}C, applied={latestAppliedInletTemperatureDegC:F3}C, " +
+                $"targets={latestTargetInletCount}, runtime={runtimeModeSummary}, status={lastStatus}");
+        }
+
+        double step = GetSafeStepSize();
+        nextCoSimTime = activeStepTime + step;
+        ClearActiveStepState();
+    }
+
+    private void FailActiveStep(Exception ex)
+    {
+        lastStatus = $"Co-sim step failed: {ex.Message}";
+        coSimFailureObserved = true;
+        lastCoSimFailure = lastStatus;
+        Debug.LogWarning($"[CoSimulation] {lastStatus}");
+        CancelActiveStep();
+        nextCoSimTime = GetCurrentTime() + GetSafeStepSize();
+    }
+
+    private void CancelActiveStep()
+    {
+        if (fmuModels != null && coSimStepInProgress)
+        {
+            for (int i = 0; i < fmuModels.Count; i++)
+            {
+                if (fmuModels[i] != null)
+                    fmuModels[i].TerminateOrDispose();
+            }
+        }
+
+        ClearActiveStepState();
+    }
+
+    private void ClearActiveStepState()
+    {
+        simulationController?.SetExternalStepPause(false);
+        coSimStepInProgress = false;
+        activeStepMap = null;
+        activeStepStatus = null;
+        activeStepModelIndex = 0;
+        pendingStepModel = null;
+    }
+
+    private void OnDisable()
+    {
+        if (Application.isPlaying)
+            CancelActiveStep();
+        else
+            simulationController?.SetExternalStepPause(false);
     }
 
     private void ResolveReferences(bool forceAutoCollectFmus = false)

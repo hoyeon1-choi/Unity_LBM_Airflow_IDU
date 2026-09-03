@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using System.Threading.Tasks;
 using System.Xml.Linq;
 using UnityEngine;
 
@@ -66,6 +67,8 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     private IFmi2Runtime runtime;
     private FmuModelDescription modelDescription;
     private double latestSimTimeSeconds;
+    private Task pendingStepTask;
+    private double pendingStepEndTime;
 
     public string ModelId => string.IsNullOrEmpty(modelId) ? name : modelId;
     public bool IsInitialized => isInitialized;
@@ -286,8 +289,45 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         latestSimTimeSeconds = currentTime + stepSize;
     }
 
+    public void BeginStep(double currentTime, double stepSize)
+    {
+        EnsureInitialized();
+        if (pendingStepTask != null)
+            throw new InvalidOperationException($"An FMU step is already pending for {ModelId}.");
+
+        if (applyTunableParameterOverridesBeforeEachStep)
+            ApplyRealParameterOverrides(runtime, false, false);
+
+        pendingStepEndTime = currentTime + stepSize;
+        if (runtime is ExternalFmi2Runtime)
+            pendingStepTask = Task.Run(() => runtime.DoStep(currentTime, stepSize));
+        else
+        {
+            runtime.DoStep(currentTime, stepSize);
+            latestSimTimeSeconds = pendingStepEndTime;
+        }
+    }
+
+    public bool TryCompleteStep()
+    {
+        if (pendingStepTask == null)
+            return true;
+        if (!pendingStepTask.IsCompleted)
+            return false;
+
+        Task completedTask = pendingStepTask;
+        pendingStepTask = null;
+        completedTask.GetAwaiter().GetResult();
+        latestSimTimeSeconds = pendingStepEndTime;
+        return true;
+    }
+
     public void TerminateOrDispose()
     {
+        if (pendingStepTask != null && !pendingStepTask.IsCompleted && runtime is ExternalFmi2Runtime externalRuntime)
+            externalRuntime.AbortPendingCommand($"disposing {ModelId}");
+
+        pendingStepTask = null;
         if (runtime != null)
         {
             runtime.Terminate();

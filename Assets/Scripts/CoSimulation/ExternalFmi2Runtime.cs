@@ -12,6 +12,7 @@ public class ExternalFmi2Runtime : IFmi2Runtime
 {
     private readonly int commandTimeoutMs;
     private readonly Dictionary<uint, string> variableNameByValueReference = new Dictionary<uint, string>();
+    private readonly ExternalFmuHostManager hostManager = new ExternalFmuHostManager();
     private FmuModelDescription modelDescription;
     private string instanceName = string.Empty;
     private bool loaded;
@@ -45,7 +46,7 @@ public class ExternalFmi2Runtime : IFmi2Runtime
                 variableNameByValueReference.Add(variable.valueReference, variable.name);
         }
 
-        ExternalFmuHostManager.Acquire();
+        hostManager.Acquire(this.instanceName);
         acquiredHost = true;
 
         try
@@ -158,13 +159,18 @@ public class ExternalFmi2Runtime : IFmi2Runtime
         Dispose();
     }
 
+    public void AbortPendingCommand(string reason)
+    {
+        hostManager.Abort(reason);
+    }
+
     public void Dispose()
     {
         if (loaded)
         {
             try
             {
-                ExternalFmuHostManager.ExecuteIfRunning(
+                hostManager.ExecuteIfRunning(
                     "unload",
                     new Dictionary<string, string> { { "instance", instanceName } },
                     Math.Min(commandTimeoutMs, 5000));
@@ -179,7 +185,7 @@ public class ExternalFmi2Runtime : IFmi2Runtime
 
         if (acquiredHost)
         {
-            ExternalFmuHostManager.Release();
+            hostManager.Release();
             acquiredHost = false;
         }
     }
@@ -206,7 +212,7 @@ public class ExternalFmi2Runtime : IFmi2Runtime
             args = new Dictionary<string, string>();
 
         args["instance"] = instanceName;
-        return ExternalFmuHostManager.Execute(command, args, commandTimeoutMs);
+        return hostManager.Execute(command, args, commandTimeoutMs);
     }
 
     private void EnsureLoaded()
@@ -225,26 +231,28 @@ public class ExternalFmi2Runtime : IFmi2Runtime
     }
 }
 
-internal static class ExternalFmuHostManager
+internal sealed class ExternalFmuHostManager
 {
-    private static readonly object SyncRoot = new object();
-    private static Process process;
-    private static string pipeName = string.Empty;
-    private static string hostLogPath = string.Empty;
-    private static int referenceCount;
+    private readonly object syncRoot = new object();
+    private Process process;
+    private string pipeName = string.Empty;
+    private string hostLogPath = string.Empty;
+    private string hostLabel = "FMU";
+    private int referenceCount;
 
-    public static void Acquire()
+    public void Acquire(string label)
     {
-        lock (SyncRoot)
+        lock (syncRoot)
         {
+            hostLabel = SanitizeFileName(label);
             EnsureStarted();
             referenceCount++;
         }
     }
 
-    public static void Release()
+    public void Release()
     {
-        lock (SyncRoot)
+        lock (syncRoot)
         {
             if (referenceCount > 0)
                 referenceCount--;
@@ -254,9 +262,9 @@ internal static class ExternalFmuHostManager
         }
     }
 
-    public static Dictionary<string, string> Execute(string command, Dictionary<string, string> args, int timeoutMs)
+    public Dictionary<string, string> Execute(string command, Dictionary<string, string> args, int timeoutMs)
     {
-        lock (SyncRoot)
+        lock (syncRoot)
         {
             EnsureStarted();
             try
@@ -280,9 +288,9 @@ internal static class ExternalFmuHostManager
         }
     }
 
-    public static bool ExecuteIfRunning(string command, Dictionary<string, string> args, int timeoutMs)
+    public bool ExecuteIfRunning(string command, Dictionary<string, string> args, int timeoutMs)
     {
-        lock (SyncRoot)
+        lock (syncRoot)
         {
             if (process == null || process.HasExited || string.IsNullOrEmpty(pipeName))
                 return false;
@@ -307,7 +315,31 @@ internal static class ExternalFmuHostManager
             }
         }
     }
-    private static void EnsureStarted()
+    public void Abort(string reason)
+    {
+        Process processToKill = System.Threading.Interlocked.Exchange(ref process, null);
+        pipeName = string.Empty;
+        if (processToKill == null)
+            return;
+
+        try
+        {
+            if (!processToKill.HasExited)
+            {
+                Debug.LogWarning($"[CoSimulation][{hostLabel}] Aborting external FMU host: {reason}. log={hostLogPath}");
+                processToKill.Kill();
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[CoSimulation][{hostLabel}] Could not abort external FMU host: {ex.Message}");
+        }
+        finally
+        {
+            processToKill.Dispose();
+        }
+    }
+    private void EnsureStarted()
     {
         if (process != null && !process.HasExited)
             return;
@@ -316,7 +348,7 @@ internal static class ExternalFmuHostManager
         string pluginPath = ResolveNativePluginPath();
         string logDirectory = Path.Combine(Application.persistentDataPath, "FmuHost");
         Directory.CreateDirectory(logDirectory);
-        hostLogPath = Path.Combine(logDirectory, "FmuHost.log");
+        hostLogPath = Path.Combine(logDirectory, $"FmuHost_{hostLabel}_{Guid.NewGuid():N}.log");
         pipeName = "lbm_fmu_host_" + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + "_" + Guid.NewGuid().ToString("N");
 
         ProcessStartInfo startInfo = new ProcessStartInfo
@@ -332,11 +364,20 @@ internal static class ExternalFmuHostManager
         if (process == null)
             throw new InvalidOperationException("Could not start FmuHost process.");
 
-        WaitUntilReady(10000);
-        Debug.Log($"[CoSimulation] Started external FMU host. pid={process.Id}, pipe={pipeName}, log={hostLogPath}");
+        try
+        {
+            WaitUntilReady(10000);
+        }
+        catch
+        {
+            KillHost("startup failed");
+            throw;
+        }
+
+        Debug.Log($"[CoSimulation][{hostLabel}] Started dedicated external FMU host. pid={process.Id}, pipe={pipeName}, log={hostLogPath}");
     }
 
-    private static void WaitUntilReady(int timeoutMs)
+    private void WaitUntilReady(int timeoutMs)
     {
         long deadline = Stopwatch.GetTimestamp() + (long)(Stopwatch.Frequency * (timeoutMs / 1000.0));
         Exception lastException = null;
@@ -362,11 +403,12 @@ internal static class ExternalFmuHostManager
         throw new TimeoutException("FmuHost did not become ready. " + (lastException != null ? lastException.Message : string.Empty));
     }
 
-    private static Dictionary<string, string> SendRaw(string requestLine, int timeoutMs)
+    private Dictionary<string, string> SendRaw(string requestLine, int timeoutMs)
     {
         int safeTimeoutMs = Math.Max(1000, timeoutMs);
+        string activePipeName = pipeName;
         System.Threading.Tasks.Task<Dictionary<string, string>> task =
-            System.Threading.Tasks.Task.Run(() => SendRawBlocking(requestLine, safeTimeoutMs));
+            System.Threading.Tasks.Task.Run(() => SendRawBlocking(activePipeName, requestLine, safeTimeoutMs));
 
         if (!task.Wait(safeTimeoutMs))
             throw new TimeoutException($"External FMU host command timed out after {safeTimeoutMs} ms. request={requestLine}");
@@ -374,9 +416,9 @@ internal static class ExternalFmuHostManager
         return task.GetAwaiter().GetResult();
     }
 
-    private static Dictionary<string, string> SendRawBlocking(string requestLine, int timeoutMs)
+    private static Dictionary<string, string> SendRawBlocking(string activePipeName, string requestLine, int timeoutMs)
     {
-        using (NamedPipeClientStream pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut))
+        using (NamedPipeClientStream pipe = new NamedPipeClientStream(".", activePipeName, PipeDirection.InOut))
         {
             pipe.Connect(Math.Max(1000, timeoutMs));
 
@@ -394,7 +436,7 @@ internal static class ExternalFmuHostManager
         }
     }
 
-    private static void ShutdownHost()
+    private void ShutdownHost()
     {
         if (process == null)
             return;
@@ -422,7 +464,7 @@ internal static class ExternalFmuHostManager
         }
     }
 
-    private static void KillHost(string reason)
+    private void KillHost(string reason)
     {
         if (process == null)
             return;
@@ -431,13 +473,13 @@ internal static class ExternalFmuHostManager
         {
             if (!process.HasExited)
             {
-                Debug.LogWarning($"[CoSimulation] Killing external FMU host: {reason}. log={hostLogPath}");
+                Debug.LogWarning($"[CoSimulation][{hostLabel}] Killing external FMU host: {reason}. log={hostLogPath}");
                 process.Kill();
             }
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"[CoSimulation] Could not kill external FMU host: {ex.Message}");
+            Debug.LogWarning($"[CoSimulation][{hostLabel}] Could not kill external FMU host: {ex.Message}");
         }
         finally
         {
@@ -524,6 +566,16 @@ internal static class ExternalFmuHostManager
     private static string Quote(string value)
     {
         return "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        string safeValue = string.IsNullOrWhiteSpace(value) ? "FMU" : value;
+        char[] invalidChars = Path.GetInvalidFileNameChars();
+        for (int i = 0; i < invalidChars.Length; i++)
+            safeValue = safeValue.Replace(invalidChars[i], '_');
+
+        return safeValue;
     }
 }
 

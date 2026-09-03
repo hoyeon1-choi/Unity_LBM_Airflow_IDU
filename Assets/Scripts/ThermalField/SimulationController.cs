@@ -35,6 +35,8 @@ public class SimulationController : Singleton<SimulationController>
     [SerializeField] private SolverEasePreset solverPreset = SolverEasePreset.Balanced;
     [Tooltip("Main run switch. Invalid readiness status will prevent stepping even if this is enabled.")]
     [SerializeField] private bool runSimulation = true;
+    [SerializeField, ReadOnly] private bool externalStepPause = false;
+    [SerializeField, ReadOnly] private string externalStepPauseReason = string.Empty;
 
     [Header("Domain / Resolution")]
     [SerializeField] private GameObject domain;
@@ -337,6 +339,7 @@ public class SimulationController : Singleton<SimulationController>
     public float TempPhysMinDegC => tempPhysMinDegC;
     public float TempPhysMaxDegC => tempPhysMaxDegC;
     public bool IsSimulationRunning => runSimulation;
+    public bool IsExternallyPaused => externalStepPause;
     public SolverEasePreset SolverPreset => solverPreset;
     public string SolverPresetName => solverPreset.ToString();
     public string ActiveCaseName => activeCaseName;
@@ -414,6 +417,12 @@ public class SimulationController : Singleton<SimulationController>
         runSimulation = running;
         if (running)
             targetTimeReached = false;
+    }
+
+    public void SetExternalStepPause(bool paused, string reason = null)
+    {
+        externalStepPause = paused;
+        externalStepPauseReason = paused ? (reason ?? string.Empty) : string.Empty;
     }
 
     protected override void Awake()
@@ -534,7 +543,7 @@ public class SimulationController : Singleton<SimulationController>
             UpdateSceneCacheStatus();
         }
 
-        if (!runSimulation || _lbmSolver == null)
+        if (!runSimulation || externalStepPause || _lbmSolver == null)
             return;
 
         if (readinessStatus == SimulationHealthStatus.Invalid)

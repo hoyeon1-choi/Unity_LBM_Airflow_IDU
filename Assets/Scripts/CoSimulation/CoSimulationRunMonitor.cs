@@ -12,6 +12,8 @@ public class CoSimulationRunMonitor : MonoBehaviour
     [Header("Health Check")]
     [SerializeField] private int minimumHealthyCoSimSteps = 1;
     [SerializeField] private bool requireAppliedInletTarget = true;
+    [SerializeField] private bool requireResponsiveMainThread = true;
+    [SerializeField] private float unresponsiveGapThresholdSeconds = 2.0f;
     [SerializeField] private bool logSummaryWhenSimulationStops = true;
     [SerializeField] private bool disableWhenComplete = true;
     [SerializeField] private bool exitPlayModeWhenComplete = false;
@@ -27,11 +29,18 @@ public class CoSimulationRunMonitor : MonoBehaviour
     [SerializeField, ReadOnly] private bool runFinished = false;
     [SerializeField, ReadOnly] private bool lastRunHealthy = false;
     [SerializeField, ReadOnly] private float elapsedRealtimeSeconds = 0.0f;
+    [SerializeField, ReadOnly] private float startupBlockingSeconds = 0.0f;
+    [SerializeField, ReadOnly] private float maximumMainThreadGapSeconds = 0.0f;
+    [SerializeField, ReadOnly] private float maximumGapDuringCoSimStepSeconds = 0.0f;
+    [SerializeField, ReadOnly] private int unresponsiveGapCount = 0;
     [TextArea(2, 6)]
     [SerializeField, ReadOnly] private string lastSummary = "Not started.";
 
     private float startRealtime;
+    private float lastUpdateRealtime;
     private bool observedSimulationRunning;
+    private bool waitingForCoSimCompletion;
+    private bool coSimStepWasInProgress;
 
     public bool RunStarted => runStarted;
     public bool RunFinished => runFinished;
@@ -109,6 +118,10 @@ public class CoSimulationRunMonitor : MonoBehaviour
         runFinished = false;
         lastRunHealthy = false;
         observedSimulationRunning = false;
+        waitingForCoSimCompletion = false;
+        maximumMainThreadGapSeconds = 0.0f;
+        maximumGapDuringCoSimStepSeconds = 0.0f;
+        unresponsiveGapCount = 0;
 
         if (simulationController != null && startSimulationOnPlay)
             simulationController.SetSimulationRunning(true);
@@ -118,6 +131,9 @@ public class CoSimulationRunMonitor : MonoBehaviour
 
         observedSimulationRunning =
             simulationController == null || simulationController.IsSimulationRunning;
+        startupBlockingSeconds = Time.realtimeSinceStartup - startRealtime;
+        lastUpdateRealtime = Time.realtimeSinceStartup;
+        coSimStepWasInProgress = orchestrator != null && orchestrator.IsCoSimStepInProgress;
 
         string profileName = orchestrator != null ? orchestrator.ProfileName : "-";
         string stopCondition = simulationController != null && simulationController.UseTargetSimulationTime
@@ -135,9 +151,19 @@ public class CoSimulationRunMonitor : MonoBehaviour
         if (runFinished)
             return;
 
+        float now = Time.realtimeSinceStartup;
+        float updateGap = now - lastUpdateRealtime;
+        lastUpdateRealtime = now;
+        maximumMainThreadGapSeconds = Mathf.Max(maximumMainThreadGapSeconds, updateGap);
+        if (coSimStepWasInProgress)
+            maximumGapDuringCoSimStepSeconds = Mathf.Max(maximumGapDuringCoSimStepSeconds, updateGap);
+        if (updateGap > Mathf.Max(0.1f, unresponsiveGapThresholdSeconds))
+            unresponsiveGapCount++;
+        coSimStepWasInProgress = orchestrator != null && orchestrator.IsCoSimStepInProgress;
+
         ResolveReferences();
 
-        elapsedRealtimeSeconds = Time.realtimeSinceStartup - startRealtime;
+        elapsedRealtimeSeconds = now - startRealtime;
 
         if (simulationController == null)
             return;
@@ -149,7 +175,11 @@ public class CoSimulationRunMonitor : MonoBehaviour
         }
 
         if (!simulationController.IsSimulationRunning)
-            FinishRun();
+        {
+            waitingForCoSimCompletion = orchestrator != null && orchestrator.IsCoSimStepInProgress;
+            if (!waitingForCoSimCompletion)
+                FinishRun();
+        }
     }
 
     private void FinishRun()
@@ -157,7 +187,8 @@ public class CoSimulationRunMonitor : MonoBehaviour
         runFinished = true;
         elapsedRealtimeSeconds = Time.realtimeSinceStartup - startRealtime;
 
-        ulong stepIndex = orchestrator != null ? orchestrator.CoSimStepIndex : 0UL;
+        ulong attemptedStepCount = orchestrator != null ? orchestrator.CoSimStepIndex : 0UL;
+        ulong completedStepCount = orchestrator != null ? orchestrator.CompletedCoSimStepCount : 0UL;
         double sensor = orchestrator != null ? orchestrator.LatestSensorTemperatureDegC : double.NaN;
         double setpoint = orchestrator != null ? orchestrator.LatestControllerSetpointDegC : double.NaN;
         double hz = orchestrator != null ? orchestrator.LatestHz : double.NaN;
@@ -172,18 +203,26 @@ public class CoSimulationRunMonitor : MonoBehaviour
         lastRunHealthy =
             orchestrator != null &&
             airflowAdapter != null &&
-            stepIndex >= (ulong)Mathf.Max(1, minimumHealthyCoSimSteps) &&
+            !orchestrator.CoSimFailureObserved &&
+            completedStepCount >= (ulong)Mathf.Max(1, minimumHealthyCoSimSteps) &&
+            (!requireResponsiveMainThread ||
+                (startupBlockingSeconds <= unresponsiveGapThresholdSeconds && unresponsiveGapCount == 0)) &&
             (!requireAppliedInletTarget || (inletTargets > 0 && !double.IsNaN(applied)));
 
         lastSummary =
-            $"completed={(lastRunHealthy ? "OK" : "Check")}, " +
+            $"completed={(lastRunHealthy ? "OK" : "FAILED")}, " +
             $"elapsedRealtime={elapsedRealtimeSeconds:F2}s, " +
             $"lbmSimTime={simTime:F6}s, " +
-            $"coSimSteps={stepIndex}, profile={profileName}, " +
+            $"coSimStepsCompleted={completedStepCount}, coSimStepsAttempted={attemptedStepCount}, profile={profileName}, " +
+            $"startupBlocking={startupBlockingSeconds:F3}s, " +
+            $"maxMainThreadGap={maximumMainThreadGapSeconds:F3}s, " +
+            $"maxGapDuringCoSimStep={maximumGapDuringCoSimStepSeconds:F3}s, " +
+            $"unresponsiveGaps={unresponsiveGapCount}, gapThreshold={unresponsiveGapThresholdSeconds:F3}s, " +
             $"T_sensor={sensor:F3}C, T_set={setpoint:F3}C, Hz={hz:F3}, plantHz={plantHz:F3}, " +
             $"T_dis={discharge:F3}C, appliedInlet={applied:F3}C, targetInlets={inletTargets}, " +
             $"runtime={Safe(orchestrator != null ? orchestrator.RuntimeModeSummary : null)}, " +
             $"debug={Safe(debugSignals)}, " +
+            $"failure={Safe(orchestrator != null ? orchestrator.LastCoSimFailure : null)}, " +
             $"status={Safe(orchestrator != null ? orchestrator.LastStatus : null)}";
 
         WriteLastRunSummaryFile();

@@ -2,7 +2,7 @@
 개발 환경은 Windows 11 64bit, Visual Studio 2022입니다.
 
 목표:
-Unity 기반 LBM 기류해석 솔버에서 실시간성 확보를 위해 dxPhys = 0.04 m를 유지한 상태로 Case Study를 실행할 수 있도록 코드를 수정/보완してください.
+Unity 기반 LBM 기류해석 솔버에서 실시간성 확보를 위해 dxPhys = 0.04 m를 유지한 상태로 Case Study를 실행할 수 있도록 코드를 수정/보완해주기 바랍니다.
 이번 Case Study의 목적은 고속 제트 코어 속도가 너무 빠르게 확산되어 감소하는 문제를 줄이면서, 안정성 및 질량보존성을 유지할 수 있는 설정을 찾는 것입니다.
 
 배경:
@@ -338,3 +338,13 @@ tau가 0.5에 가까우면 불안정해질 수 있으므로 아래 경고를 추
 - 우선 A0~A4를 쉽게 적용하고 로그로 비교 가능하게 만드는 것이 핵심입니다.
 - 실시간성 때문에 dx = 0.04 m는 반드시 유지하십시오.
 - 기존 Mass-Flux Corrected Outlet 동작은 깨지 않도록 주의하십시오.
+
+## FMU Out-of-Process 비동기 실행 원칙
+
+- FMU 초기화는 순차 비동기로 수행하십시오. Unity 메인 스레드는 양보하되, 모든 FMU를 `Task.WhenAll` 등으로 동시에 초기화하지 마십시오.
+- Controller -> Product처럼 출력-입력 의존성이 있는 FMU step은 반드시 순차 비동기로 수행하십시오. 선행 FMU의 step 완료와 출력 읽기가 끝난 뒤 후행 FMU의 입력을 설정하고 step을 시작해야 합니다.
+- 서로 독립적인 Plant R1~R5만 추후 선택적으로 병렬화할 수 있습니다. 기본 동작은 순차 실행이며, profile에서 병렬 실행이 명시되고 FMU 간 의존성이 없다고 검증된 경우에만 병렬화를 허용하십시오.
+- FMU 초기화 또는 co-simulation step이 진행 중일 때는 LBM 물리 step과 simulated time을 pause하십시오. 모든 FMU 출력 전달, LBM boundary 적용, dynamic boundary 동기화가 완료된 뒤에만 LBM pause를 해제하십시오.
+- FMU 초기 입력값과 순환 연결 정책을 product co-simulation profile에 명시하십시오. 순환 연결은 기본적으로 이전 step 출력을 사용하는 one-step delay 방식으로 처리하고, 지연을 허용할 수 없는 제품은 별도의 fixed-point iteration 정책을 명시해야 합니다.
+- 비동기 실행은 Unity UI를 막지 않기 위한 것이며 FMU 실행 순서를 비결정적으로 만드는 병렬 실행을 의미하지 않습니다.
+- timeout 또는 FMU 오류가 발생하면 해당 step을 완료로 기록하지 말고 실패 상태를 보존하십시오. 외부 호스트 정리와 LBM pause 해제 후 명시적인 재초기화 절차를 따르십시오.

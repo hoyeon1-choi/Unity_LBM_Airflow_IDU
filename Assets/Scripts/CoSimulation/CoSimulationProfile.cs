@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -177,14 +177,26 @@ public class CoSimulationProfile : ScriptableObject
 
         CoSimulationFmuModelConfig controller = new CoSimulationFmuModelConfig(
             "MultiV_Controller_Model",
-            "Multi_V_S__Set_CFMU_CS",
-            "controller/Multi_V_S__Set_CFMU_CS.fmu");
+            "Multi_V_S__Set_CFMU",
+            "controller/Multi_V_S__Set_CFMU.fmu");
         controller.defaultStepSize = 1.0;
         controller.useExternalRuntime = true;
         controller.fallbackToMockOnNativeFailure = false;
         controller.externalCommandTimeoutMs = 30000;
         controller.loadMissingRealParametersFromFmu = false;
-        controller.stringParameterOverrides = new List<CoSimulationStringParameterPreset>();
+        controller.realParameterOverrides = new List<CoSimulationRealParameterPreset>
+        {
+            new CoSimulationRealParameterPreset("Period", 1.0)
+        };
+        controller.stringParameterOverrides = new List<CoSimulationStringParameterPreset>
+        {
+            new CoSimulationStringParameterPreset("IDU_01.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
+            new CoSimulationStringParameterPreset("IDU_02.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
+            new CoSimulationStringParameterPreset("IDU_03.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
+            new CoSimulationStringParameterPreset("IDU_04.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
+            new CoSimulationStringParameterPreset("IDU_05.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
+            new CoSimulationStringParameterPreset("Multi_V_S.Option_HEX_path", "{FMU_ROOT}/S_SAA37571716_RPUW100S9S_141016_0456.hex")
+        };
 
         fmuModels = new List<CoSimulationFmuModelConfig>
         {
@@ -212,23 +224,23 @@ public class CoSimulationProfile : ScriptableObject
         for (int i = 1; i <= 5; i++)
             AddMultiVIndoorUnitConnections(i);
 
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Pressure_HI", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Sensor__Pressure_HI", "Product high pressure sensor to controller."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Pressure_LO", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Sensor__Pressure_LO", "Product low pressure sensor to controller."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_SC_Out", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Sensor__Temp_SC_Out", "Product subcooling outlet temperature to controller."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_SC_In", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Sensor__Temp_SC_In", "Product subcooling inlet temperature to controller."));
-        connections.Add(NewConnection("profile", "outdoor_temp_c", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Sensor__Temp_OutAir", "Outdoor air temperature default."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_Liquid", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Sensor__Temp_Liquid", "Product liquid temperature to controller."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_HEXPipe", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Sensor__Temp_HEXPipe", "Product HEX pipe temperature to controller."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_Discharge", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Sensor__Temp_Discharge", "Product discharge temperature to controller."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_Suction", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Sensor__Temp_Suction", "Product suction temperature to controller."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU_CS", "Multi_V_S_Comp__TarFreq", "MULTIV_FMU_WARPPER", "Comp_CurFreq", "Controller compressor target frequency to product compressor input."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU_CS", "Multi_V_S_Fan1__TarRPM", "MULTIV_FMU_WARPPER", "Fan_CurRPM", "Controller fan target RPM to product fan input."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU_CS", "Multi_V_S_4Way_Valve__OnOff", "MULTIV_FMU_WARPPER", "reversing_valve_mode_flag", "Controller reversing valve output to product."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU_CS", "Multi_V_S_MAIN_EEV__CurPulse", "MULTIV_FMU_WARPPER", "MAIN_EEV_CurPulse", "Controller main EEV current pulse to product."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Pressure_HI", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Pressure_HI", "Product high pressure sensor to controller."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Pressure_LO", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Pressure_LO", "Product low pressure sensor to controller."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_SC_Out", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_SC_Out", "Product subcooling outlet temperature to controller."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_SC_In", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_SC_In", "Product subcooling inlet temperature to controller."));
+        connections.Add(NewConnection("profile", "outdoor_temp_c", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_OutAir", "Outdoor air temperature default."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_Liquid", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_Liquid", "Product liquid temperature to controller."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_HEXPipe", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_HEXPipe", "Product HEX pipe temperature to controller."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_Discharge", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_Discharge", "Product discharge temperature to controller."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_Suction", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_Suction", "Product suction temperature to controller."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Comp__TarFreq", "MULTIV_FMU_WARPPER", "Comp_CurFreq", "Controller compressor target frequency to product compressor input."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Fan1__TarRPM", "MULTIV_FMU_WARPPER", "Fan_CurRPM", "Controller fan target RPM to product fan input."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.4Way_Valve__OnOff", "MULTIV_FMU_WARPPER", "reversing_valve_mode_flag", "Controller reversing valve output to product."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.MAIN_EEV__CurPulse", "MULTIV_FMU_WARPPER", "MAIN_EEV_CurPulse", "Controller main EEV current pulse to product."));
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", "IDU_01_Air_Temp_Discharge", "airflow", "T_discharge", "First IDU discharge temperature to LBM inlet boundary."));
 
         controllerSetpointSignal = new CoSimSignalReference("profile", "set_temp");
-        controllerOutputSignal = new CoSimSignalReference("Multi_V_S__Set_CFMU_CS", "Multi_V_S_Comp__TarFreq");
+        controllerOutputSignal = new CoSimSignalReference("Multi_V_S__Set_CFMU", "Multi_V_S.Comp__TarFreq");
         plantInputSignal = new CoSimSignalReference("MULTIV_FMU_WARPPER", "Comp_CurFreq");
         dischargeOutputSignal = new CoSimSignalReference("MULTIV_FMU_WARPPER", "IDU_01_Air_Temp_Discharge");
 
@@ -236,8 +248,8 @@ public class CoSimulationProfile : ScriptableObject
         {
             new CoSimDebugSignal("LBM_T_sensor", "airflow", "T_sensor"),
             new CoSimDebugSignal("SetTemp", "profile", "set_temp"),
-            new CoSimDebugSignal("CompTarFreq", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Comp__TarFreq"),
-            new CoSimDebugSignal("FanTarRPM", "Multi_V_S__Set_CFMU_CS", "Multi_V_S_Fan1__TarRPM"),
+            new CoSimDebugSignal("CompTarFreq", "Multi_V_S__Set_CFMU", "Multi_V_S.Comp__TarFreq"),
+            new CoSimDebugSignal("FanTarRPM", "Multi_V_S__Set_CFMU", "Multi_V_S.Fan1__TarRPM"),
             new CoSimDebugSignal("IDU01_T_dis", "MULTIV_FMU_WARPPER", "IDU_01_Air_Temp_Discharge"),
             new CoSimDebugSignal("IDU01_T_suc", "Simple_Chamber_R1", "T_air_suc")
         };
@@ -250,18 +262,18 @@ public class CoSimulationProfile : ScriptableObject
         string chamber = $"Simple_Chamber_R{index}";
         string pipeInOutput = index == 2 ? "IDU_02_Sensor_Temp_Pipe_In2" : $"IDU_{index:00}_Sensor_Temp_Pipe_In";
 
-        connections.Add(NewConnection("profile", "idu_on", "Multi_V_S__Set_CFMU_CS", $"{idu}_FOnOff", "Indoor unit on command."));
-        connections.Add(NewConnection("profile", "set_mode", "Multi_V_S__Set_CFMU_CS", $"{idu}_SetMode", "Indoor unit mode command."));
-        connections.Add(NewConnection("profile", "set_temp", "Multi_V_S__Set_CFMU_CS", $"{idu}_SetTemp", "Indoor unit set temperature."));
-        connections.Add(NewConnection("profile", "set_fan", "Multi_V_S__Set_CFMU_CS", $"{idu}_SetFan", "Indoor unit fan command."));
-        connections.Add(NewConnection(chamber, "T_air_suc", "Multi_V_S__Set_CFMU_CS", $"{idu}_Room_Temp", "Chamber suction temperature to controller room sensor."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", pipeInOutput, "Multi_V_S__Set_CFMU_CS", $"{idu}_Pipe_In_Temp", "Product pipe-in temperature to controller."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Sensor_Temp_Pipe_Out", "Multi_V_S__Set_CFMU_CS", $"{idu}_Pipe_Out_Temp", "Product pipe-out temperature to controller."));
-        connections.Add(NewConnection("profile", "room_humidity_percent", "Multi_V_S__Set_CFMU_CS", $"{idu}_Humidity", "Indoor humidity default."));
+        connections.Add(NewConnection("profile", "idu_on", "Multi_V_S__Set_CFMU", $"{idu}.FOnOff", "Indoor unit on command."));
+        connections.Add(NewConnection("profile", "set_mode", "Multi_V_S__Set_CFMU", $"{idu}.SetMode", "Indoor unit mode command."));
+        connections.Add(NewConnection("profile", "set_temp", "Multi_V_S__Set_CFMU", $"{idu}.SetTemp", "Indoor unit set temperature."));
+        connections.Add(NewConnection("profile", "set_fan", "Multi_V_S__Set_CFMU", $"{idu}.SetFan", "Indoor unit fan command."));
+        connections.Add(NewConnection(chamber, "T_air_suc", "Multi_V_S__Set_CFMU", $"{idu}.Room_Temp", "Chamber suction temperature to controller room sensor."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", pipeInOutput, "Multi_V_S__Set_CFMU", $"{idu}.Pipe_In_Temp", "Product pipe-in temperature to controller."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Sensor_Temp_Pipe_Out", "Multi_V_S__Set_CFMU", $"{idu}.Pipe_Out_Temp", "Product pipe-out temperature to controller."));
+        connections.Add(NewConnection("profile", "room_humidity_percent", "Multi_V_S__Set_CFMU", $"{idu}.Humidity", "Indoor humidity default."));
 
         connections.Add(NewConnection("profile", "idu_on", "MULTIV_FMU_WARPPER", $"{iduLower}_onoff", "Indoor unit on command to product."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU_CS", $"{idu}_CurSetFan", "MULTIV_FMU_WARPPER", $"{iduLower}_fan_mode", "Controller fan mode to product."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU_CS", $"{idu}_EEV_TarPulse", "MULTIV_FMU_WARPPER", $"{iduLower}_pulse", "Controller EEV target pulse to product."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", $"{idu}.CurSetFan", "MULTIV_FMU_WARPPER", $"{iduLower}_fan_mode", "Controller fan mode to product."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", $"{idu}.EEV_TarPulse", "MULTIV_FMU_WARPPER", $"{iduLower}_pulse", "Controller EEV target pulse to product."));
         connections.Add(NewConnection(chamber, "T_air_suc", "MULTIV_FMU_WARPPER", $"{iduLower}_temp_air", "Chamber suction temperature to product indoor inlet air."));
         connections.Add(NewConnection(chamber, "RH_air_suc", "MULTIV_FMU_WARPPER", $"{iduLower}_RH_air", "Chamber suction RH to product indoor inlet air."));
 
