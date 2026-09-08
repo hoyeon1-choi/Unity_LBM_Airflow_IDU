@@ -29,13 +29,56 @@ MonoBehaviour:
     modelId: Multi_V_S__Set_CFMU
     fmuFileName: controller/Multi_V_S__Set_CFMU.fmu
     useMockRuntime: 0
-    fallbackToMockOnNativeFailure: 1
+    useExternalRuntime: 1
+    launchBundledServer: 1
+    fallbackToMockOnNativeFailure: 0
+    externalCommandTimeoutMs: 30000
     logging: 1
     defaultStepSize: 1
     loadMissingRealParametersFromFmu: 0
     realParameterOverrides:
     - enabled: 1
       variableName: Period
+      value: 1
+    - enabled: 1
+      variableName: Multi_V_S.TotalIDUNum
+      value: 5
+    - enabled: 1
+      variableName: IDU_01.IDU_Address
+      value: 1
+    - enabled: 1
+      variableName: IDU_02.IDU_Address
+      value: 2
+    - enabled: 1
+      variableName: IDU_03.IDU_Address
+      value: 3
+    - enabled: 1
+      variableName: IDU_04.IDU_Address
+      value: 4
+    - enabled: 1
+      variableName: IDU_05.IDU_Address
+      value: 5
+    - enabled: 1
+      variableName: IDU_06.IDU_Address
+      value: 6
+    integerParameterOverrides:
+    - enabled: 1
+      variableName: IDU_01.Type
+      value: 1
+    - enabled: 1
+      variableName: IDU_02.Type
+      value: 1
+    - enabled: 1
+      variableName: IDU_03.Type
+      value: 1
+    - enabled: 1
+      variableName: IDU_04.Type
+      value: 1
+    - enabled: 1
+      variableName: IDU_05.Type
+      value: 1
+    - enabled: 1
+      variableName: IDU_06.Type
       value: 1
     stringParameterOverrides:
     - enabled: 1
@@ -59,6 +102,10 @@ MonoBehaviour:
       value: '{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex'
       rewriteModelDescriptionStart: 1
     - enabled: 1
+      variableName: IDU_06.Option_HEX_path
+      value: '{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex'
+      rewriteModelDescriptionStart: 1
+    - enabled: 1
       variableName: Multi_V_S.Option_HEX_path
       value: '{FMU_ROOT}/S_SAA37571716_RPUW100S9S_141016_0456.hex'
       rewriteModelDescriptionStart: 1
@@ -66,19 +113,12 @@ MonoBehaviour:
     modelId: MULTIV_FMU_WARPPER
     fmuFileName: product/MULTIV_FMU_WARPPER.fmu
     useMockRuntime: 0
-    fallbackToMockOnNativeFailure: 1
+    useExternalRuntime: 1
+    launchBundledServer: 0
+    fallbackToMockOnNativeFailure: 0
+    externalCommandTimeoutMs: 30000
     logging: 1
-    defaultStepSize: 1
-    loadMissingRealParametersFromFmu: 0
-    realParameterOverrides: []
-    stringParameterOverrides: []
-  - childObjectName: Simple_Chamber_R1_Model
-    modelId: Simple_Chamber_R1
-    fmuFileName: plant/Simple_Chamber_R1.fmu
-    useMockRuntime: 0
-    fallbackToMockOnNativeFailure: 1
-    logging: 1
-    defaultStepSize: 1
+    defaultStepSize: 0.1
     loadMissingRealParametersFromFmu: 0
     realParameterOverrides: []
     stringParameterOverrides: []
@@ -86,7 +126,10 @@ MonoBehaviour:
     modelId: Simple_Chamber_R2
     fmuFileName: plant/Simple_Chamber_R2.fmu
     useMockRuntime: 0
-    fallbackToMockOnNativeFailure: 1
+    useExternalRuntime: 1
+    launchBundledServer: 0
+    fallbackToMockOnNativeFailure: 0
+    externalCommandTimeoutMs: 30000
     logging: 1
     defaultStepSize: 1
     loadMissingRealParametersFromFmu: 0
@@ -96,7 +139,10 @@ MonoBehaviour:
     modelId: Simple_Chamber_R3
     fmuFileName: plant/Simple_Chamber_R3.fmu
     useMockRuntime: 0
-    fallbackToMockOnNativeFailure: 1
+    useExternalRuntime: 1
+    launchBundledServer: 0
+    fallbackToMockOnNativeFailure: 0
+    externalCommandTimeoutMs: 30000
     logging: 1
     defaultStepSize: 1
     loadMissingRealParametersFromFmu: 0
@@ -106,7 +152,10 @@ MonoBehaviour:
     modelId: Simple_Chamber_R4
     fmuFileName: plant/Simple_Chamber_R4.fmu
     useMockRuntime: 0
-    fallbackToMockOnNativeFailure: 1
+    useExternalRuntime: 1
+    launchBundledServer: 0
+    fallbackToMockOnNativeFailure: 0
+    externalCommandTimeoutMs: 30000
     logging: 1
     defaultStepSize: 1
     loadMissingRealParametersFromFmu: 0
@@ -116,7 +165,10 @@ MonoBehaviour:
     modelId: Simple_Chamber_R5
     fmuFileName: plant/Simple_Chamber_R5.fmu
     useMockRuntime: 0
-    fallbackToMockOnNativeFailure: 1
+    useExternalRuntime: 1
+    launchBundledServer: 0
+    fallbackToMockOnNativeFailure: 0
+    externalCommandTimeoutMs: 30000
     logging: 1
     defaultStepSize: 1
     loadMissingRealParametersFromFmu: 0
@@ -172,8 +224,8 @@ MonoBehaviour:
     clampMax: 0
     description: Indoor unit fan command.
   - enabled: 1
-    sourceModelId: Simple_Chamber_R1
-    sourceVariableName: T_air_suc
+    sourceModelId: airflow
+    sourceVariableName: T_sensor
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_01.Room_Temp
     scale: 1
@@ -182,7 +234,7 @@ MonoBehaviour:
     clampMin: 0
     useClampMax: 0
     clampMax: 0
-    description: Chamber suction temperature to controller room sensor.
+    description: LBM outlet temperature to controller room sensor.
   - enabled: 1
     sourceModelId: MULTIV_FMU_WARPPER
     sourceVariableName: IDU_01_Sensor_Temp_Pipe_In
@@ -208,8 +260,8 @@ MonoBehaviour:
     clampMax: 0
     description: Product pipe-out temperature to controller.
   - enabled: 1
-    sourceModelId: profile
-    sourceVariableName: room_humidity_percent
+    sourceModelId: airflow
+    sourceVariableName: RH_suction
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_01.Humidity
     scale: 1
@@ -218,7 +270,7 @@ MonoBehaviour:
     clampMin: 0
     useClampMax: 0
     clampMax: 0
-    description: Indoor humidity default.
+    description: LBM outlet humidity proxy to controller.
   - enabled: 1
     sourceModelId: profile
     sourceVariableName: idu_on
@@ -256,8 +308,8 @@ MonoBehaviour:
     clampMax: 0
     description: Controller EEV target pulse to product.
   - enabled: 1
-    sourceModelId: Simple_Chamber_R1
-    sourceVariableName: T_air_suc
+    sourceModelId: airflow
+    sourceVariableName: T_sensor
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: idu_01_temp_air
     scale: 1
@@ -266,55 +318,55 @@ MonoBehaviour:
     clampMin: 0
     useClampMax: 0
     clampMax: 0
-    description: Chamber suction temperature to product indoor inlet air.
+    description: LBM outlet temperature to product indoor inlet air.
   - enabled: 1
-    sourceModelId: Simple_Chamber_R1
-    sourceVariableName: RH_air_suc
+    sourceModelId: airflow
+    sourceVariableName: RH_suction
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: idu_01_RH_air
     scale: 1
     offset: 0
-    useClampMin: 0
+    useClampMin: 1
     clampMin: 0
-    useClampMax: 0
-    clampMax: 0
-    description: Chamber suction RH to product indoor inlet air.
+    useClampMax: 1
+    clampMax: 100
+    description: LBM outlet humidity proxy to product indoor inlet air.
   - enabled: 1
     sourceModelId: MULTIV_FMU_WARPPER
     sourceVariableName: IDU_01_Air_Temp_Discharge
-    targetModelId: Simple_Chamber_R1
-    targetVariableName: T_air_dis
+    targetModelId: airflow
+    targetVariableName: T_discharge
     scale: 1
     offset: 0
     useClampMin: 0
     clampMin: 0
     useClampMax: 0
     clampMax: 0
-    description: Product discharge temperature to chamber.
+    description: Product discharge temperature to LBM inlet.
   - enabled: 1
     sourceModelId: MULTIV_FMU_WARPPER
     sourceVariableName: IDU_01_Air_RH_Discharge
-    targetModelId: Simple_Chamber_R1
-    targetVariableName: RH_air_dis
+    targetModelId: airflow
+    targetVariableName: RH_discharge
     scale: 1
     offset: 0
     useClampMin: 0
     clampMin: 0
     useClampMax: 0
     clampMax: 0
-    description: Product discharge RH to chamber.
+    description: Product discharge RH to LBM humidity proxy.
   - enabled: 1
     sourceModelId: MULTIV_FMU_WARPPER
     sourceVariableName: IDU_01_Air_mfr_Discharge
-    targetModelId: Simple_Chamber_R1
-    targetVariableName: mfr_air_dis
+    targetModelId: airflow
+    targetVariableName: mfr_discharge
     scale: 1
     offset: 0
     useClampMin: 0
     clampMin: 0
     useClampMax: 0
     clampMax: 0
-    description: Product discharge mass flow to chamber.
+    description: Product discharge mass flow to LBM inlet.
   - enabled: 1
     sourceModelId: profile
     sourceVariableName: idu_on
@@ -466,10 +518,10 @@ MonoBehaviour:
     targetVariableName: idu_02_RH_air
     scale: 1
     offset: 0
-    useClampMin: 0
+    useClampMin: 1
     clampMin: 0
-    useClampMax: 0
-    clampMax: 0
+    useClampMax: 1
+    clampMax: 100
     description: Chamber suction RH to product indoor inlet air.
   - enabled: 1
     sourceModelId: MULTIV_FMU_WARPPER
@@ -658,10 +710,10 @@ MonoBehaviour:
     targetVariableName: idu_03_RH_air
     scale: 1
     offset: 0
-    useClampMin: 0
+    useClampMin: 1
     clampMin: 0
-    useClampMax: 0
-    clampMax: 0
+    useClampMax: 1
+    clampMax: 100
     description: Chamber suction RH to product indoor inlet air.
   - enabled: 1
     sourceModelId: MULTIV_FMU_WARPPER
@@ -850,10 +902,10 @@ MonoBehaviour:
     targetVariableName: idu_04_RH_air
     scale: 1
     offset: 0
-    useClampMin: 0
+    useClampMin: 1
     clampMin: 0
-    useClampMax: 0
-    clampMax: 0
+    useClampMax: 1
+    clampMax: 100
     description: Chamber suction RH to product indoor inlet air.
   - enabled: 1
     sourceModelId: MULTIV_FMU_WARPPER
@@ -1042,10 +1094,10 @@ MonoBehaviour:
     targetVariableName: idu_05_RH_air
     scale: 1
     offset: 0
-    useClampMin: 0
+    useClampMin: 1
     clampMin: 0
-    useClampMax: 0
-    clampMax: 0
+    useClampMax: 1
+    clampMax: 100
     description: Chamber suction RH to product indoor inlet air.
   - enabled: 1
     sourceModelId: MULTIV_FMU_WARPPER
@@ -1193,7 +1245,7 @@ MonoBehaviour:
     description: Product suction temperature to controller.
   - enabled: 1
     sourceModelId: Multi_V_S__Set_CFMU
-    sourceVariableName: Multi_V_S.Comp__TarFreq
+    sourceVariableName: Multi_V_S.Comp__CurFreq
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: Comp_CurFreq
     scale: 1
@@ -1205,7 +1257,7 @@ MonoBehaviour:
     description: Controller compressor target frequency to product compressor input.
   - enabled: 1
     sourceModelId: Multi_V_S__Set_CFMU
-    sourceVariableName: Multi_V_S.Fan1__TarRPM
+    sourceVariableName: Multi_V_S.Fan1__CurRPM
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: Fan_CurRPM
     scale: 1
@@ -1215,7 +1267,7 @@ MonoBehaviour:
     useClampMax: 0
     clampMax: 0
     description: Controller fan target RPM to product fan input.
-  - enabled: 1
+  - enabled: 0
     sourceModelId: Multi_V_S__Set_CFMU
     sourceVariableName: Multi_V_S.4Way_Valve__OnOff
     targetModelId: MULTIV_FMU_WARPPER
@@ -1229,7 +1281,7 @@ MonoBehaviour:
     description: Controller reversing valve output to product.
   - enabled: 1
     sourceModelId: Multi_V_S__Set_CFMU
-    sourceVariableName: Multi_V_S.MAIN_EEV__CurPulse
+    sourceVariableName: Multi_V_S.Main_EEV__TarPulse
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: MAIN_EEV_CurPulse
     scale: 1
@@ -1239,18 +1291,6 @@ MonoBehaviour:
     useClampMax: 0
     clampMax: 0
     description: Controller main EEV current pulse to product.
-  - enabled: 1
-    sourceModelId: MULTIV_FMU_WARPPER
-    sourceVariableName: IDU_01_Air_Temp_Discharge
-    targetModelId: airflow
-    targetVariableName: T_discharge
-    scale: 1
-    offset: 0
-    useClampMin: 0
-    clampMin: 0
-    useClampMax: 0
-    clampMax: 0
-    description: First IDU discharge temperature to LBM inlet boundary.
   constantSignals:
   - enabled: 1
     modelId: profile
@@ -1313,7 +1353,7 @@ MonoBehaviour:
     variableName: set_temp
   controllerOutputSignal:
     modelId: Multi_V_S__Set_CFMU
-    variableName: Multi_V_S.Comp__TarFreq
+    variableName: Multi_V_S.Comp__CurFreq
   plantInputSignal:
     modelId: MULTIV_FMU_WARPPER
     variableName: Comp_CurFreq
@@ -1329,13 +1369,19 @@ MonoBehaviour:
     variableName: set_temp
   - label: CompTarFreq
     modelId: Multi_V_S__Set_CFMU
-    variableName: Multi_V_S.Comp__TarFreq
+    variableName: Multi_V_S.Comp__CurFreq
   - label: FanTarRPM
     modelId: Multi_V_S__Set_CFMU
-    variableName: Multi_V_S.Fan1__TarRPM
+    variableName: Multi_V_S.Fan1__CurRPM
   - label: IDU01_T_dis
     modelId: MULTIV_FMU_WARPPER
     variableName: IDU_01_Air_Temp_Discharge
   - label: IDU01_T_suc
-    modelId: Simple_Chamber_R1
-    variableName: T_air_suc
+    modelId: airflow
+    variableName: T_sensor
+  - label: IDU01_RH_suc
+    modelId: airflow
+    variableName: RH_suction
+  - label: IDU01_mfr_suc
+    modelId: airflow
+    variableName: mfr_suction

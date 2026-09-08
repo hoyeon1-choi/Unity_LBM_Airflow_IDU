@@ -163,7 +163,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
 
     private void TickIfDue()
     {
-        if (!enableCoSimulation)
+        if (!enableCoSimulation || coSimFailureObserved)
             return;
 
         if (coSimStepInProgress)
@@ -302,7 +302,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
         lastCoSimFailure = lastStatus;
         Debug.LogWarning($"[CoSimulation] {lastStatus}");
         CancelActiveStep();
-        nextCoSimTime = GetCurrentTime() + GetSafeStepSize();
+        simulationController?.SetSimulationRunning(false);
     }
 
     private void CancelActiveStep()

@@ -181,12 +181,29 @@ public class CoSimulationProfile : ScriptableObject
             "controller/Multi_V_S__Set_CFMU.fmu");
         controller.defaultStepSize = 1.0;
         controller.useExternalRuntime = true;
+        controller.launchBundledServer = true;
         controller.fallbackToMockOnNativeFailure = false;
         controller.externalCommandTimeoutMs = 30000;
         controller.loadMissingRealParametersFromFmu = false;
         controller.realParameterOverrides = new List<CoSimulationRealParameterPreset>
         {
-            new CoSimulationRealParameterPreset("Period", 1.0)
+            new CoSimulationRealParameterPreset("Period", 1.0),
+            new CoSimulationRealParameterPreset("Multi_V_S.TotalIDUNum", 5.0),
+            new CoSimulationRealParameterPreset("IDU_01.IDU_Address", 1.0),
+            new CoSimulationRealParameterPreset("IDU_02.IDU_Address", 2.0),
+            new CoSimulationRealParameterPreset("IDU_03.IDU_Address", 3.0),
+            new CoSimulationRealParameterPreset("IDU_04.IDU_Address", 4.0),
+            new CoSimulationRealParameterPreset("IDU_05.IDU_Address", 5.0),
+            new CoSimulationRealParameterPreset("IDU_06.IDU_Address", 6.0)
+        };
+        controller.integerParameterOverrides = new List<CoSimulationIntegerParameterPreset>
+        {
+            new CoSimulationIntegerParameterPreset("IDU_01.Type", 1),
+            new CoSimulationIntegerParameterPreset("IDU_02.Type", 1),
+            new CoSimulationIntegerParameterPreset("IDU_03.Type", 1),
+            new CoSimulationIntegerParameterPreset("IDU_04.Type", 1),
+            new CoSimulationIntegerParameterPreset("IDU_05.Type", 1),
+            new CoSimulationIntegerParameterPreset("IDU_06.Type", 1)
         };
         controller.stringParameterOverrides = new List<CoSimulationStringParameterPreset>
         {
@@ -195,14 +212,14 @@ public class CoSimulationProfile : ScriptableObject
             new CoSimulationStringParameterPreset("IDU_03.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
             new CoSimulationStringParameterPreset("IDU_04.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
             new CoSimulationStringParameterPreset("IDU_05.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
+            new CoSimulationStringParameterPreset("IDU_06.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
             new CoSimulationStringParameterPreset("Multi_V_S.Option_HEX_path", "{FMU_ROOT}/S_SAA37571716_RPUW100S9S_141016_0456.hex")
         };
 
         fmuModels = new List<CoSimulationFmuModelConfig>
         {
             controller,
-            new CoSimulationFmuModelConfig("MultiV_Product_Model", "MULTIV_FMU_WARPPER", "product/MULTIV_FMU_WARPPER.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
-            new CoSimulationFmuModelConfig("Simple_Chamber_R1_Model", "Simple_Chamber_R1", "plant/Simple_Chamber_R1.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
+            new CoSimulationFmuModelConfig("MultiV_Product_Model", "MULTIV_FMU_WARPPER", "product/MULTIV_FMU_WARPPER.fmu") { defaultStepSize = 0.1, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
             new CoSimulationFmuModelConfig("Simple_Chamber_R2_Model", "Simple_Chamber_R2", "plant/Simple_Chamber_R2.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
             new CoSimulationFmuModelConfig("Simple_Chamber_R3_Model", "Simple_Chamber_R3", "plant/Simple_Chamber_R3.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
             new CoSimulationFmuModelConfig("Simple_Chamber_R4_Model", "Simple_Chamber_R4", "plant/Simple_Chamber_R4.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
@@ -233,14 +250,11 @@ public class CoSimulationProfile : ScriptableObject
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_HEXPipe", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_HEXPipe", "Product HEX pipe temperature to controller."));
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_Discharge", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_Discharge", "Product discharge temperature to controller."));
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_Suction", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_Suction", "Product suction temperature to controller."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Comp__TarFreq", "MULTIV_FMU_WARPPER", "Comp_CurFreq", "Controller compressor target frequency to product compressor input."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Fan1__TarRPM", "MULTIV_FMU_WARPPER", "Fan_CurRPM", "Controller fan target RPM to product fan input."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.4Way_Valve__OnOff", "MULTIV_FMU_WARPPER", "reversing_valve_mode_flag", "Controller reversing valve output to product."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.MAIN_EEV__CurPulse", "MULTIV_FMU_WARPPER", "MAIN_EEV_CurPulse", "Controller main EEV current pulse to product."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", "IDU_01_Air_Temp_Discharge", "airflow", "T_discharge", "First IDU discharge temperature to LBM inlet boundary."));
-
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Comp__CurFreq", "MULTIV_FMU_WARPPER", "Comp_CurFreq", "Controller compressor frequency to product compressor input."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Fan1__CurRPM", "MULTIV_FMU_WARPPER", "Fan_CurRPM", "Controller fan RPM to product fan input."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Main_EEV__TarPulse", "MULTIV_FMU_WARPPER", "MAIN_EEV_CurPulse", "Controller main EEV target pulse to product."));
         controllerSetpointSignal = new CoSimSignalReference("profile", "set_temp");
-        controllerOutputSignal = new CoSimSignalReference("Multi_V_S__Set_CFMU", "Multi_V_S.Comp__TarFreq");
+        controllerOutputSignal = new CoSimSignalReference("Multi_V_S__Set_CFMU", "Multi_V_S.Comp__CurFreq");
         plantInputSignal = new CoSimSignalReference("MULTIV_FMU_WARPPER", "Comp_CurFreq");
         dischargeOutputSignal = new CoSimSignalReference("MULTIV_FMU_WARPPER", "IDU_01_Air_Temp_Discharge");
 
@@ -248,10 +262,12 @@ public class CoSimulationProfile : ScriptableObject
         {
             new CoSimDebugSignal("LBM_T_sensor", "airflow", "T_sensor"),
             new CoSimDebugSignal("SetTemp", "profile", "set_temp"),
-            new CoSimDebugSignal("CompTarFreq", "Multi_V_S__Set_CFMU", "Multi_V_S.Comp__TarFreq"),
-            new CoSimDebugSignal("FanTarRPM", "Multi_V_S__Set_CFMU", "Multi_V_S.Fan1__TarRPM"),
+            new CoSimDebugSignal("CompCurFreq", "Multi_V_S__Set_CFMU", "Multi_V_S.Comp__CurFreq"),
+            new CoSimDebugSignal("FanCurRPM", "Multi_V_S__Set_CFMU", "Multi_V_S.Fan1__CurRPM"),
             new CoSimDebugSignal("IDU01_T_dis", "MULTIV_FMU_WARPPER", "IDU_01_Air_Temp_Discharge"),
-            new CoSimDebugSignal("IDU01_T_suc", "Simple_Chamber_R1", "T_air_suc")
+            new CoSimDebugSignal("IDU01_T_suc", "airflow", "T_sensor"),
+            new CoSimDebugSignal("IDU01_RH_suc", "airflow", "RH_suction"),
+            new CoSimDebugSignal("IDU01_mfr_suc", "airflow", "mfr_suction")
         };
     }
 
@@ -259,27 +275,40 @@ public class CoSimulationProfile : ScriptableObject
     {
         string idu = $"IDU_{index:00}";
         string iduLower = $"idu_{index:00}";
-        string chamber = $"Simple_Chamber_R{index}";
+        string chamber = index == 1 ? "airflow" : $"Simple_Chamber_R{index}";
+        string suctionTemperature = index == 1 ? "T_sensor" : "T_air_suc";
+        string suctionHumidityName = index == 1 ? "RH_suction" : "RH_air_suc";
         string pipeInOutput = index == 2 ? "IDU_02_Sensor_Temp_Pipe_In2" : $"IDU_{index:00}_Sensor_Temp_Pipe_In";
 
         connections.Add(NewConnection("profile", "idu_on", "Multi_V_S__Set_CFMU", $"{idu}.FOnOff", "Indoor unit on command."));
         connections.Add(NewConnection("profile", "set_mode", "Multi_V_S__Set_CFMU", $"{idu}.SetMode", "Indoor unit mode command."));
         connections.Add(NewConnection("profile", "set_temp", "Multi_V_S__Set_CFMU", $"{idu}.SetTemp", "Indoor unit set temperature."));
         connections.Add(NewConnection("profile", "set_fan", "Multi_V_S__Set_CFMU", $"{idu}.SetFan", "Indoor unit fan command."));
-        connections.Add(NewConnection(chamber, "T_air_suc", "Multi_V_S__Set_CFMU", $"{idu}.Room_Temp", "Chamber suction temperature to controller room sensor."));
+        connections.Add(NewConnection(chamber, suctionTemperature, "Multi_V_S__Set_CFMU", $"{idu}.Room_Temp", "Indoor suction temperature to controller room sensor."));
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", pipeInOutput, "Multi_V_S__Set_CFMU", $"{idu}.Pipe_In_Temp", "Product pipe-in temperature to controller."));
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Sensor_Temp_Pipe_Out", "Multi_V_S__Set_CFMU", $"{idu}.Pipe_Out_Temp", "Product pipe-out temperature to controller."));
-        connections.Add(NewConnection("profile", "room_humidity_percent", "Multi_V_S__Set_CFMU", $"{idu}.Humidity", "Indoor humidity default."));
+        connections.Add(NewConnection(index == 1 ? "airflow" : "profile", index == 1 ? "RH_suction" : "room_humidity_percent", "Multi_V_S__Set_CFMU", $"{idu}.Humidity", "Indoor suction humidity to controller."));
 
         connections.Add(NewConnection("profile", "idu_on", "MULTIV_FMU_WARPPER", $"{iduLower}_onoff", "Indoor unit on command to product."));
         connections.Add(NewConnection("Multi_V_S__Set_CFMU", $"{idu}.CurSetFan", "MULTIV_FMU_WARPPER", $"{iduLower}_fan_mode", "Controller fan mode to product."));
         connections.Add(NewConnection("Multi_V_S__Set_CFMU", $"{idu}.EEV_TarPulse", "MULTIV_FMU_WARPPER", $"{iduLower}_pulse", "Controller EEV target pulse to product."));
-        connections.Add(NewConnection(chamber, "T_air_suc", "MULTIV_FMU_WARPPER", $"{iduLower}_temp_air", "Chamber suction temperature to product indoor inlet air."));
-        connections.Add(NewConnection(chamber, "RH_air_suc", "MULTIV_FMU_WARPPER", $"{iduLower}_RH_air", "Chamber suction RH to product indoor inlet air."));
+        connections.Add(NewConnection(chamber, suctionTemperature, "MULTIV_FMU_WARPPER", $"{iduLower}_temp_air", "Indoor suction temperature to product inlet air."));
+        CoSimConnection suctionHumidity = NewConnection(
+            chamber,
+            suctionHumidityName,
+            "MULTIV_FMU_WARPPER",
+            $"{iduLower}_RH_air",
+            "Chamber suction RH percent to product indoor inlet air (clamped to physical range)."
+        );
+        suctionHumidity.useClampMin = true;
+        suctionHumidity.clampMin = 0.0;
+        suctionHumidity.useClampMax = true;
+        suctionHumidity.clampMax = 100.0;
+        connections.Add(suctionHumidity);
 
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Air_Temp_Discharge", chamber, "T_air_dis", "Product discharge temperature to chamber."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Air_RH_Discharge", chamber, "RH_air_dis", "Product discharge RH to chamber."));
-        connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Air_mfr_Discharge", chamber, "mfr_air_dis", "Product discharge mass flow to chamber."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Air_Temp_Discharge", chamber, index == 1 ? "T_discharge" : "T_air_dis", "Product discharge temperature to indoor airflow model."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Air_RH_Discharge", chamber, index == 1 ? "RH_discharge" : "RH_air_dis", "Product discharge RH to indoor airflow model."));
+        connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Air_mfr_Discharge", chamber, index == 1 ? "mfr_discharge" : "mfr_air_dis", "Product discharge mass flow to indoor airflow model."));
     }
 
     private static CoSimConstantSignal NewRealConstant(string modelId, string variableName, double value)
@@ -325,6 +354,7 @@ public class CoSimulationFmuModelConfig
     public string fmuFileName = "model.fmu";
     public bool useMockRuntime = false;
     public bool useExternalRuntime = false;
+    public bool launchBundledServer = false;
     public bool fallbackToMockOnNativeFailure = true;
     public int externalCommandTimeoutMs = 30000;
     public bool logging = true;
@@ -332,6 +362,8 @@ public class CoSimulationFmuModelConfig
     public bool loadMissingRealParametersFromFmu = true;
     public List<CoSimulationRealParameterPreset> realParameterOverrides =
         new List<CoSimulationRealParameterPreset>();
+    public List<CoSimulationIntegerParameterPreset> integerParameterOverrides =
+        new List<CoSimulationIntegerParameterPreset>();
     public List<CoSimulationStringParameterPreset> stringParameterOverrides =
         new List<CoSimulationStringParameterPreset>();
 
@@ -359,6 +391,24 @@ public class CoSimulationRealParameterPreset
     }
 
     public CoSimulationRealParameterPreset(string variableName, double value)
+    {
+        this.variableName = variableName;
+        this.value = value;
+    }
+}
+
+[Serializable]
+public class CoSimulationIntegerParameterPreset
+{
+    public bool enabled = true;
+    public string variableName = string.Empty;
+    public int value = 0;
+
+    public CoSimulationIntegerParameterPreset()
+    {
+    }
+
+    public CoSimulationIntegerParameterPreset(string variableName, int value)
     {
         this.variableName = variableName;
         this.value = value;

@@ -95,6 +95,18 @@ typedef fmi2Status(__cdecl* fmi2GetRealTYPE)(
     size_t nvr,
     fmi2Real value[]);
 
+typedef fmi2Status(__cdecl* fmi2SetIntegerTYPE)(
+    fmi2Component c,
+    const fmi2ValueReference vr[],
+    size_t nvr,
+    const fmi2Integer value[]);
+
+typedef fmi2Status(__cdecl* fmi2SetStringTYPE)(
+    fmi2Component c,
+    const fmi2ValueReference vr[],
+    size_t nvr,
+    const fmi2String value[]);
+
 struct FmuFunctions
 {
     fmi2GetVersionTYPE fmi2GetVersion;
@@ -109,6 +121,8 @@ struct FmuFunctions
     fmi2DoStepTYPE fmi2DoStep;
     fmi2SetRealTYPE fmi2SetReal;
     fmi2GetRealTYPE fmi2GetReal;
+    fmi2SetIntegerTYPE fmi2SetInteger;
+    fmi2SetStringTYPE fmi2SetString;
 
     FmuFunctions()
         : fmi2GetVersion(nullptr)
@@ -123,6 +137,8 @@ struct FmuFunctions
         , fmi2DoStep(nullptr)
         , fmi2SetReal(nullptr)
         , fmi2GetReal(nullptr)
+        , fmi2SetInteger(nullptr)
+        , fmi2SetString(nullptr)
     {
     }
 };
@@ -238,6 +254,8 @@ static std::string ToFileUri(const std::string& path)
 struct FmuVariableMap
 {
     std::unordered_map<std::string, fmi2ValueReference> realVR;
+    std::unordered_map<std::string, fmi2ValueReference> integerVR;
+    std::unordered_map<std::string, fmi2ValueReference> stringVR;
 };
 
 struct FmuInstance
@@ -262,6 +280,8 @@ struct FmuInstance
     bool initialized;
 
     std::unordered_map<std::string, double> initialRealValues;
+    std::unordered_map<std::string, int> initialIntegerValues;
+    std::unordered_map<std::string, std::string> initialStringValues;
 
     FmuInstance()
         : dllHandle(nullptr)
@@ -331,7 +351,7 @@ static bool ParseModelDescription(
     }
 
     std::regex scalarVarRgx(
-        "<ScalarVariable[^>]*name\\s*=\\s*\"([^\"]+)\"[^>]*valueReference\\s*=\\s*\"([0-9]+)\"[^>]*>[\\s\\S]*?<Real\\b[^>]*/>",
+        "<ScalarVariable[^>]*name\\s*=\\s*\"([^\"]+)\"[^>]*valueReference\\s*=\\s*\"([0-9]+)\"[^>]*>([\\s\\S]*?)</ScalarVariable>",
         std::regex::icase);
 
     std::sregex_iterator it(xml.begin(), xml.end(), scalarVarRgx);
@@ -340,11 +360,17 @@ static bool ParseModelDescription(
     for (; it != end; ++it)
     {
         std::smatch m = *it;
-        if (m.size() >= 3)
+        if (m.size() >= 4)
         {
             const std::string name = m[1].str();
             const fmi2ValueReference vr = static_cast<fmi2ValueReference>(std::stoul(m[2].str()));
-            outVars.realVR[name] = vr;
+            const std::string body = m[3].str();
+            if (std::regex_search(body, std::regex("<Real\\b", std::regex::icase)))
+                outVars.realVR[name] = vr;
+            else if (std::regex_search(body, std::regex("<Integer\\b", std::regex::icase)))
+                outVars.integerVR[name] = vr;
+            else if (std::regex_search(body, std::regex("<String\\b", std::regex::icase)))
+                outVars.stringVR[name] = vr;
         }
     }
 
@@ -408,6 +434,12 @@ static bool LoadFmiFunctions(FmuInstance& fmu)
     if (!LoadFunction(fmu.dllHandle, "fmi2GetReal", p)) return false;
     fmu.fn.fmi2GetReal = reinterpret_cast<fmi2GetRealTYPE>(p);
 
+    if (!LoadFunction(fmu.dllHandle, "fmi2SetInteger", p)) return false;
+    fmu.fn.fmi2SetInteger = reinterpret_cast<fmi2SetIntegerTYPE>(p);
+
+    if (!LoadFunction(fmu.dllHandle, "fmi2SetString", p)) return false;
+    fmu.fn.fmi2SetString = reinterpret_cast<fmi2SetStringTYPE>(p);
+
     return true;
 }
 
@@ -454,12 +486,69 @@ static bool GetRealByName(FmuInstance& fmu, const std::string& name, double& val
     return true;
 }
 
+static bool SetIntegerByName(FmuInstance& fmu, const std::string& name, int value)
+{
+    std::unordered_map<std::string, fmi2ValueReference>::iterator it = fmu.vars.integerVR.find(name);
+    if (it == fmu.vars.integerVR.end())
+    {
+        SetLastErrorMsg("SetInteger failed. Variable not found: " + name);
+        return false;
+    }
+
+    fmi2ValueReference vr = it->second;
+    fmi2Integer v = value;
+    fmi2Status s = fmu.fn.fmi2SetInteger(fmu.component, &vr, 1, &v);
+    if (s > fmi2Warning)
+    {
+        SetFmiStatusError("fmi2SetInteger(" + name + ")", s);
+        return false;
+    }
+
+    return true;
+}
+
+static bool SetStringByName(FmuInstance& fmu, const std::string& name, const std::string& value)
+{
+    std::unordered_map<std::string, fmi2ValueReference>::iterator it = fmu.vars.stringVR.find(name);
+    if (it == fmu.vars.stringVR.end())
+    {
+        SetLastErrorMsg("SetString failed. Variable not found: " + name);
+        return false;
+    }
+
+    fmi2ValueReference vr = it->second;
+    fmi2String v = value.c_str();
+    fmi2Status s = fmu.fn.fmi2SetString(fmu.component, &vr, 1, &v);
+    if (s > fmi2Warning)
+    {
+        SetFmiStatusError("fmi2SetString(" + name + ")", s);
+        return false;
+    }
+    return true;
+}
+
 static bool ApplyInitialValues(FmuInstance& fmu)
 {
     std::unordered_map<std::string, double>::const_iterator it = fmu.initialRealValues.begin();
     for (; it != fmu.initialRealValues.end(); ++it)
     {
         if (!SetRealByName(fmu, it->first, it->second))
+        {
+            return false;
+        }
+    }
+    std::unordered_map<std::string, int>::const_iterator integerIt = fmu.initialIntegerValues.begin();
+    for (; integerIt != fmu.initialIntegerValues.end(); ++integerIt)
+    {
+        if (!SetIntegerByName(fmu, integerIt->first, integerIt->second))
+        {
+            return false;
+        }
+    }
+    std::unordered_map<std::string, std::string>::const_iterator stringIt = fmu.initialStringValues.begin();
+    for (; stringIt != fmu.initialStringValues.end(); ++stringIt)
+    {
+        if (!SetStringByName(fmu, stringIt->first, stringIt->second))
         {
             return false;
         }
@@ -775,6 +864,29 @@ DLL_EXPORT int Fmu_RegisterInitialReal(void* handle, const char* varName, double
 
     FmuInstance* fmu = reinterpret_cast<FmuInstance*>(handle);
     fmu->initialRealValues[varName] = value;
+    return 1;
+}
+
+DLL_EXPORT int Fmu_RegisterInitialInteger(void* handle, const char* varName, int value)
+{
+    if (!handle || !varName)
+    {
+        return 0;
+    }
+
+    FmuInstance* fmu = reinterpret_cast<FmuInstance*>(handle);
+    fmu->initialIntegerValues[varName] = value;
+    return 1;
+}
+
+DLL_EXPORT int Fmu_RegisterInitialString(void* handle, const char* varName, const char* value)
+{
+    if (!handle || !varName || !value)
+    {
+        return 0;
+    }
+    FmuInstance* fmu = reinterpret_cast<FmuInstance*>(handle);
+    fmu->initialStringValues[varName] = value;
     return 1;
 }
 

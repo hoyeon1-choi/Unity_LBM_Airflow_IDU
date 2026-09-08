@@ -15,6 +15,8 @@ public class FmuVariableInfo
     public SignalValueType valueType;
     public bool hasStartReal;
     public double startReal;
+    public bool hasStartInteger;
+    public int startInteger;
     public bool hasStartString;
     public string startString = string.Empty;
 }
@@ -270,6 +272,16 @@ public static class FmuModelDescriptionParser
                 {
                     variable.hasStartReal = true;
                     variable.startReal = startReal;
+                }
+            }
+            else if (typeElement != null && valueType == SignalValueType.Integer)
+            {
+                string start = ReadAttribute(typeElement, "start");
+                int startInteger;
+                if (int.TryParse(start, NumberStyles.Integer, CultureInfo.InvariantCulture, out startInteger))
+                {
+                    variable.hasStartInteger = true;
+                    variable.startInteger = startInteger;
                 }
             }
             else if (typeElement != null && valueType == SignalValueType.String)

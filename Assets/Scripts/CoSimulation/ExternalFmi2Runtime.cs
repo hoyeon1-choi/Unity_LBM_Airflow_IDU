@@ -11,6 +11,7 @@ using Debug = UnityEngine.Debug;
 public class ExternalFmi2Runtime : IFmi2Runtime
 {
     private readonly int commandTimeoutMs;
+    private readonly bool launchBundledServer;
     private readonly Dictionary<uint, string> variableNameByValueReference = new Dictionary<uint, string>();
     private readonly ExternalFmuHostManager hostManager = new ExternalFmuHostManager();
     private FmuModelDescription modelDescription;
@@ -22,10 +23,12 @@ public class ExternalFmi2Runtime : IFmi2Runtime
     private double stopTime;
     private double tolerance;
     private bool hasStopTime;
+    private Process bundledServerProcess;
 
-    public ExternalFmi2Runtime(int commandTimeoutMs = 30000)
+    public ExternalFmi2Runtime(int commandTimeoutMs = 30000, bool launchBundledServer = false)
     {
         this.commandTimeoutMs = Math.Max(1000, commandTimeoutMs);
+        this.launchBundledServer = launchBundledServer;
     }
 
     public void Load(string fmuPath, string unzipDirectory, string instanceName, bool logging)
@@ -51,6 +54,8 @@ public class ExternalFmi2Runtime : IFmi2Runtime
 
         try
         {
+            if (launchBundledServer)
+                StartBundledServer(unzipDirectory);
             Execute(
                 "load",
                 new Dictionary<string, string>
@@ -104,6 +109,30 @@ public class ExternalFmi2Runtime : IFmi2Runtime
     {
         EnsureLoaded();
         ExecuteRealCommand("register", valueReference, value);
+    }
+
+    public void RegisterInitialInteger(uint valueReference, int value)
+    {
+        EnsureLoaded();
+        Execute(
+            "registerInteger",
+            new Dictionary<string, string>
+            {
+                { "name", ResolveVariableName(valueReference, SignalValueType.Integer) },
+                { "value", value.ToString(CultureInfo.InvariantCulture) }
+            });
+    }
+
+    public void RegisterInitialString(uint valueReference, string value)
+    {
+        EnsureLoaded();
+        Execute(
+            "registerString",
+            new Dictionary<string, string>
+            {
+                { "name", ResolveVariableName(valueReference, SignalValueType.String) },
+                { "value", value ?? string.Empty }
+            });
     }
 
     public void SetReal(uint valueReference, double value)
@@ -188,6 +217,51 @@ public class ExternalFmi2Runtime : IFmi2Runtime
             hostManager.Release();
             acquiredHost = false;
         }
+
+        StopBundledServer();
+    }
+
+    private void StartBundledServer(string unzipDirectory)
+    {
+        string serverPath = Path.Combine(unzipDirectory, "resources", "binaries", "win64", "FMI2CoSimulationServer.exe");
+        if (!File.Exists(serverPath))
+            throw new FileNotFoundException("Bundled CoSimulation server was not found.", serverPath);
+
+        bundledServerProcess = Process.Start(new ProcessStartInfo
+        {
+            FileName = serverPath,
+            WorkingDirectory = unzipDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WindowStyle = ProcessWindowStyle.Hidden
+        });
+        if (bundledServerProcess == null)
+            throw new InvalidOperationException("Could not start bundled CoSimulation server.");
+
+        System.Threading.Thread.Sleep(500);
+        if (bundledServerProcess.HasExited)
+            throw new InvalidOperationException($"Bundled CoSimulation server exited during startup. code={bundledServerProcess.ExitCode}");
+    }
+
+    private void StopBundledServer()
+    {
+        if (bundledServerProcess == null)
+            return;
+
+        try
+        {
+            if (!bundledServerProcess.HasExited)
+                bundledServerProcess.Kill();
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"[CoSimulation][{instanceName}] Could not stop bundled server: {ex.Message}");
+        }
+        finally
+        {
+            bundledServerProcess.Dispose();
+            bundledServerProcess = null;
+        }
     }
 
     private void ExecuteRealCommand(string command, uint valueReference, double value)
@@ -221,13 +295,15 @@ public class ExternalFmi2Runtime : IFmi2Runtime
             throw new InvalidOperationException("External FMU runtime is not loaded.");
     }
 
-    private string ResolveVariableName(uint valueReference)
+    private string ResolveVariableName(uint valueReference, SignalValueType valueType = SignalValueType.Real)
     {
-        string variableName;
-        if (!variableNameByValueReference.TryGetValue(valueReference, out variableName))
-            throw new KeyNotFoundException($"ValueReference not found in FMU modelDescription: {valueReference}");
-
-        return variableName;
+        for (int i = 0; i < modelDescription.variables.Count; i++)
+        {
+            FmuVariableInfo variable = modelDescription.variables[i];
+            if (variable != null && variable.valueReference == valueReference && variable.valueType == valueType)
+                return variable.name;
+        }
+        throw new KeyNotFoundException($"{valueType} valueReference not found in FMU modelDescription: {valueReference}");
     }
 }
 

@@ -16,6 +16,11 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
     [SerializeField] private string sensorSignalName = "T_sensor";
     [SerializeField] private string dischargeSignalName = "T_discharge";
 
+    private const string SuctionHumiditySignalName = "RH_suction";
+    private const string SuctionMassFlowSignalName = "mfr_suction";
+    private const string DischargeHumiditySignalName = "RH_discharge";
+    private const string DischargeMassFlowSignalName = "mfr_discharge";
+
     [Header("LBM References")]
     [SerializeField] private SimulationController simulationController;
     [SerializeField] private SimulationResultSampler resultSampler;
@@ -24,6 +29,8 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
     [Header("Sensor Source")]
     [SerializeField] private SensorTemperatureSource sensorSource = SensorTemperatureSource.OutletAverageTemperatureDegC;
     [SerializeField] private float fallbackTemperatureDegC = 30.0f;
+    [SerializeField, Range(0.0f, 100.0f)] private float fallbackRelativeHumidityPercent = 50.0f;
+    [SerializeField, Min(0.1f)] private float airDensityKgPerM3 = 1.2f;
     [SerializeField] private bool logInvalidMetricWarning = true;
 
     [Header("Runtime Sync")]
@@ -32,6 +39,8 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
     [Header("Read-Only Status")]
     [SerializeField, ReadOnly] private float latestSensorTemperatureDegC = 0.0f;
     [SerializeField, ReadOnly] private float latestAppliedDischargeTemperatureDegC = 0.0f;
+    [SerializeField, ReadOnly] private float latestRelativeHumidityPercent = 50.0f;
+    [SerializeField, ReadOnly] private float latestAppliedMassFlowKgPerSecond = 0.0f;
     [SerializeField, ReadOnly] private int targetInletCount = 0;
     [SerializeField, ReadOnly] private string targetInletNames = string.Empty;
     [SerializeField, ReadOnly] private string lastStatus = "Not initialized.";
@@ -72,6 +81,7 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
     }
     private void Awake()
     {
+        latestRelativeHumidityPercent = Mathf.Clamp(fallbackRelativeHumidityPercent, 0.0f, 100.0f);
         ResolveReferences();
         if (inletTargets == null || inletTargets.Length == 0)
             AutoCollectInletTargets();
@@ -87,10 +97,35 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
     {
         value = default;
 
-        if (!IsSignal(key, sensorSignalName))
+        bool isTemperature = IsSignal(key, sensorSignalName);
+        bool isHumidity = IsSignal(key, SuctionHumiditySignalName);
+        bool isMassFlow = IsSignal(key, SuctionMassFlowSignalName);
+        if (!isTemperature && !isHumidity && !isMassFlow)
             return false;
 
         ResolveReferences();
+
+        double simTime = simulationController != null
+            ? simulationController.SimulatedTimeSeconds
+            : Time.timeAsDouble;
+
+        if (isHumidity)
+        {
+            value = CoSimSignalValue.FromReal(latestRelativeHumidityPercent, simTime);
+            lastStatus = "Using LBM humidity proxy as RH_suction (humidity transport is not implemented).";
+            return true;
+        }
+
+        if (isMassFlow)
+        {
+            SimulationResultMetrics metrics = LatestMetrics;
+            float massFlow = metrics != null && metrics.hasValidFlowDiagnostic
+                ? metrics.outletFlowRatePhysAbs * Mathf.Max(airDensityKgPerM3, 0.1f)
+                : 0.0f;
+            value = CoSimSignalValue.FromReal(massFlow, simTime);
+            lastStatus = $"Using LBM outlet flow as mfr_suction={massFlow:F4} kg/s.";
+            return true;
+        }
 
         bool valid;
         string sourceStatus;
@@ -98,17 +133,16 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
         latestSensorTemperatureDegC = sensorTemperature;
         lastStatus = sourceStatus;
 
-        double simTime = simulationController != null
-            ? simulationController.SimulatedTimeSeconds
-            : Time.timeAsDouble;
-
         value = CoSimSignalValue.FromReal(sensorTemperature, simTime);
         return true;
     }
 
     public bool TrySetSignal(CoSimSignalKey key, CoSimSignalValue value)
     {
-        if (!IsSignal(key, dischargeSignalName))
+        bool isTemperature = IsSignal(key, dischargeSignalName);
+        bool isHumidity = IsSignal(key, DischargeHumiditySignalName);
+        bool isMassFlow = IsSignal(key, DischargeMassFlowSignalName);
+        if (!isTemperature && !isHumidity && !isMassFlow)
             return false;
 
         double real;
@@ -118,8 +152,48 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
             return false;
         }
 
+        if (isHumidity)
+        {
+            latestRelativeHumidityPercent = Mathf.Clamp((float)real, 0.0f, 100.0f);
+            lastStatus = $"Stored {key}={latestRelativeHumidityPercent:F2}% as LBM humidity proxy.";
+            return true;
+        }
+
         if (inletTargets == null || inletTargets.Length == 0)
             AutoCollectInletTargets();
+
+        if (isMassFlow)
+        {
+            float totalVolumeFlow = Mathf.Max(0.0f, (float)real) / Mathf.Max(airDensityKgPerM3, 0.1f);
+            float totalArea = 0.0f;
+            for (int i = 0; i < inletTargets.Length; i++)
+            {
+                LBMZouHeBox target = inletTargets[i];
+                if (target != null && target.Power && target.PatchKind == LBMZouHeBox.Kind.Inlet)
+                    totalArea += Mathf.Max(target.PatchAreaPhysCached, 0.0f);
+            }
+
+            int flowTargets = 0;
+            int validTargets = Mathf.Max(1, CountValidInletTargets());
+            for (int i = 0; i < inletTargets.Length; i++)
+            {
+                LBMZouHeBox target = inletTargets[i];
+                if (target == null || !target.Power || target.PatchKind != LBMZouHeBox.Kind.Inlet)
+                    continue;
+
+                float share = totalArea > 1e-8f
+                    ? Mathf.Max(target.PatchAreaPhysCached, 0.0f) / totalArea
+                    : 1.0f / validTargets;
+                target.SetInletVolumeFlowRateM3ps(totalVolumeFlow * share, false);
+                flowTargets++;
+            }
+
+            latestAppliedMassFlowKgPerSecond = Mathf.Max(0.0f, (float)real);
+            lastStatus = $"Applied {key}={latestAppliedMassFlowKgPerSecond:F4} kg/s to {flowTargets} inlet target(s).";
+            if (syncControllerAfterSet)
+                SyncDynamicBoundaryInputsNow();
+            return flowTargets > 0;
+        }
 
         int applied = 0;
         for (int i = 0; i < inletTargets.Length; i++)

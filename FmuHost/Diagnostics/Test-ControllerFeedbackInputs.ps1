@@ -5,7 +5,8 @@ param(
     [switch]$EnableFmuLogging,
     [string]$InstanceName = "ControllerProbe",
     [int]$InterStepDelaySeconds = 0,
-    [int]$HeartbeatIntervalSeconds = 0
+    [int]$HeartbeatIntervalSeconds = 0,
+    [switch]$LaunchBundledServer
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,7 +34,7 @@ foreach ($scalar in $modelDescription.fmiModelDescription.ModelVariables.ScalarV
     $startValue = if ($parameterName -eq "Multi_V_S.Option_HEX_path") {
         $oduHexPath
     }
-    elseif ($parameterName -match '^IDU_0[1-5]\.Option_HEX_path$') {
+    elseif ($parameterName -match '^IDU_0[1-6]\.Option_HEX_path$') {
         $iduHexPath
     }
     else {
@@ -100,10 +101,9 @@ $controllerOutputs = @(
         "IDU_{0:D2}.EEV_TarPulse" -f $_
     }
 ) + @(
-    "Multi_V_S.Comp__TarFreq",
-    "Multi_V_S.Fan1__TarRPM",
-    "Multi_V_S.4Way_Valve__OnOff",
-    "Multi_V_S.MAIN_EEV__CurPulse"
+    "Multi_V_S.Comp__CurFreq",
+    "Multi_V_S.Fan1__CurRPM",
+    "Multi_V_S.Main_EEV__TarPulse"
 )
 
 function Convert-ToRequestValue([string]$value) {
@@ -162,6 +162,15 @@ function Invoke-ControllerCase(
         "--pipe", $pipeName,
         "--plugin", $pluginPath,
         "--log", $caseLog) -PassThru -WindowStyle Hidden -WorkingDirectory $runDirectory
+    $serverProcess = $null
+    if ($LaunchBundledServer) {
+        $serverPath = Join-Path $controllerCache.FullName "resources\binaries\win64\FMI2CoSimulationServer.exe"
+        if (-not (Test-Path -LiteralPath $serverPath)) {
+            throw "Bundled CoSimulation server was not found: $serverPath"
+        }
+        $serverProcess = Start-Process -FilePath $serverPath -PassThru -WindowStyle Hidden -WorkingDirectory $controllerCache.FullName
+        Start-Sleep -Milliseconds 500
+    }
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
     $outputValues = [Collections.Generic.List[string]]::new()
 
@@ -185,8 +194,18 @@ function Invoke-ControllerCase(
         $unzipValue = Convert-ToRequestValue $controllerCache.FullName
         $loggingValue = if ($EnableFmuLogging) { "1" } else { "0" }
         $nativeLogValue = Convert-ToRequestValue $nativeLog
-        Send-HostCommand $pipeName "load instance=$instance unzip=$unzipValue logging=$loggingValue log=$nativeLogValue" 10000 | Out-Null
+        Send-HostCommand $pipeName "load instance=$instance unzip=$unzipValue logging=$loggingValue log=$nativeLogValue" ([Math]::Max(10000, $StepTimeoutMs)) | Out-Null
         Send-HostCommand $pipeName "register instance=$instance name=Period value=1" 2000 | Out-Null
+        Send-HostCommand $pipeName "register instance=$instance name=Multi_V_S.TotalIDUNum value=5" 2000 | Out-Null
+        foreach ($index in 1..6) {
+            $prefix = "IDU_{0:D2}" -f $index
+            Send-HostCommand $pipeName "registerInteger instance=$instance name=${prefix}.Type value=1" 2000 | Out-Null
+            Send-HostCommand $pipeName "register instance=$instance name=${prefix}.IDU_Address value=$index" 2000 | Out-Null
+            $iduHexValue = Convert-ToRequestValue $iduHexPath
+            Send-HostCommand $pipeName "registerString instance=$instance name=${prefix}.Option_HEX_path value=$iduHexValue" 2000 | Out-Null
+        }
+        $oduHexValue = Convert-ToRequestValue $oduHexPath
+        Send-HostCommand $pipeName "registerString instance=$instance name=Multi_V_S.Option_HEX_path value=$oduHexValue" 2000 | Out-Null
         Send-HostCommand $pipeName "setup instance=$instance start=0 stop=0 hasStop=0 tolerance=0 toleranceDefined=0" 5000 | Out-Null
         Send-HostCommand $pipeName "enter instance=$instance" 5000 | Out-Null
         Send-HostCommand $pipeName "exit instance=$instance" $StepTimeoutMs | Out-Null
@@ -267,6 +286,13 @@ function Invoke-ControllerCase(
             $hostProcess.WaitForExit(3000) | Out-Null
         }
         $hostProcess.Dispose()
+        if ($null -ne $serverProcess) {
+            if (-not $serverProcess.HasExited) {
+                $serverProcess.Kill()
+                $serverProcess.WaitForExit(3000) | Out-Null
+            }
+            $serverProcess.Dispose()
+        }
     }
 }
 

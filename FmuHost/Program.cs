@@ -145,6 +145,10 @@ internal sealed class FmuHostServer : IDisposable
                     return Exit(request);
                 case "register":
                     return RegisterInitialReal(request);
+                case "registerInteger":
+                    return RegisterInitialInteger(request);
+                case "registerString":
+                    return RegisterInitialString(request);
                 case "set":
                     return SetReal(request);
                 case "get":
@@ -224,6 +228,24 @@ internal sealed class FmuHostServer : IDisposable
             request.Require("name"),
             request.GetDouble("value", 0.0));
         return ok != 0 ? Protocol.Ok() : Protocol.Fail("Fmu_RegisterInitialReal failed: " + FmuNative.GetLastErrorText());
+    }
+
+    private string RegisterInitialInteger(Request request)
+    {
+        int ok = FmuNative.RegisterInitialInteger(
+            GetHandle(request),
+            request.Require("name"),
+            request.GetInt("value", 0));
+        return ok != 0 ? Protocol.Ok() : Protocol.Fail("Fmu_RegisterInitialInteger failed: " + FmuNative.GetLastErrorText());
+    }
+
+    private string RegisterInitialString(Request request)
+    {
+        int ok = FmuNative.RegisterInitialString(
+            GetHandle(request),
+            request.Require("name"),
+            request.Get("value", string.Empty));
+        return ok != 0 ? Protocol.Ok() : Protocol.Fail("Fmu_RegisterInitialString failed: " + FmuNative.GetLastErrorText());
     }
 
     private string SetReal(Request request)
@@ -354,6 +376,16 @@ internal sealed class Request
             ? parsed
             : fallback;
     }
+
+    public int GetInt(string key, int fallback)
+    {
+        if (!values.TryGetValue(key, out string? value))
+            return fallback;
+
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed)
+            ? parsed
+            : fallback;
+    }
 }
 
 internal static class Protocol
@@ -447,6 +479,12 @@ internal static class FmuNative
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "Fmu_RegisterInitialReal")]
     public static extern int RegisterInitialReal(IntPtr handle, string variableName, double value);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "Fmu_RegisterInitialInteger")]
+    public static extern int RegisterInitialInteger(IntPtr handle, string variableName, int value);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "Fmu_RegisterInitialString")]
+    public static extern int RegisterInitialString(IntPtr handle, string variableName, string value);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "Fmu_DoStep")]
     public static extern int DoStep(IntPtr handle, double currentTime, double stepSize);

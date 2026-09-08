@@ -152,6 +152,24 @@ public class LBMZouHeBox : MonoBehaviour
             NotifySceneCacheDirty();
     }
 
+    public void SetInletVolumeFlowRateM3ps(float value, bool notifySceneCache = true)
+    {
+        if (kind != Kind.Inlet)
+        {
+            Debug.LogWarning($"[LBMZouHeBox] SetInletVolumeFlowRateM3ps ignored for non-inlet patch: {name}");
+            return;
+        }
+
+        boundaryInputMode = BoundaryInputMode.VolumeFlowRate;
+        volumeFlowRateUnit = FlowRateInputUnit.CubicMetersPerSecond;
+        volumeFlowRateM3ps = Mathf.Max(0.0f, value);
+        volumeFlowRateCMM = volumeFlowRateM3ps * 60.0f;
+        Refresh();
+
+        if (notifySceneCache)
+            NotifySceneCacheDirty();
+    }
+
     public float TargetOutletNormalSpeedLat
     {
         get

@@ -5086,7 +5086,10 @@ MonoBehaviour:
   modelId: MULTIV_FMU_WARPPER
   fmuFileName: product/MULTIV_FMU_WARPPER.fmu
   useMockRuntime: 0
-  fallbackToMockOnNativeFailure: 1
+  useExternalRuntime: 1
+  launchBundledServer: 0
+  fallbackToMockOnNativeFailure: 0
+  externalCommandTimeoutMs: 30000
   logging: 1
   startTime: 0
   stopTime: 0
@@ -11032,7 +11035,10 @@ MonoBehaviour:
   modelId: Multi_V_S__Set_CFMU
   fmuFileName: controller/Multi_V_S__Set_CFMU.fmu
   useMockRuntime: 0
-  fallbackToMockOnNativeFailure: 1
+  useExternalRuntime: 1
+  launchBundledServer: 1
+  fallbackToMockOnNativeFailure: 0
+  externalCommandTimeoutMs: 30000
   logging: 1
   startTime: 0
   stopTime: 0
@@ -11042,6 +11048,59 @@ MonoBehaviour:
   realParameterOverrides:
   - enabled: 1
     variableName: Period
+    value: 1
+    status: Not applied.
+  - enabled: 1
+    variableName: Multi_V_S.TotalIDUNum
+    value: 5
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_01.IDU_Address
+    value: 1
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_02.IDU_Address
+    value: 2
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_03.IDU_Address
+    value: 3
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_04.IDU_Address
+    value: 4
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_05.IDU_Address
+    value: 5
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_06.IDU_Address
+    value: 6
+    status: Not applied.
+  integerParameterOverrides:
+  - enabled: 1
+    variableName: IDU_01.Type
+    value: 1
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_02.Type
+    value: 1
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_03.Type
+    value: 1
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_04.Type
+    value: 1
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_05.Type
+    value: 1
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_06.Type
     value: 1
     status: Not applied.
   stringParameterOverrides:
@@ -11067,6 +11126,11 @@ MonoBehaviour:
     status: Not applied.
   - enabled: 1
     variableName: IDU_05.Option_HEX_path
+    value: '{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex'
+    rewriteModelDescriptionStart: 1
+    status: Not applied.
+  - enabled: 1
+    variableName: IDU_06.Option_HEX_path
     value: '{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex'
     rewriteModelDescriptionStart: 1
     status: Not applied.
@@ -11833,7 +11897,10 @@ MonoBehaviour:
   modelId: Simple_Chamber_R2
   fmuFileName: plant/Simple_Chamber_R2.fmu
   useMockRuntime: 0
-  fallbackToMockOnNativeFailure: 1
+  useExternalRuntime: 1
+  launchBundledServer: 0
+  fallbackToMockOnNativeFailure: 0
+  externalCommandTimeoutMs: 30000
   logging: 1
   startTime: 0
   stopTime: 0
@@ -12231,7 +12298,10 @@ MonoBehaviour:
   modelId: Simple_Chamber_R4
   fmuFileName: plant/Simple_Chamber_R4.fmu
   useMockRuntime: 0
-  fallbackToMockOnNativeFailure: 1
+  useExternalRuntime: 1
+  launchBundledServer: 0
+  fallbackToMockOnNativeFailure: 0
+  externalCommandTimeoutMs: 30000
   logging: 1
   startTime: 0
   stopTime: 0
@@ -12482,73 +12552,6 @@ MonoBehaviour:
     x: 0
     y: 0
     z: -0.8
---- !u!1 &1417275044
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1417275046}
-  - component: {fileID: 1417275045}
-  m_Layer: 0
-  m_Name: Simple_Chamber_R1_Model
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1417275045
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1417275044}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a0ff32639a5645deb3901048f9bd84ae, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  modelId: Simple_Chamber_R1
-  fmuFileName: plant/Simple_Chamber_R1.fmu
-  useMockRuntime: 0
-  fallbackToMockOnNativeFailure: 1
-  logging: 1
-  startTime: 0
-  stopTime: 0
-  defaultStepSize: 1
-  applyParameterOverridesOnInitialize: 1
-  applyTunableParameterOverridesBeforeEachStep: 1
-  realParameterOverrides: []
-  stringParameterOverrides: []
-  isInitialized: 0
-  nativeFallbackActive: 0
-  runtimeMode: Not initialized
-  resolvedSourcePath: 
-  resolvedUnzipDirectory: 
-  parsedModelName: 
-  parsedVariableCount: 0
-  appliedParameterCount: 0
-  appliedStringParameterCount: 0
-  parameterStatus: No parameters applied.
-  lastStatus: Configured FMU model. modelId=Simple_Chamber_R1, fmuFileName=plant/Simple_Chamber_R1.fmu
---- !u!4 &1417275046
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1417275044}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 730100000002}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1433191954
 GameObject:
   m_ObjectHideFlags: 0
@@ -13396,7 +13399,10 @@ MonoBehaviour:
   modelId: Simple_Chamber_R5
   fmuFileName: plant/Simple_Chamber_R5.fmu
   useMockRuntime: 0
-  fallbackToMockOnNativeFailure: 1
+  useExternalRuntime: 1
+  launchBundledServer: 0
+  fallbackToMockOnNativeFailure: 0
+  externalCommandTimeoutMs: 30000
   logging: 1
   startTime: 0
   stopTime: 0
@@ -14951,7 +14957,10 @@ MonoBehaviour:
   modelId: Simple_Chamber_R3
   fmuFileName: plant/Simple_Chamber_R3.fmu
   useMockRuntime: 0
-  fallbackToMockOnNativeFailure: 1
+  useExternalRuntime: 1
+  launchBundledServer: 0
+  fallbackToMockOnNativeFailure: 0
+  externalCommandTimeoutMs: 30000
   logging: 1
   startTime: 0
   stopTime: 0
@@ -15364,7 +15373,6 @@ Transform:
   m_Children:
   - {fileID: 1073609518}
   - {fileID: 929070003}
-  - {fileID: 1417275046}
   - {fileID: 1252988192}
   - {fileID: 2081330036}
   - {fileID: 1297470969}
@@ -15443,14 +15451,13 @@ MonoBehaviour:
   fmuModels:
   - {fileID: 1073609517}
   - {fileID: 929070002}
-  - {fileID: 1417275045}
   - {fileID: 1252988191}
   - {fileID: 2081330035}
   - {fileID: 1297470968}
   - {fileID: 1746852574}
   csvLogger: {fileID: 730100000004}
   debugHzModelId: Multi_V_S__Set_CFMU
-  debugHzVariableName: Multi_V_S.Comp__TarFreq
+  debugHzVariableName: Multi_V_S.Comp__CurFreq
   debugControllerSetpointModelId: profile
   debugControllerSetpointVariableName: set_temp
   debugPlantHzInputModelId: MULTIV_FMU_WARPPER

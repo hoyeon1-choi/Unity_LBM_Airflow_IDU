@@ -11,6 +11,8 @@ public interface IFmi2Runtime : IDisposable
     void EnterInitializationMode();
     void ExitInitializationMode();
     void RegisterInitialReal(uint valueReference, double value);
+    void RegisterInitialInteger(uint valueReference, int value);
+    void RegisterInitialString(uint valueReference, string value);
     void SetReal(uint valueReference, double value);
     double GetReal(uint valueReference);
     void DoStep(double currentTime, double stepSize);
@@ -52,6 +54,12 @@ internal static class FmuNative
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "Fmu_RegisterInitialReal")]
     public static extern int RegisterInitialReal(IntPtr handle, string variableName, double value);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "Fmu_RegisterInitialInteger")]
+    public static extern int RegisterInitialInteger(IntPtr handle, string variableName, int value);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi, EntryPoint = "Fmu_RegisterInitialString")]
+    public static extern int RegisterInitialString(IntPtr handle, string variableName, string value);
 
     [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "Fmu_DoStep")]
     public static extern int DoStep(IntPtr handle, double currentTime, double stepSize);
@@ -186,6 +194,24 @@ public class NativeFmi2Runtime : IFmi2Runtime
             throw new InvalidOperationException($"Fmu_RegisterInitialReal({variableName}) failed: {ReadNativeError()}");
     }
 
+    public void RegisterInitialInteger(uint valueReference, int value)
+    {
+        EnsureLoaded();
+        string variableName = ResolveVariableName(valueReference, SignalValueType.Integer);
+        int ok = FmuNative.RegisterInitialInteger(handle, variableName, value);
+        if (ok == 0)
+            throw new InvalidOperationException($"Fmu_RegisterInitialInteger({variableName}) failed: {ReadNativeError()}");
+    }
+
+    public void RegisterInitialString(uint valueReference, string value)
+    {
+        EnsureLoaded();
+        string variableName = ResolveVariableName(valueReference, SignalValueType.String);
+        int ok = FmuNative.RegisterInitialString(handle, variableName, value ?? string.Empty);
+        if (ok == 0)
+            throw new InvalidOperationException($"Fmu_RegisterInitialString({variableName}) failed: {ReadNativeError()}");
+    }
+
     public void SetReal(uint valueReference, double value)
     {
         EnsureLoaded();
@@ -251,13 +277,15 @@ public class NativeFmi2Runtime : IFmi2Runtime
             throw new InvalidOperationException("Native FMU runtime is not loaded.");
     }
 
-    private string ResolveVariableName(uint valueReference)
+    private string ResolveVariableName(uint valueReference, SignalValueType valueType = SignalValueType.Real)
     {
-        string variableName;
-        if (!variableNameByValueReference.TryGetValue(valueReference, out variableName))
-            throw new KeyNotFoundException($"ValueReference not found in FMU modelDescription: {valueReference}");
-
-        return variableName;
+        for (int i = 0; i < modelDescription.variables.Count; i++)
+        {
+            FmuVariableInfo variable = modelDescription.variables[i];
+            if (variable != null && variable.valueReference == valueReference && variable.valueType == valueType)
+                return variable.name;
+        }
+        throw new KeyNotFoundException($"{valueType} valueReference not found in FMU modelDescription: {valueReference}");
     }
 
     private static string ReadNativeError()
@@ -338,6 +366,16 @@ public class MockFmi2Runtime : IFmi2Runtime
     public void RegisterInitialReal(uint valueReference, double value)
     {
         SetReal(valueReference, value);
+    }
+
+    public void RegisterInitialInteger(uint valueReference, int value)
+    {
+        EnsureLoaded();
+    }
+
+    public void RegisterInitialString(uint valueReference, string value)
+    {
+        EnsureLoaded();
     }
 
     public void SetReal(uint valueReference, double value)

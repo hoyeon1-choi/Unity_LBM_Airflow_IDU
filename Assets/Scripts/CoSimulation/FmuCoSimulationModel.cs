@@ -16,6 +16,15 @@ public class FmuRealParameterOverride
 }
 
 [Serializable]
+public class FmuIntegerParameterOverride
+{
+    public bool enabled = true;
+    public string variableName = string.Empty;
+    public int value = 0;
+    [ReadOnly] public string status = "Not applied.";
+}
+
+[Serializable]
 public class FmuStringParameterOverride
 {
     public bool enabled = true;
@@ -34,6 +43,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     [Header("Runtime")]
     [SerializeField] private bool useMockRuntime = false;
     [SerializeField] private bool useExternalRuntime = false;
+    [SerializeField] private bool launchBundledServer = false;
     [SerializeField] private bool fallbackToMockOnNativeFailure = true;
     [SerializeField] private int externalCommandTimeoutMs = 30000;
     [SerializeField] private bool logging = true;
@@ -48,6 +58,8 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     [SerializeField] private bool applyTunableParameterOverridesBeforeEachStep = true;
     [SerializeField] private List<FmuRealParameterOverride> realParameterOverrides =
         new List<FmuRealParameterOverride>();
+    [SerializeField] private List<FmuIntegerParameterOverride> integerParameterOverrides =
+        new List<FmuIntegerParameterOverride>();
     [SerializeField] private List<FmuStringParameterOverride> stringParameterOverrides =
         new List<FmuStringParameterOverride>();
 
@@ -77,6 +89,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     public bool NativeFallbackActive => nativeFallbackActive;
     public FmuModelDescription ModelDescription => modelDescription;
     public IReadOnlyList<FmuRealParameterOverride> RealParameterOverrides => realParameterOverrides;
+    public IReadOnlyList<FmuIntegerParameterOverride> IntegerParameterOverrides => integerParameterOverrides;
     public IReadOnlyList<FmuStringParameterOverride> StringParameterOverrides => stringParameterOverrides;
 
     public void ConfigureModel(CoSimulationFmuModelConfig config)
@@ -93,6 +106,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
             config.externalCommandTimeoutMs,
             config.logging,
             config.defaultStepSize);
+        launchBundledServer = config.launchBundledServer;
         ConfigureParameterOverrides(config);
     }
 
@@ -129,8 +143,11 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
             realParameterOverrides = new List<FmuRealParameterOverride>();
         if (stringParameterOverrides == null)
             stringParameterOverrides = new List<FmuStringParameterOverride>();
+        if (integerParameterOverrides == null)
+            integerParameterOverrides = new List<FmuIntegerParameterOverride>();
 
         realParameterOverrides.Clear();
+        integerParameterOverrides.Clear();
         stringParameterOverrides.Clear();
 
         if (config.realParameterOverrides != null)
@@ -142,6 +159,24 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
                     continue;
 
                 realParameterOverrides.Add(new FmuRealParameterOverride
+                {
+                    enabled = preset.enabled,
+                    variableName = preset.variableName,
+                    value = preset.value,
+                    status = "Configured from co-sim profile."
+                });
+            }
+        }
+
+        if (config.integerParameterOverrides != null)
+        {
+            for (int i = 0; i < config.integerParameterOverrides.Count; i++)
+            {
+                CoSimulationIntegerParameterPreset preset = config.integerParameterOverrides[i];
+                if (preset == null)
+                    continue;
+
+                integerParameterOverrides.Add(new FmuIntegerParameterOverride
                 {
                     enabled = preset.enabled,
                     variableName = preset.variableName,
@@ -214,7 +249,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         try
         {
             if (useExternalRuntime)
-                InitializeRuntime(new ExternalFmi2Runtime(externalCommandTimeoutMs), "External");
+                InitializeRuntime(new ExternalFmi2Runtime(externalCommandTimeoutMs, launchBundledServer), "External");
             else
                 InitializeRuntime(new NativeFmi2Runtime(), "Native");
         }
@@ -285,7 +320,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         if (applyTunableParameterOverridesBeforeEachStep)
             ApplyRealParameterOverrides(runtime, false, false);
 
-        runtime.DoStep(currentTime, stepSize);
+        RunStepSequence(currentTime, stepSize);
         latestSimTimeSeconds = currentTime + stepSize;
     }
 
@@ -300,11 +335,26 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
 
         pendingStepEndTime = currentTime + stepSize;
         if (runtime is ExternalFmi2Runtime)
-            pendingStepTask = Task.Run(() => runtime.DoStep(currentTime, stepSize));
+            pendingStepTask = Task.Run(() => RunStepSequence(currentTime, stepSize));
         else
         {
-            runtime.DoStep(currentTime, stepSize);
+            RunStepSequence(currentTime, stepSize);
             latestSimTimeSeconds = pendingStepEndTime;
+        }
+    }
+
+    private void RunStepSequence(double currentTime, double communicationStepSize)
+    {
+        double remaining = communicationStepSize;
+        double substepTime = currentTime;
+        double maxSubstep = Math.Max(defaultStepSize, 1.0e-6);
+
+        while (remaining > 1.0e-9)
+        {
+            double substep = Math.Min(remaining, maxSubstep);
+            runtime.DoStep(substepTime, substep);
+            substepTime += substep;
+            remaining -= substep;
         }
     }
 
@@ -518,7 +568,10 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         {
             newRuntime.Load(resolvedSourcePath, resolvedUnzipDirectory, ModelId, logging);
             appliedParameterCount = applyParameterOverridesOnInitialize
-                ? ApplyRealParameterOverrides(newRuntime, true, true)
+                ? ApplyRealParameterOverrides(newRuntime, true, true) + ApplyIntegerParameterOverrides(newRuntime, true)
+                : 0;
+            appliedStringParameterCount = applyParameterOverridesOnInitialize
+                ? RegisterInitialStringParameterOverrides(newRuntime, true)
                 : 0;
             double tolerance = modelDescription != null && modelDescription.hasDefaultExperimentTolerance
                 ? modelDescription.defaultExperimentTolerance
@@ -649,6 +702,76 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
 
         status.Append($"Applied Real parameter overrides: applied={applied}, skipped={skipped}.");
         parameterStatus = status.ToString();
+        return applied;
+    }
+
+    private int ApplyIntegerParameterOverrides(IFmi2Runtime targetRuntime, bool logWarnings)
+    {
+        if (targetRuntime == null || integerParameterOverrides == null)
+            return 0;
+
+        int applied = 0;
+        for (int i = 0; i < integerParameterOverrides.Count; i++)
+        {
+            FmuIntegerParameterOverride parameter = integerParameterOverrides[i];
+            if (parameter == null || !parameter.enabled || string.IsNullOrWhiteSpace(parameter.variableName))
+                continue;
+
+            if (modelDescription == null || !modelDescription.TryGetVariable(parameter.variableName, out FmuVariableInfo variable) ||
+                variable.valueType != SignalValueType.Integer)
+            {
+                parameter.status = "Skipped: Integer variable not found in modelDescription.";
+                if (logWarnings)
+                    Debug.LogWarning($"[CoSimulation][{ModelId}] {parameter.status} variable={parameter.variableName}");
+                continue;
+            }
+
+            try
+            {
+                targetRuntime.RegisterInitialInteger(variable.valueReference, parameter.value);
+                parameter.status = BuildVariableStatus(variable, "Registered initial Integer value");
+                applied++;
+            }
+            catch (Exception ex)
+            {
+                parameter.status = $"Failed: {ex.Message}";
+                if (logWarnings)
+                    Debug.LogWarning($"[CoSimulation][{ModelId}] Failed to apply Integer parameter {parameter.variableName}: {ex.Message}");
+            }
+        }
+
+        return applied;
+    }
+
+    private int RegisterInitialStringParameterOverrides(IFmi2Runtime targetRuntime, bool logWarnings)
+    {
+        if (targetRuntime == null || stringParameterOverrides == null)
+            return 0;
+
+        int applied = 0;
+        for (int i = 0; i < stringParameterOverrides.Count; i++)
+        {
+            FmuStringParameterOverride parameter = stringParameterOverrides[i];
+            if (parameter == null || !parameter.enabled || string.IsNullOrWhiteSpace(parameter.variableName))
+                continue;
+
+            if (modelDescription == null || !modelDescription.TryGetVariable(parameter.variableName, out FmuVariableInfo variable) ||
+                variable.valueType != SignalValueType.String)
+                continue;
+
+            try
+            {
+                targetRuntime.RegisterInitialString(variable.valueReference, ResolveStringParameterValue(parameter.value));
+                parameter.status = BuildVariableStatus(variable, "Registered initial String value");
+                applied++;
+            }
+            catch (Exception ex)
+            {
+                parameter.status = $"Failed: {ex.Message}";
+                if (logWarnings)
+                    Debug.LogWarning($"[CoSimulation][{ModelId}] Failed to apply String parameter {parameter.variableName}: {ex.Message}");
+            }
+        }
         return applied;
     }
 
