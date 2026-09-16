@@ -193,8 +193,7 @@ public class CoSimulationProfile : ScriptableObject
             new CoSimulationRealParameterPreset("IDU_02.IDU_Address", 2.0),
             new CoSimulationRealParameterPreset("IDU_03.IDU_Address", 3.0),
             new CoSimulationRealParameterPreset("IDU_04.IDU_Address", 4.0),
-            new CoSimulationRealParameterPreset("IDU_05.IDU_Address", 5.0),
-            new CoSimulationRealParameterPreset("IDU_06.IDU_Address", 6.0)
+            new CoSimulationRealParameterPreset("IDU_05.IDU_Address", 5.0)
         };
         controller.integerParameterOverrides = new List<CoSimulationIntegerParameterPreset>
         {
@@ -202,8 +201,7 @@ public class CoSimulationProfile : ScriptableObject
             new CoSimulationIntegerParameterPreset("IDU_02.Type", 1),
             new CoSimulationIntegerParameterPreset("IDU_03.Type", 1),
             new CoSimulationIntegerParameterPreset("IDU_04.Type", 1),
-            new CoSimulationIntegerParameterPreset("IDU_05.Type", 1),
-            new CoSimulationIntegerParameterPreset("IDU_06.Type", 1)
+            new CoSimulationIntegerParameterPreset("IDU_05.Type", 1)
         };
         controller.stringParameterOverrides = new List<CoSimulationStringParameterPreset>
         {
@@ -212,14 +210,26 @@ public class CoSimulationProfile : ScriptableObject
             new CoSimulationStringParameterPreset("IDU_03.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
             new CoSimulationStringParameterPreset("IDU_04.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
             new CoSimulationStringParameterPreset("IDU_05.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
-            new CoSimulationStringParameterPreset("IDU_06.Option_HEX_path", "{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex"),
             new CoSimulationStringParameterPreset("Multi_V_S.Option_HEX_path", "{FMU_ROOT}/S_SAA37571716_RPUW100S9S_141016_0456.hex")
         };
+
+        CoSimulationFmuModelConfig product = new CoSimulationFmuModelConfig(
+            "MultiV_Product_Model",
+            "MULTIV_FMU_WARPPER",
+            "product/MULTIV_FMU_WARPPER.fmu")
+        {
+            defaultStepSize = 0.1,
+            useExternalRuntime = true,
+            fallbackToMockOnNativeFailure = false,
+            externalCommandTimeoutMs = 30000,
+            loadMissingRealParametersFromFmu = false
+        };
+        product.initialRealInputValues = CreateMultiVProductInitialInputs();
 
         fmuModels = new List<CoSimulationFmuModelConfig>
         {
             controller,
-            new CoSimulationFmuModelConfig("MultiV_Product_Model", "MULTIV_FMU_WARPPER", "product/MULTIV_FMU_WARPPER.fmu") { defaultStepSize = 0.1, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
+            product,
             new CoSimulationFmuModelConfig("Simple_Chamber_R2_Model", "Simple_Chamber_R2", "plant/Simple_Chamber_R2.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
             new CoSimulationFmuModelConfig("Simple_Chamber_R3_Model", "Simple_Chamber_R3", "plant/Simple_Chamber_R3.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
             new CoSimulationFmuModelConfig("Simple_Chamber_R4_Model", "Simple_Chamber_R4", "plant/Simple_Chamber_R4.fmu") { defaultStepSize = 1.0, useExternalRuntime = true, fallbackToMockOnNativeFailure = false, externalCommandTimeoutMs = 30000, loadMissingRealParametersFromFmu = false },
@@ -231,7 +241,7 @@ public class CoSimulationProfile : ScriptableObject
             NewRealConstant("profile", "idu_on", 1.0),
             NewRealConstant("profile", "set_mode", 0.0),
             NewRealConstant("profile", "set_temp", 28.0),
-            NewRealConstant("profile", "set_fan", 0.0),
+            NewRealConstant("profile", "set_fan", 4.0),
             NewRealConstant("profile", "room_humidity_percent", 40.0),
             NewRealConstant("profile", "outdoor_temp_c", 35.0),
             NewRealConstant("profile", "zero", 0.0)
@@ -269,6 +279,29 @@ public class CoSimulationProfile : ScriptableObject
             new CoSimDebugSignal("IDU01_RH_suc", "airflow", "RH_suction"),
             new CoSimDebugSignal("IDU01_mfr_suc", "airflow", "mfr_suction")
         };
+    }
+
+    private static List<CoSimulationRealParameterPreset> CreateMultiVProductInitialInputs()
+    {
+        List<CoSimulationRealParameterPreset> values = new List<CoSimulationRealParameterPreset>
+        {
+            new CoSimulationRealParameterPreset("Comp_CurFreq", 0.0),
+            new CoSimulationRealParameterPreset("Fan_CurRPM", 0.0),
+            new CoSimulationRealParameterPreset("reversing_valve_mode_flag", 0.0),
+            new CoSimulationRealParameterPreset("MAIN_EEV_CurPulse", 10.0)
+        };
+
+        for (int i = 1; i <= 5; i++)
+        {
+            string idu = $"idu_{i:00}";
+            values.Add(new CoSimulationRealParameterPreset($"{idu}_onoff", 1.0));
+            values.Add(new CoSimulationRealParameterPreset($"{idu}_fan_mode", 4.0));
+            values.Add(new CoSimulationRealParameterPreset($"{idu}_pulse", 0.0));
+            values.Add(new CoSimulationRealParameterPreset($"{idu}_temp_air", 20.0));
+            values.Add(new CoSimulationRealParameterPreset($"{idu}_RH_air", 40.0));
+        }
+
+        return values;
     }
 
     private void AddMultiVIndoorUnitConnections(int index)
@@ -366,6 +399,9 @@ public class CoSimulationFmuModelConfig
         new List<CoSimulationIntegerParameterPreset>();
     public List<CoSimulationStringParameterPreset> stringParameterOverrides =
         new List<CoSimulationStringParameterPreset>();
+    [Tooltip("Real input values applied while the FMU is in initialization mode. They also provide the first-step fallback for delayed controller outputs.")]
+    public List<CoSimulationRealParameterPreset> initialRealInputValues =
+        new List<CoSimulationRealParameterPreset>();
 
     public CoSimulationFmuModelConfig()
     {

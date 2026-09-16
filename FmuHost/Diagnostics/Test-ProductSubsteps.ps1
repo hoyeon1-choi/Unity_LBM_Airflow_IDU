@@ -84,13 +84,13 @@ try {
         if (-not $controlJumpApplied -and $current -ge $ControlJumpAtSeconds) {
             foreach ($iduIndex in 1..5) {
                 $prefix = "idu_{0:D2}" -f $iduIndex
-                Send-Command $pipeName "set instance=$instance name=${prefix}_pulse value=1600" 5000 | Out-Null
+                Send-Command $pipeName "set instance=$instance name=${prefix}_pulse value=100" 5000 | Out-Null
                 Send-Command $pipeName "set instance=$instance name=${prefix}_RH_air value=100" 5000 | Out-Null
                 if ($iduIndex -gt 1) {
                     Send-Command $pipeName "set instance=$instance name=${prefix}_temp_air value=20" 5000 | Out-Null
                 }
             }
-            Send-Command $pipeName "set instance=$instance name=MAIN_EEV_CurPulse value=1070" 5000 | Out-Null
+            Send-Command $pipeName "set instance=$instance name=MAIN_EEV_CurPulse value=100" 5000 | Out-Null
             $controlJumpApplied = $true
         }
         $watch = [Diagnostics.Stopwatch]::StartNew()

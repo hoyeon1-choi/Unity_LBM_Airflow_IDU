@@ -13,7 +13,7 @@ public class ExternalFmi2Runtime : IFmi2Runtime
     private readonly int commandTimeoutMs;
     private readonly bool launchBundledServer;
     private readonly Dictionary<uint, string> variableNameByValueReference = new Dictionary<uint, string>();
-    private readonly ExternalFmuHostManager hostManager = new ExternalFmuHostManager();
+    private readonly ExternalFmuHostManager hostManager;
     private FmuModelDescription modelDescription;
     private string instanceName = string.Empty;
     private bool loaded;
@@ -25,10 +25,19 @@ public class ExternalFmi2Runtime : IFmi2Runtime
     private bool hasStopTime;
     private Process bundledServerProcess;
 
-    public ExternalFmi2Runtime(int commandTimeoutMs = 30000, bool launchBundledServer = false)
+    public ExternalFmi2Runtime(
+        int commandTimeoutMs = 30000,
+        bool launchBundledServer = false,
+        string applicationDataPath = null,
+        string streamingAssetsPath = null,
+        string persistentDataPath = null)
     {
         this.commandTimeoutMs = Math.Max(1000, commandTimeoutMs);
         this.launchBundledServer = launchBundledServer;
+        hostManager = new ExternalFmuHostManager(
+            applicationDataPath ?? Application.dataPath,
+            streamingAssetsPath ?? Application.streamingAssetsPath,
+            persistentDataPath ?? Application.persistentDataPath);
     }
 
     public void Load(string fmuPath, string unzipDirectory, string instanceName, bool logging)
@@ -310,11 +319,24 @@ public class ExternalFmi2Runtime : IFmi2Runtime
 internal sealed class ExternalFmuHostManager
 {
     private readonly object syncRoot = new object();
+    private readonly string applicationDataPath;
+    private readonly string streamingAssetsPath;
+    private readonly string persistentDataPath;
     private Process process;
     private string pipeName = string.Empty;
     private string hostLogPath = string.Empty;
     private string hostLabel = "FMU";
     private int referenceCount;
+
+    public ExternalFmuHostManager(
+        string applicationDataPath,
+        string streamingAssetsPath,
+        string persistentDataPath)
+    {
+        this.applicationDataPath = applicationDataPath;
+        this.streamingAssetsPath = streamingAssetsPath;
+        this.persistentDataPath = persistentDataPath;
+    }
 
     public void Acquire(string label)
     {
@@ -422,7 +444,7 @@ internal sealed class ExternalFmuHostManager
 
         string hostExePath = ResolveHostExecutablePath();
         string pluginPath = ResolveNativePluginPath();
-        string logDirectory = Path.Combine(Application.persistentDataPath, "FmuHost");
+        string logDirectory = Path.Combine(persistentDataPath, "FmuHost");
         Directory.CreateDirectory(logDirectory);
         hostLogPath = Path.Combine(logDirectory, $"FmuHost_{hostLabel}_{Guid.NewGuid():N}.log");
         pipeName = "lbm_fmu_host_" + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + "_" + Guid.NewGuid().ToString("N");
@@ -565,14 +587,14 @@ internal sealed class ExternalFmuHostManager
         }
     }
 
-    private static string ResolveHostExecutablePath()
+    private string ResolveHostExecutablePath()
     {
-        string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+        string projectRoot = Path.GetFullPath(Path.Combine(applicationDataPath, ".."));
         string[] candidates =
         {
             Path.Combine(projectRoot, "FmuHost", "bin", "Debug", "net8.0", "FmuHost.exe"),
             Path.Combine(projectRoot, "FmuHost", "bin", "Release", "net8.0", "FmuHost.exe"),
-            Path.Combine(Application.streamingAssetsPath, "FmuHost", "FmuHost.exe")
+            Path.Combine(streamingAssetsPath, "FmuHost", "FmuHost.exe")
         };
 
         for (int i = 0; i < candidates.Length; i++)
@@ -584,12 +606,12 @@ internal sealed class ExternalFmuHostManager
         throw new FileNotFoundException("FmuHost.exe was not found. Build FmuHost/FmuHost.csproj first.", candidates[0]);
     }
 
-    private static string ResolveNativePluginPath()
+    private string ResolveNativePluginPath()
     {
         string[] candidates =
         {
-            Path.Combine(Application.dataPath, "Plugins", "x86_64", "FmuNativePlugin.dll"),
-            Path.Combine(Application.streamingAssetsPath, "FmuHost", "FmuNativePlugin.dll")
+            Path.Combine(applicationDataPath, "Plugins", "x86_64", "FmuNativePlugin.dll"),
+            Path.Combine(streamingAssetsPath, "FmuHost", "FmuNativePlugin.dll")
         };
 
         for (int i = 0; i < candidates.Length; i++)

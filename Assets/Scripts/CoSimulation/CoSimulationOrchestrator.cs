@@ -55,6 +55,8 @@ public class CoSimulationOrchestrator : MonoBehaviour
     private readonly CoSimSignalBus signalBus = new CoSimSignalBus();
     private readonly Dictionary<CoSimSignalKey, CoSimSignalValue> previousStepSignals =
         new Dictionary<CoSimSignalKey, CoSimSignalValue>();
+    private readonly HashSet<string> fanModeSignalsWithValidControllerOutput =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private CoSimConnectionMap runtimeDefaultConnectionMap;
     private CoSimConnectionMap runtimeProfileConnectionMap;
     private SimulationController simulationController;
@@ -63,7 +65,10 @@ public class CoSimulationOrchestrator : MonoBehaviour
     private CoSimConnectionMap activeStepMap;
     private StringBuilder activeStepStatus;
     private int activeStepModelIndex;
+    private int activeInitializationModelIndex;
     private double activeStepTime;
+    private bool modelsInitializationCompleted;
+    private FmuCoSimulationModel pendingInitializationModel;
     private FmuCoSimulationModel pendingStepModel;
 
     public ulong CoSimStepIndex => coSimStepIndex;
@@ -158,6 +163,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
         completedCoSimStepCount = 0;
         coSimFailureObserved = false;
         lastCoSimFailure = string.Empty;
+        fanModeSignalsWithValidControllerOutput.Clear();
         lastStatus = "Co-sim schedule reset.";
     }
 
@@ -202,16 +208,16 @@ public class CoSimulationOrchestrator : MonoBehaviour
             activeStepMap = GetActiveConnectionMap();
             EnsureFmuModels();
             SortFmuModelsForMap(activeStepMap);
-            simulationController?.SetExternalStepPause(true, "Waiting for co-simulation FMU step.");
-            EnsureModelsInitialized(currentTime);
-
             signalBus.Clear();
             currentCoSimTime = currentTime;
             coSimStepIndex++;
             activeStepTime = currentTime;
             activeStepModelIndex = 0;
+            activeInitializationModelIndex = 0;
+            modelsInitializationCompleted = false;
             activeStepStatus = new StringBuilder(512);
             coSimStepInProgress = true;
+            simulationController?.SetExternalStepPause(true, "Waiting for sequential FMU initialization/step.");
 
             SeedBusWithPreviousStepSignals(activeStepStatus);
             PublishProfileConstantSignals(activeStepStatus);
@@ -228,6 +234,14 @@ public class CoSimulationOrchestrator : MonoBehaviour
     {
         try
         {
+            if (!modelsInitializationCompleted)
+            {
+                if (!ContinueSequentialModelInitialization())
+                    return;
+
+                modelsInitializationCompleted = true;
+            }
+
             if (pendingStepModel != null)
             {
                 if (!pendingStepModel.TryCompleteStep())
@@ -248,6 +262,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
                 }
 
                 TransferConnectionsToModel(activeStepMap, model, activeStepStatus);
+                ValidateIndoorUnitFanInputs(activeStepMap, model);
                 model.BeginStep(activeStepTime, GetSafeStepSize());
                 if (!model.TryCompleteStep())
                 {
@@ -266,6 +281,44 @@ public class CoSimulationOrchestrator : MonoBehaviour
         {
             FailActiveStep(ex);
         }
+    }
+
+    private bool ContinueSequentialModelInitialization()
+    {
+        double step = GetSafeStepSize();
+
+        if (pendingInitializationModel != null)
+        {
+            if (!pendingInitializationModel.TryCompleteInitialization())
+                return false;
+
+            activeStepStatus.Append($"Initialized {pendingInitializationModel.ModelId}. ");
+            pendingInitializationModel = null;
+            activeInitializationModelIndex++;
+        }
+
+        while (activeInitializationModelIndex < fmuModels.Count)
+        {
+            FmuCoSimulationModel model = fmuModels[activeInitializationModelIndex];
+            if (model == null || model.IsInitialized)
+            {
+                activeInitializationModelIndex++;
+                continue;
+            }
+
+            model.BeginInitialize(activeStepTime, 0.0, step);
+            if (!model.TryCompleteInitialization())
+            {
+                pendingInitializationModel = model;
+                lastStatus = $"Sequential FMU initialization pending: {model.ModelId}.";
+                return false;
+            }
+
+            activeStepStatus.Append($"Initialized {model.ModelId}. ");
+            activeInitializationModelIndex++;
+        }
+
+        return true;
     }
 
     private void CompleteActiveStep()
@@ -326,6 +379,9 @@ public class CoSimulationOrchestrator : MonoBehaviour
         activeStepMap = null;
         activeStepStatus = null;
         activeStepModelIndex = 0;
+        activeInitializationModelIndex = 0;
+        modelsInitializationCompleted = false;
+        pendingInitializationModel = null;
         pendingStepModel = null;
     }
 
@@ -435,17 +491,6 @@ public class CoSimulationOrchestrator : MonoBehaviour
         return -1;
     }
 
-    private void EnsureModelsInitialized(double currentTime)
-    {
-        double step = GetSafeStepSize();
-        for (int i = 0; i < fmuModels.Count; i++)
-        {
-            FmuCoSimulationModel model = fmuModels[i];
-            if (model != null && !model.IsInitialized)
-                model.Initialize(currentTime, 0.0, step);
-        }
-    }
-
     private void SeedBusWithPreviousStepSignals(StringBuilder status)
     {
         if (previousStepSignals.Count == 0)
@@ -529,8 +574,180 @@ public class CoSimulationOrchestrator : MonoBehaviour
                 continue;
             }
 
+            if (ShouldForceStoppedIndoorUnitFanMode(
+                    map,
+                    model,
+                    connection,
+                    out CoSimSignalValue stoppedFanMode,
+                    out string onOffVariableName))
+            {
+                string signalKey = $"{connection.sourceModelId}.{connection.sourceVariableName}";
+                fanModeSignalsWithValidControllerOutput.Remove(signalKey);
+                model.SetInput(connection.targetVariableName, stoppedFanMode);
+                status.Append(
+                    $"Stop-synchronized {model.ModelId}.{connection.targetVariableName}=0 " +
+                    $"because {model.ModelId}.{onOffVariableName}=0. ");
+                continue;
+            }
+
+            if (ShouldUseInitialFanModeFallback(model, connection, value, out CoSimSignalValue fallback))
+            {
+                model.SetInput(connection.targetVariableName, fallback);
+                status.Append($"Fan-mode fallback {model.ModelId}.{connection.targetVariableName}={fallback}. ");
+                continue;
+            }
+
             model.SetInput(connection.targetVariableName, value);
             status.Append(transferStatus).Append(". ");
+        }
+    }
+
+    private bool ShouldForceStoppedIndoorUnitFanMode(
+        CoSimConnectionMap map,
+        FmuCoSimulationModel model,
+        CoSimConnection fanModeConnection,
+        out CoSimSignalValue stoppedFanMode,
+        out string onOffVariableName)
+    {
+        stoppedFanMode = default;
+        onOffVariableName = string.Empty;
+        if (map == null || model == null || fanModeConnection == null)
+            return false;
+
+        const string fanModeSuffix = "_fan_mode";
+        string fanModeVariableName = fanModeConnection.targetVariableName ?? string.Empty;
+        if (!fanModeVariableName.EndsWith(fanModeSuffix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string indoorUnit = fanModeVariableName.Substring(
+            0,
+            fanModeVariableName.Length - fanModeSuffix.Length);
+        onOffVariableName = indoorUnit + "_onoff";
+
+        foreach (CoSimConnection connection in map.EnabledConnections)
+        {
+            if (!string.Equals(connection.targetModelId, model.ModelId, StringComparison.Ordinal) ||
+                !string.Equals(connection.targetVariableName, onOffVariableName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (!signalBus.TryTransfer(connection, out CoSimSignalValue onOff, out _) ||
+                !onOff.TryGetReal(out double onOffValue) ||
+                double.IsNaN(onOffValue) ||
+                double.IsInfinity(onOffValue) ||
+                onOffValue > 0.5)
+            {
+                return false;
+            }
+
+            stoppedFanMode = CoSimSignalValue.FromReal(0.0, activeStepTime);
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool ShouldUseInitialFanModeFallback(
+        FmuCoSimulationModel model,
+        CoSimConnection connection,
+        CoSimSignalValue transferred,
+        out CoSimSignalValue fallback)
+    {
+        fallback = default;
+        if (model == null || connection == null ||
+            !connection.targetVariableName.EndsWith("_fan_mode", StringComparison.OrdinalIgnoreCase) ||
+            !transferred.TryGetReal(out double transferredValue))
+        {
+            return false;
+        }
+
+        string signalKey = $"{connection.sourceModelId}.{connection.sourceVariableName}";
+        bool isValidControllerOutput =
+            !double.IsNaN(transferredValue) &&
+            !double.IsInfinity(transferredValue) &&
+            transferredValue >= 1.0 &&
+            transferredValue <= 5.0;
+        if (isValidControllerOutput)
+        {
+            fanModeSignalsWithValidControllerOutput.Add(signalKey);
+            return false;
+        }
+
+        if (fanModeSignalsWithValidControllerOutput.Contains(signalKey) ||
+            !model.TryGetInitialRealInputValue(connection.targetVariableName, out double initialValue) ||
+            double.IsNaN(initialValue) ||
+            double.IsInfinity(initialValue) ||
+            initialValue < 1.0 ||
+            initialValue > 5.0)
+        {
+            return false;
+        }
+
+        fallback = CoSimSignalValue.FromReal(initialValue, activeStepTime);
+        return true;
+    }
+
+    private void ValidateIndoorUnitFanInputs(
+        CoSimConnectionMap map,
+        FmuCoSimulationModel model)
+    {
+        const string onOffSuffix = "_onoff";
+        const string fanModeSuffix = "_fan_mode";
+        Dictionary<string, double> onOffByIndoorUnit = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, double> fanModeByIndoorUnit = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (CoSimConnection connection in map.EnabledConnections)
+        {
+            if (!string.Equals(connection.targetModelId, model.ModelId, StringComparison.Ordinal))
+                continue;
+
+            string targetName = connection.targetVariableName ?? string.Empty;
+            string indoorUnit;
+            Dictionary<string, double> destination;
+            if (targetName.EndsWith(onOffSuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                indoorUnit = targetName.Substring(0, targetName.Length - onOffSuffix.Length);
+                destination = onOffByIndoorUnit;
+            }
+            else if (targetName.EndsWith(fanModeSuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                indoorUnit = targetName.Substring(0, targetName.Length - fanModeSuffix.Length);
+                destination = fanModeByIndoorUnit;
+            }
+            else
+            {
+                continue;
+            }
+
+            if (model.TryGetRealValue(targetName, out double realValue))
+                destination[indoorUnit] = realValue;
+        }
+
+        foreach (KeyValuePair<string, double> pair in onOffByIndoorUnit)
+        {
+            double fanMode;
+            if (!fanModeByIndoorUnit.TryGetValue(pair.Key, out fanMode))
+                continue;
+
+            if (pair.Value <= 0.5)
+            {
+                if (!double.IsNaN(fanMode) && !double.IsInfinity(fanMode) && Math.Abs(fanMode) <= 1.0e-9)
+                    continue;
+
+                throw new InvalidOperationException(
+                    $"[CoSimulation Guard] Refusing {model.ModelId} step: " +
+                    $"{pair.Key}{onOffSuffix}={pair.Value:G6} while {pair.Key}{fanModeSuffix}={fanMode:G6}. " +
+                    "When an indoor unit is off, CurSetFan/fan_mode must be 0.");
+            }
+
+            if (!double.IsNaN(fanMode) && !double.IsInfinity(fanMode) && fanMode >= 1.0 && fanMode <= 5.0)
+                continue;
+
+            throw new InvalidOperationException(
+                $"[CoSimulation Guard] Refusing {model.ModelId} step: " +
+                $"{pair.Key}{onOffSuffix}={pair.Value:G6} while {pair.Key}{fanModeSuffix}={fanMode:G6}. " +
+                "When an indoor unit is on, set_fan/fan_mode must be in the valid operating range 1..5.");
         }
     }
 
@@ -549,10 +766,55 @@ public class CoSimulationOrchestrator : MonoBehaviour
                 continue;
 
             CoSimSignalValue value = model.GetOutput(connection.sourceVariableName);
+            if (ShouldPublishStoppedCurSetFan(
+                    model,
+                    connection.sourceVariableName,
+                    value,
+                    out CoSimSignalValue stoppedCurSetFan,
+                    out string onOffVariableName))
+            {
+                value = stoppedCurSetFan;
+                status.Append(
+                    $"Stop-synchronized {model.ModelId}.{connection.sourceVariableName}=0 " +
+                    $"because {model.ModelId}.{onOffVariableName}=0. ");
+            }
+
             CoSimSignalKey key = connection.SourceKey;
             signalBus.Publish(key, value);
             status.Append($"Published {key}={value}. ");
         }
+    }
+
+    private static bool ShouldPublishStoppedCurSetFan(
+        FmuCoSimulationModel model,
+        string outputVariableName,
+        CoSimSignalValue output,
+        out CoSimSignalValue stoppedCurSetFan,
+        out string onOffVariableName)
+    {
+        stoppedCurSetFan = default;
+        onOffVariableName = string.Empty;
+        if (model == null || string.IsNullOrWhiteSpace(outputVariableName))
+            return false;
+
+        const string curSetFanSuffix = ".CurSetFan";
+        if (!outputVariableName.EndsWith(curSetFanSuffix, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        string indoorUnit = outputVariableName.Substring(
+            0,
+            outputVariableName.Length - curSetFanSuffix.Length);
+        onOffVariableName = indoorUnit + ".FOnOff";
+        if (!model.TryGetRealValue(onOffVariableName, out double onOffValue) ||
+            double.IsNaN(onOffValue) ||
+            double.IsInfinity(onOffValue) ||
+            onOffValue > 0.5)
+        {
+            return false;
+        }
+
+        stoppedCurSetFan = CoSimSignalValue.FromReal(0.0, output.simTimeSeconds);
+        return true;
     }
 
     private bool TransferConnectionsToReceiver(
@@ -598,8 +860,17 @@ public class CoSimulationOrchestrator : MonoBehaviour
         if (TryGetBusReal(debugHzModelId, debugHzVariableName, out latestHz) == false)
             latestHz = double.NaN;
 
-        if (TryGetFmuReal(debugControllerSetpointModelId, debugControllerSetpointVariableName, out latestControllerSetpointDegC) == false)
+        if (!TryGetBusReal(
+                debugControllerSetpointModelId,
+                debugControllerSetpointVariableName,
+                out latestControllerSetpointDegC) &&
+            !TryGetFmuReal(
+                debugControllerSetpointModelId,
+                debugControllerSetpointVariableName,
+                out latestControllerSetpointDegC))
+        {
             latestControllerSetpointDegC = double.NaN;
+        }
 
         if (TryGetBusReal(debugPlantHzInputModelId, debugPlantHzInputVariableName, out latestPlantHzInput) == false)
             latestPlantHzInput = double.NaN;

@@ -34,7 +34,7 @@ foreach ($scalar in $modelDescription.fmiModelDescription.ModelVariables.ScalarV
     $startValue = if ($parameterName -eq "Multi_V_S.Option_HEX_path") {
         $oduHexPath
     }
-    elseif ($parameterName -match '^IDU_0[1-6]\.Option_HEX_path$') {
+    elseif ($parameterName -match '^IDU_0[1-5]\.Option_HEX_path$') {
         $iduHexPath
     }
     else {
@@ -176,6 +176,7 @@ function Invoke-ControllerCase(
 
     try {
         $ready = $false
+        $lastReadyError = ""
         foreach ($attempt in 1..20) {
             try {
                 Send-HostCommand $pipeName "ping" 500 | Out-Null
@@ -183,11 +184,12 @@ function Invoke-ControllerCase(
                 break
             }
             catch {
+                $lastReadyError = $_.Exception.Message
                 Start-Sleep -Milliseconds 100
             }
         }
         if (-not $ready) {
-            throw "FmuHost did not become ready."
+            throw "FmuHost did not become ready. Last error: $lastReadyError"
         }
 
         $instance = $InstanceName
@@ -197,7 +199,7 @@ function Invoke-ControllerCase(
         Send-HostCommand $pipeName "load instance=$instance unzip=$unzipValue logging=$loggingValue log=$nativeLogValue" ([Math]::Max(10000, $StepTimeoutMs)) | Out-Null
         Send-HostCommand $pipeName "register instance=$instance name=Period value=1" 2000 | Out-Null
         Send-HostCommand $pipeName "register instance=$instance name=Multi_V_S.TotalIDUNum value=5" 2000 | Out-Null
-        foreach ($index in 1..6) {
+        foreach ($index in 1..5) {
             $prefix = "IDU_{0:D2}" -f $index
             Send-HostCommand $pipeName "registerInteger instance=$instance name=${prefix}.Type value=1" 2000 | Out-Null
             Send-HostCommand $pipeName "register instance=$instance name=${prefix}.IDU_Address value=$index" 2000 | Out-Null
@@ -287,9 +289,14 @@ function Invoke-ControllerCase(
         }
         $hostProcess.Dispose()
         if ($null -ne $serverProcess) {
-            if (-not $serverProcess.HasExited) {
-                $serverProcess.Kill()
-                $serverProcess.WaitForExit(3000) | Out-Null
+            try {
+                if (-not $serverProcess.HasExited) {
+                    $serverProcess.Kill()
+                    $serverProcess.WaitForExit(3000) | Out-Null
+                }
+            }
+            catch {
+                Write-Warning "Bundled CoSimulation server cleanup was skipped: $($_.Exception.Message)"
             }
             $serverProcess.Dispose()
         }

@@ -58,9 +58,6 @@ MonoBehaviour:
     - enabled: 1
       variableName: IDU_05.IDU_Address
       value: 5
-    - enabled: 1
-      variableName: IDU_06.IDU_Address
-      value: 6
     integerParameterOverrides:
     - enabled: 1
       variableName: IDU_01.Type
@@ -76,9 +73,6 @@ MonoBehaviour:
       value: 1
     - enabled: 1
       variableName: IDU_05.Type
-      value: 1
-    - enabled: 1
-      variableName: IDU_06.Type
       value: 1
     stringParameterOverrides:
     - enabled: 1
@@ -102,10 +96,6 @@ MonoBehaviour:
       value: '{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex'
       rewriteModelDescriptionStart: 1
     - enabled: 1
-      variableName: IDU_06.Option_HEX_path
-      value: '{FMU_ROOT}/Korea_MultiV_CST_Main_EEPROM_24C16_RNW0721C2S_SAA43756039_001_4DDC_0x03F4B670.hex'
-      rewriteModelDescriptionStart: 1
-    - enabled: 1
       variableName: Multi_V_S.Option_HEX_path
       value: '{FMU_ROOT}/S_SAA37571716_RPUW100S9S_141016_0456.hex'
       rewriteModelDescriptionStart: 1
@@ -122,6 +112,95 @@ MonoBehaviour:
     loadMissingRealParametersFromFmu: 0
     realParameterOverrides: []
     stringParameterOverrides: []
++    initialRealInputValues:
+    - enabled: 1
+      variableName: Comp_CurFreq
+      value: 0
+    - enabled: 1
+      variableName: Fan_CurRPM
+      value: 0
+    - enabled: 1
+      variableName: reversing_valve_mode_flag
+      value: 0
+    - enabled: 1
+      variableName: MAIN_EEV_CurPulse
+      value: 10
+    - enabled: 1
+      variableName: idu_01_onoff
+      value: 1
+    - enabled: 1
+      variableName: idu_01_fan_mode
+      value: 4
+    - enabled: 1
+      variableName: idu_01_pulse
+      value: 0
+    - enabled: 1
+      variableName: idu_01_temp_air
+      value: 20
+    - enabled: 1
+      variableName: idu_01_RH_air
+      value: 40
+    - enabled: 1
+      variableName: idu_02_onoff
+      value: 1
+    - enabled: 1
+      variableName: idu_02_fan_mode
+      value: 4
+    - enabled: 1
+      variableName: idu_02_pulse
+      value: 0
+    - enabled: 1
+      variableName: idu_02_temp_air
+      value: 20
+    - enabled: 1
+      variableName: idu_02_RH_air
+      value: 40
+    - enabled: 1
+      variableName: idu_03_onoff
+      value: 1
+    - enabled: 1
+      variableName: idu_03_fan_mode
+      value: 4
+    - enabled: 1
+      variableName: idu_03_pulse
+      value: 0
+    - enabled: 1
+      variableName: idu_03_temp_air
+      value: 20
+    - enabled: 1
+      variableName: idu_03_RH_air
+      value: 40
+    - enabled: 1
+      variableName: idu_04_onoff
+      value: 1
+    - enabled: 1
+      variableName: idu_04_fan_mode
+      value: 4
+    - enabled: 1
+      variableName: idu_04_pulse
+      value: 0
+    - enabled: 1
+      variableName: idu_04_temp_air
+      value: 20
+    - enabled: 1
+      variableName: idu_04_RH_air
+      value: 40
+    - enabled: 1
+      variableName: idu_05_onoff
+      value: 1
+    - enabled: 1
+      variableName: idu_05_fan_mode
+      value: 4
+    - enabled: 1
+      variableName: idu_05_pulse
+      value: 0
+    - enabled: 1
+      variableName: idu_05_temp_air
+      value: 20
+    - enabled: 1
+      variableName: idu_05_RH_air
+      value: 40
+
   - childObjectName: Simple_Chamber_R2_Model
     modelId: Simple_Chamber_R2
     fmuFileName: plant/Simple_Chamber_R2.fmu
@@ -1320,7 +1399,7 @@ MonoBehaviour:
     modelId: profile
     variableName: set_fan
     valueType: 0
-    realValue: 0
+    realValue: 4
     intValue: 0
     boolValue: 0
     stringValue: 

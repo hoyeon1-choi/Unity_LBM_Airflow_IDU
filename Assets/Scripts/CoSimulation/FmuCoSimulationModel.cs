@@ -63,6 +63,10 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     [SerializeField] private List<FmuStringParameterOverride> stringParameterOverrides =
         new List<FmuStringParameterOverride>();
 
+    [Header("FMU Initial Real Inputs")]
+    [SerializeField] private List<FmuRealParameterOverride> initialRealInputValues =
+        new List<FmuRealParameterOverride>();
+
     [Header("Read-Only Status")]
     [SerializeField, ReadOnly] private bool isInitialized = false;
     [SerializeField, ReadOnly] private bool nativeFallbackActive = false;
@@ -73,17 +77,23 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     [SerializeField, ReadOnly] private int parsedVariableCount = 0;
     [SerializeField, ReadOnly] private int appliedParameterCount = 0;
     [SerializeField, ReadOnly] private int appliedStringParameterCount = 0;
+    [SerializeField, ReadOnly] private int appliedInitialInputCount = 0;
     [SerializeField, ReadOnly] private string parameterStatus = "No parameters applied.";
     [SerializeField, ReadOnly] private string lastStatus = "Not initialized.";
 
     private IFmi2Runtime runtime;
+    private IFmi2Runtime initializationRuntime;
     private FmuModelDescription modelDescription;
     private double latestSimTimeSeconds;
+    private Task pendingInitializationTask;
     private Task pendingStepTask;
     private double pendingStepEndTime;
+    private string initializationStreamingAssetsPath = string.Empty;
+    private volatile bool initializationCancellationRequested;
 
     public string ModelId => string.IsNullOrEmpty(modelId) ? name : modelId;
     public bool IsInitialized => isInitialized;
+    public bool IsInitializationPending => pendingInitializationTask != null;
     public string RuntimeMode => runtimeMode;
     public string LastStatus => lastStatus;
     public bool NativeFallbackActive => nativeFallbackActive;
@@ -91,6 +101,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     public IReadOnlyList<FmuRealParameterOverride> RealParameterOverrides => realParameterOverrides;
     public IReadOnlyList<FmuIntegerParameterOverride> IntegerParameterOverrides => integerParameterOverrides;
     public IReadOnlyList<FmuStringParameterOverride> StringParameterOverrides => stringParameterOverrides;
+    public IReadOnlyList<FmuRealParameterOverride> InitialRealInputValues => initialRealInputValues;
 
     public void ConfigureModel(CoSimulationFmuModelConfig config)
     {
@@ -145,10 +156,13 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
             stringParameterOverrides = new List<FmuStringParameterOverride>();
         if (integerParameterOverrides == null)
             integerParameterOverrides = new List<FmuIntegerParameterOverride>();
+        if (initialRealInputValues == null)
+            initialRealInputValues = new List<FmuRealParameterOverride>();
 
         realParameterOverrides.Clear();
         integerParameterOverrides.Clear();
         stringParameterOverrides.Clear();
+        initialRealInputValues.Clear();
 
         if (config.realParameterOverrides != null)
         {
@@ -204,8 +218,104 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
                 });
             }
         }
+
+        if (config.initialRealInputValues != null)
+        {
+            for (int i = 0; i < config.initialRealInputValues.Count; i++)
+            {
+                CoSimulationRealParameterPreset preset = config.initialRealInputValues[i];
+                if (preset == null)
+                    continue;
+
+                initialRealInputValues.Add(new FmuRealParameterOverride
+                {
+                    enabled = preset.enabled,
+                    variableName = preset.variableName,
+                    value = preset.value,
+                    status = "Configured as an FMU initialization input."
+                });
+            }
+        }
     }
     public void Initialize(double startTime, double stopTime, double stepSize)
+    {
+        if (isInitialized)
+            return;
+
+        if (pendingInitializationTask != null)
+            throw new InvalidOperationException($"FMU initialization is already pending for {ModelId}.");
+
+        initializationCancellationRequested = false;
+        InitializeInternal(
+            startTime,
+            stopTime,
+            stepSize,
+            Application.dataPath,
+            Application.streamingAssetsPath,
+            Application.persistentDataPath);
+    }
+
+    public void BeginInitialize(double startTime, double stopTime, double stepSize)
+    {
+        if (isInitialized || pendingInitializationTask != null)
+            return;
+
+        initializationCancellationRequested = false;
+        string applicationDataPath = Application.dataPath;
+        string streamingAssetsPath = Application.streamingAssetsPath;
+        string persistentDataPath = Application.persistentDataPath;
+
+        pendingInitializationTask = Task.Run(() => InitializeInternal(
+            startTime,
+            stopTime,
+            stepSize,
+            applicationDataPath,
+            streamingAssetsPath,
+            persistentDataPath));
+    }
+
+    public bool TryCompleteInitialization()
+    {
+        if (pendingInitializationTask == null)
+            return isInitialized;
+        if (!pendingInitializationTask.IsCompleted)
+            return false;
+
+        Task completedTask = pendingInitializationTask;
+        pendingInitializationTask = null;
+        completedTask.GetAwaiter().GetResult();
+        return isInitialized;
+    }
+
+    public bool TryGetInitialRealInputValue(string variableName, out double value)
+    {
+        value = 0.0;
+        if (initialRealInputValues == null || string.IsNullOrWhiteSpace(variableName))
+            return false;
+
+        for (int i = 0; i < initialRealInputValues.Count; i++)
+        {
+            FmuRealParameterOverride input = initialRealInputValues[i];
+            if (input == null || !input.enabled ||
+                !string.Equals(input.variableName, variableName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            value = input.value;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void InitializeInternal(
+        double startTime,
+        double stopTime,
+        double stepSize,
+        string applicationDataPath,
+        string streamingAssetsPath,
+        string persistentDataPath)
     {
         if (isInitialized)
             return;
@@ -213,8 +323,9 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         this.startTime = startTime;
         this.stopTime = stopTime;
         this.defaultStepSize = stepSize;
+        initializationStreamingAssetsPath = streamingAssetsPath;
 
-        string root = Path.Combine(Application.streamingAssetsPath, "FMU");
+        string root = Path.Combine(streamingAssetsPath, "FMU");
         string resolveStatus;
         if (!FmuModelDescriptionParser.TryResolveFmuSourcePath(
                 root,
@@ -227,7 +338,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
             throw new FileNotFoundException(resolveStatus);
         }
 
-        string cacheRoot = Path.Combine(Application.persistentDataPath, "FMUCache");
+        string cacheRoot = Path.Combine(persistentDataPath, "FMUCache");
         resolvedUnzipDirectory = FmuModelDescriptionParser.PrepareUnzipDirectory(
             resolvedSourcePath,
             cacheRoot,
@@ -249,13 +360,30 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
         try
         {
             if (useExternalRuntime)
-                InitializeRuntime(new ExternalFmi2Runtime(externalCommandTimeoutMs, launchBundledServer), "External");
+                InitializeRuntime(
+                    new ExternalFmi2Runtime(
+                        externalCommandTimeoutMs,
+                        launchBundledServer,
+                        applicationDataPath,
+                        streamingAssetsPath,
+                        persistentDataPath),
+                    "External");
             else
                 InitializeRuntime(new NativeFmi2Runtime(), "Native");
         }
+        catch (OperationCanceledException)
+        {
+            runtime = null;
+            isInitialized = false;
+            runtimeMode = "Not initialized";
+            lastStatus = "FMU initialization was cancelled.";
+            throw;
+        }
         catch (Exception ex)
         {
-            TerminateOrDispose();
+            runtime = null;
+            isInitialized = false;
+            runtimeMode = "Not initialized";
 
             if (!fallbackToMockOnNativeFailure)
             {
@@ -374,10 +502,25 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
 
     public void TerminateOrDispose()
     {
+        initializationCancellationRequested = true;
+        if (pendingInitializationTask != null && !pendingInitializationTask.IsCompleted &&
+            initializationRuntime is ExternalFmi2Runtime initializingExternalRuntime)
+        {
+            initializingExternalRuntime.AbortPendingCommand($"cancelling initialization of {ModelId}");
+        }
+
+        if (pendingInitializationTask != null)
+        {
+            pendingInitializationTask.ContinueWith(
+                task => { _ = task.Exception; },
+                TaskContinuationOptions.OnlyOnFaulted);
+        }
+
         if (pendingStepTask != null && !pendingStepTask.IsCompleted && runtime is ExternalFmi2Runtime externalRuntime)
             externalRuntime.AbortPendingCommand($"disposing {ModelId}");
 
         pendingStepTask = null;
+        pendingInitializationTask = null;
         if (runtime != null)
         {
             runtime.Terminate();
@@ -564,6 +707,7 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
 
     private void InitializeRuntime(IFmi2Runtime newRuntime, string mode)
     {
+        initializationRuntime = newRuntime;
         try
         {
             newRuntime.Load(resolvedSourcePath, resolvedUnzipDirectory, ModelId, logging);
@@ -578,21 +722,30 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
                 : 0.0;
             newRuntime.SetupExperiment(startTime, stopTime, tolerance);
             newRuntime.EnterInitializationMode();
+            appliedInitialInputCount = ApplyInitialRealInputs(newRuntime, true);
             newRuntime.ExitInitializationMode();
+
+            if (initializationCancellationRequested)
+                throw new OperationCanceledException($"FMU initialization was cancelled for {ModelId}.");
+
+            runtime = newRuntime;
+            isInitialized = true;
+            runtimeMode = mode;
         }
         catch
         {
             newRuntime.Dispose();
             throw;
         }
+        finally
+        {
+            initializationRuntime = null;
+        }
 
-        runtime = newRuntime;
-        isInitialized = true;
-        runtimeMode = mode;
         lastStatus =
             $"{mode} runtime initialized. source={resolvedSourcePath}, unzip={resolvedUnzipDirectory}, " +
             $"modelName={parsedModelName}, variables={parsedVariableCount}, parameters={appliedParameterCount}, " +
-            $"stringParameters={appliedStringParameterCount}";
+            $"stringParameters={appliedStringParameterCount}, initialInputs={appliedInitialInputCount}";
 
         if (logging)
             Debug.Log($"[CoSimulation][{ModelId}] {lastStatus}");
@@ -702,6 +855,37 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
 
         status.Append($"Applied Real parameter overrides: applied={applied}, skipped={skipped}.");
         parameterStatus = status.ToString();
+        return applied;
+    }
+
+    private int ApplyInitialRealInputs(IFmi2Runtime targetRuntime, bool logWarnings)
+    {
+        if (targetRuntime == null || initialRealInputValues == null)
+            return 0;
+
+        int applied = 0;
+        for (int i = 0; i < initialRealInputValues.Count; i++)
+        {
+            FmuRealParameterOverride input = initialRealInputValues[i];
+            if (input == null || !input.enabled || string.IsNullOrWhiteSpace(input.variableName))
+                continue;
+
+            if (modelDescription == null ||
+                !modelDescription.TryGetVariable(input.variableName, out FmuVariableInfo variable) ||
+                variable.valueType != SignalValueType.Real ||
+                variable.causality != SignalDirection.Input)
+            {
+                input.status = "Skipped: Real input variable not found in modelDescription.";
+                if (logWarnings)
+                    Debug.LogWarning($"[CoSimulation][{ModelId}] {input.status} variable={input.variableName}");
+                continue;
+            }
+
+            targetRuntime.SetReal(variable.valueReference, input.value);
+            input.status = BuildVariableStatus(variable, "Applied during initialization");
+            applied++;
+        }
+
         return applied;
     }
 
@@ -840,8 +1024,11 @@ public class FmuCoSimulationModel : MonoBehaviour, ICoSimulationModel
     private string ResolveStringParameterValue(string value)
     {
         string resolved = value ?? string.Empty;
-        string streamingAssets = Application.streamingAssetsPath.Replace('\\', '/');
-        string fmuRoot = Path.Combine(Application.streamingAssetsPath, "FMU").Replace('\\', '/');
+        string streamingAssetsPath = string.IsNullOrEmpty(initializationStreamingAssetsPath)
+            ? Application.streamingAssetsPath
+            : initializationStreamingAssetsPath;
+        string streamingAssets = streamingAssetsPath.Replace('\\', '/');
+        string fmuRoot = Path.Combine(streamingAssetsPath, "FMU").Replace('\\', '/');
 
         resolved = resolved.Replace("{StreamingAssets}", streamingAssets)
                            .Replace("{STREAMING_ASSETS}", streamingAssets)

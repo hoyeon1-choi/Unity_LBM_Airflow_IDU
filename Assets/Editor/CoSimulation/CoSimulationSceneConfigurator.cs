@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -167,6 +168,32 @@ public static class CoSimulationSceneConfigurator
             CoSimulationProfile.CreateDefaultMultiVProductProfile,
             targetSimulationTimeSeconds,
             quitEditorWhenComplete);
+    }
+
+    public static void RunMultiVProductDraftTestAndQuit()
+    {
+        const float defaultTargetSimulationTimeSeconds = 2.0f;
+        float targetSimulationTimeSeconds = defaultTargetSimulationTimeSeconds;
+        string[] args = Environment.GetCommandLineArgs();
+
+        for (int i = 0; i < args.Length - 1; i++)
+        {
+            if (!string.Equals(args[i], "-coSimTargetTime", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (float.TryParse(
+                    args[i + 1],
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out float parsed))
+            {
+                targetSimulationTimeSeconds = Mathf.Max(0.0f, parsed);
+            }
+
+            break;
+        }
+
+        RunMultiVProductDraftTest(targetSimulationTimeSeconds, true);
     }
 
     public static void RunShortIntegrationTest(
