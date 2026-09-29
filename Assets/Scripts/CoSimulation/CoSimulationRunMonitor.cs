@@ -6,8 +6,8 @@ using UnityEngine;
 public class CoSimulationRunMonitor : MonoBehaviour
 {
     [Header("Run Control")]
-    [SerializeField] private bool startSimulationOnPlay = true;
-    [SerializeField] private bool runInitialCoSimStepOnStart = true;
+    [SerializeField] private bool startSimulationOnPlay = false;
+    [SerializeField] private bool runInitialCoSimStepOnStart = false;
 
     [Header("Health Check")]
     [SerializeField] private int minimumHealthyCoSimSteps = 1;
@@ -41,6 +41,7 @@ public class CoSimulationRunMonitor : MonoBehaviour
     private bool observedSimulationRunning;
     private bool waitingForCoSimCompletion;
     private bool coSimStepWasInProgress;
+    private bool startupGateReleased;
 
     public bool RunStarted => runStarted;
     public bool RunFinished => runFinished;
@@ -52,8 +53,8 @@ public class CoSimulationRunMonitor : MonoBehaviour
         AirflowLbmSignalAdapter airflowAdapter,
         SimulationController simulationController,
         int minimumHealthyCoSimSteps = 1,
-        bool startSimulationOnPlay = true,
-        bool runInitialCoSimStepOnStart = true,
+        bool startSimulationOnPlay = false,
+        bool runInitialCoSimStepOnStart = false,
         bool quitEditorWhenComplete = false,
         bool exitPlayModeWhenComplete = false)
     {
@@ -79,8 +80,8 @@ public class CoSimulationRunMonitor : MonoBehaviour
             airflowAdapter,
             simulationController,
             minCoSimSteps,
-            true,
-            true,
+            false,
+            false,
             quitEditorWhenComplete);
     }
 
@@ -123,6 +124,21 @@ public class CoSimulationRunMonitor : MonoBehaviour
         maximumGapDuringCoSimStepSeconds = 0.0f;
         unresponsiveGapCount = 0;
 
+        startupGateReleased = !CoSimulationStartupGate.IsWaitingForConfirmation;
+        if (!startupGateReleased)
+        {
+            // Interactive runs are owned by the startup panel. Ignore stale settings
+            // that may have been serialized by an earlier automated integration test.
+            startSimulationOnPlay = false;
+            runInitialCoSimStepOnStart = false;
+            exitPlayModeWhenComplete = false;
+            simulationController?.SetSimulationRunning(false);
+            startupBlockingSeconds = 0.0f;
+            lastUpdateRealtime = Time.realtimeSinceStartup;
+            lastSummary = "Waiting for initial-condition confirmation.";
+            return;
+        }
+
         if (simulationController != null && startSimulationOnPlay)
             simulationController.SetSimulationRunning(true);
 
@@ -152,6 +168,27 @@ public class CoSimulationRunMonitor : MonoBehaviour
             return;
 
         float now = Time.realtimeSinceStartup;
+
+        if (!startupGateReleased)
+        {
+            lastUpdateRealtime = now;
+            if (CoSimulationStartupGate.IsWaitingForConfirmation)
+                return;
+
+            startupGateReleased = true;
+            startRealtime = now;
+            if (simulationController != null && startSimulationOnPlay)
+                simulationController.SetSimulationRunning(true);
+            if (orchestrator != null && runInitialCoSimStepOnStart)
+                orchestrator.RunOneStepFromInspector();
+
+            observedSimulationRunning =
+                simulationController == null || simulationController.IsSimulationRunning;
+            coSimStepWasInProgress = orchestrator != null && orchestrator.IsCoSimStepInProgress;
+            lastSummary = "Initial conditions confirmed; co-simulation run started.";
+            return;
+        }
+
         float updateGap = now - lastUpdateRealtime;
         lastUpdateRealtime = now;
         maximumMainThreadGapSeconds = Mathf.Max(maximumMainThreadGapSeconds, updateGap);
@@ -198,6 +235,7 @@ public class CoSimulationRunMonitor : MonoBehaviour
         int inletTargets = airflowAdapter != null ? airflowAdapter.TargetInletCount : 0;
         float simTime = simulationController != null ? simulationController.SimulatedTimeSeconds : 0f;
         string profileName = orchestrator != null ? orchestrator.ProfileName : "-";
+        double lastCoSimWallMs = orchestrator != null ? orchestrator.LastCoSimulationWallTimeMs : double.NaN;
         string debugSignals = orchestrator != null ? orchestrator.LatestDebugSignalSummary : string.Empty;
 
         lastRunHealthy =
@@ -214,6 +252,7 @@ public class CoSimulationRunMonitor : MonoBehaviour
             $"elapsedRealtime={elapsedRealtimeSeconds:F2}s, " +
             $"lbmSimTime={simTime:F6}s, " +
             $"coSimStepsCompleted={completedStepCount}, coSimStepsAttempted={attemptedStepCount}, profile={profileName}, " +
+            $"lastCoSimWall={lastCoSimWallMs:F1}ms, " +
             $"startupBlocking={startupBlockingSeconds:F3}s, " +
             $"maxMainThreadGap={maximumMainThreadGapSeconds:F3}s, " +
             $"maxGapDuringCoSimStep={maximumGapDuringCoSimStepSeconds:F3}s, " +

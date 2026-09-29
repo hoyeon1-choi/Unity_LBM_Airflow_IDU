@@ -17,7 +17,7 @@ MonoBehaviour:
   coSimStepSizeSeconds: 1
   useLbmSimulatedTime: 1
   runFmuBeforeLbmStep: 0
-  logEveryCoSimStep: 1
+  logEveryCoSimStep: 0
   airflowModelId: airflow
   sensorSignalName: T_sensor
   dischargeSignalName: T_discharge
@@ -34,6 +34,12 @@ MonoBehaviour:
     fallbackToMockOnNativeFailure: 0
     externalCommandTimeoutMs: 30000
     logging: 1
+    nativeFmuLogging: 0
+    verboseExternalStepLogging: 0
+    batchExternalRealIo: 1
+    skipUnchangedExternalInputs: 1
+    unchangedInputTolerance: 1e-09
+    experimentToleranceOverride: 0
     defaultStepSize: 1
     loadMissingRealParametersFromFmu: 0
     realParameterOverrides:
@@ -108,11 +114,26 @@ MonoBehaviour:
     fallbackToMockOnNativeFailure: 0
     externalCommandTimeoutMs: 30000
     logging: 1
-    defaultStepSize: 0.1
+    nativeFmuLogging: 0
+    verboseExternalStepLogging: 0
+    batchExternalRealIo: 1
+    skipUnchangedExternalInputs: 1
+    unchangedInputTolerance: 1e-09
+    experimentToleranceOverride: 0
+    defaultStepSize: 0.02
+    useAdaptiveSubsteps: 1
+    adaptiveMinStepSize: 0.02
+    adaptiveMaxStepSize: 1
+    adaptiveInitialStepSize: 0.02
+    adaptiveFastCommandThresholdMs: 1000
+    adaptiveSlowCommandThresholdMs: 5000
+    adaptiveSuccessesBeforeIncrease: 5
+    adaptiveIncreaseFactor: 1.25
+    adaptiveDecreaseFactor: 0.5
     loadMissingRealParametersFromFmu: 0
     realParameterOverrides: []
     stringParameterOverrides: []
-+    initialRealInputValues:
+    initialRealInputValues:
     - enabled: 1
       variableName: Comp_CurFreq
       value: 0
@@ -127,7 +148,7 @@ MonoBehaviour:
       value: 10
     - enabled: 1
       variableName: idu_01_onoff
-      value: 1
+      value: 0
     - enabled: 1
       variableName: idu_01_fan_mode
       value: 4
@@ -142,7 +163,7 @@ MonoBehaviour:
       value: 40
     - enabled: 1
       variableName: idu_02_onoff
-      value: 1
+      value: 0
     - enabled: 1
       variableName: idu_02_fan_mode
       value: 4
@@ -157,7 +178,7 @@ MonoBehaviour:
       value: 40
     - enabled: 1
       variableName: idu_03_onoff
-      value: 1
+      value: 0
     - enabled: 1
       variableName: idu_03_fan_mode
       value: 4
@@ -172,7 +193,7 @@ MonoBehaviour:
       value: 40
     - enabled: 1
       variableName: idu_04_onoff
-      value: 1
+      value: 0
     - enabled: 1
       variableName: idu_04_fan_mode
       value: 4
@@ -187,7 +208,7 @@ MonoBehaviour:
       value: 40
     - enabled: 1
       variableName: idu_05_onoff
-      value: 1
+      value: 0
     - enabled: 1
       variableName: idu_05_fan_mode
       value: 4
@@ -210,6 +231,12 @@ MonoBehaviour:
     fallbackToMockOnNativeFailure: 0
     externalCommandTimeoutMs: 30000
     logging: 1
+    nativeFmuLogging: 0
+    verboseExternalStepLogging: 0
+    batchExternalRealIo: 1
+    skipUnchangedExternalInputs: 1
+    unchangedInputTolerance: 1e-09
+    experimentToleranceOverride: 0
     defaultStepSize: 1
     loadMissingRealParametersFromFmu: 0
     realParameterOverrides: []
@@ -223,6 +250,12 @@ MonoBehaviour:
     fallbackToMockOnNativeFailure: 0
     externalCommandTimeoutMs: 30000
     logging: 1
+    nativeFmuLogging: 0
+    verboseExternalStepLogging: 0
+    batchExternalRealIo: 1
+    skipUnchangedExternalInputs: 1
+    unchangedInputTolerance: 1e-09
+    experimentToleranceOverride: 0
     defaultStepSize: 1
     loadMissingRealParametersFromFmu: 0
     realParameterOverrides: []
@@ -236,6 +269,12 @@ MonoBehaviour:
     fallbackToMockOnNativeFailure: 0
     externalCommandTimeoutMs: 30000
     logging: 1
+    nativeFmuLogging: 0
+    verboseExternalStepLogging: 0
+    batchExternalRealIo: 1
+    skipUnchangedExternalInputs: 1
+    unchangedInputTolerance: 1e-09
+    experimentToleranceOverride: 0
     defaultStepSize: 1
     loadMissingRealParametersFromFmu: 0
     realParameterOverrides: []
@@ -249,6 +288,12 @@ MonoBehaviour:
     fallbackToMockOnNativeFailure: 0
     externalCommandTimeoutMs: 30000
     logging: 1
+    nativeFmuLogging: 0
+    verboseExternalStepLogging: 0
+    batchExternalRealIo: 1
+    skipUnchangedExternalInputs: 1
+    unchangedInputTolerance: 1e-09
+    experimentToleranceOverride: 0
     defaultStepSize: 1
     loadMissingRealParametersFromFmu: 0
     realParameterOverrides: []
@@ -448,7 +493,7 @@ MonoBehaviour:
     description: Product discharge mass flow to LBM inlet.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: idu_on
+    sourceVariableName: idu_02_on
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_02.FOnOff
     scale: 1
@@ -544,7 +589,7 @@ MonoBehaviour:
     description: Indoor humidity default.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: idu_on
+    sourceVariableName: idu_02_on
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: idu_02_onoff
     scale: 1
@@ -640,7 +685,7 @@ MonoBehaviour:
     description: Product discharge mass flow to chamber.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: idu_on
+    sourceVariableName: idu_03_on
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_03.FOnOff
     scale: 1
@@ -736,7 +781,7 @@ MonoBehaviour:
     description: Indoor humidity default.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: idu_on
+    sourceVariableName: idu_03_on
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: idu_03_onoff
     scale: 1
@@ -832,7 +877,7 @@ MonoBehaviour:
     description: Product discharge mass flow to chamber.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: idu_on
+    sourceVariableName: idu_04_on
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_04.FOnOff
     scale: 1
@@ -928,7 +973,7 @@ MonoBehaviour:
     description: Indoor humidity default.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: idu_on
+    sourceVariableName: idu_04_on
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: idu_04_onoff
     scale: 1
@@ -1024,7 +1069,7 @@ MonoBehaviour:
     description: Product discharge mass flow to chamber.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: idu_on
+    sourceVariableName: idu_05_on
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_05.FOnOff
     scale: 1
@@ -1120,7 +1165,7 @@ MonoBehaviour:
     description: Indoor humidity default.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: idu_on
+    sourceVariableName: idu_05_on
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: idu_05_onoff
     scale: 1
@@ -1324,7 +1369,7 @@ MonoBehaviour:
     description: Product suction temperature to controller.
   - enabled: 1
     sourceModelId: Multi_V_S__Set_CFMU
-    sourceVariableName: Multi_V_S.Comp__CurFreq
+    sourceVariableName: Multi_V_S.Comp__TarFreq
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: Comp_CurFreq
     scale: 1
@@ -1336,7 +1381,7 @@ MonoBehaviour:
     description: Controller compressor target frequency to product compressor input.
   - enabled: 1
     sourceModelId: Multi_V_S__Set_CFMU
-    sourceVariableName: Multi_V_S.Fan1__CurRPM
+    sourceVariableName: Multi_V_S.Fan1__TarRPM
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: Fan_CurRPM
     scale: 1
@@ -1360,7 +1405,7 @@ MonoBehaviour:
     description: Controller reversing valve output to product.
   - enabled: 1
     sourceModelId: Multi_V_S__Set_CFMU
-    sourceVariableName: Multi_V_S.Main_EEV__TarPulse
+    sourceVariableName: Multi_V_S.MAIN_EEV__TarPulse
     targetModelId: MULTIV_FMU_WARPPER
     targetVariableName: MAIN_EEV_CurPulse
     scale: 1
@@ -1375,7 +1420,39 @@ MonoBehaviour:
     modelId: profile
     variableName: idu_on
     valueType: 0
-    realValue: 1
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_02_on
+    valueType: 0
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_03_on
+    valueType: 0
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_04_on
+    valueType: 0
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_05_on
+    valueType: 0
+    realValue: 0
     intValue: 0
     boolValue: 0
     stringValue: 
@@ -1432,7 +1509,7 @@ MonoBehaviour:
     variableName: set_temp
   controllerOutputSignal:
     modelId: Multi_V_S__Set_CFMU
-    variableName: Multi_V_S.Comp__CurFreq
+    variableName: Multi_V_S.Comp__TarFreq
   plantInputSignal:
     modelId: MULTIV_FMU_WARPPER
     variableName: Comp_CurFreq
@@ -1448,10 +1525,10 @@ MonoBehaviour:
     variableName: set_temp
   - label: CompTarFreq
     modelId: Multi_V_S__Set_CFMU
-    variableName: Multi_V_S.Comp__CurFreq
+    variableName: Multi_V_S.Comp__TarFreq
   - label: FanTarRPM
     modelId: Multi_V_S__Set_CFMU
-    variableName: Multi_V_S.Fan1__CurRPM
+    variableName: Multi_V_S.Fan1__TarRPM
   - label: IDU01_T_dis
     modelId: MULTIV_FMU_WARPPER
     variableName: IDU_01_Air_Temp_Discharge

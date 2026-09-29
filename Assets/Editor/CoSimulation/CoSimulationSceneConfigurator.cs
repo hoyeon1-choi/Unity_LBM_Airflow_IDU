@@ -39,24 +39,6 @@ public static class CoSimulationSceneConfigurator
             $"harness={result.Harness.name}, controller={result.Controller.name}, fmus={result.FmuModels.Count}");
     }
 
-    [MenuItem("Tools/Co-Simulation/Run Short Integration Test (50s)")]
-    public static void RunShortIntegrationTest50s()
-    {
-        RunShortIntegrationTest(50.0f, false);
-    }
-
-    [MenuItem("Tools/Co-Simulation/Run MultiV Product Draft Test (50s)")]
-    public static void RunMultiVProductDraftTest50s()
-    {
-        RunMultiVProductDraftTest(50.0f, false);
-    }
-
-    [MenuItem("Tools/Co-Simulation/Probe MultiV Product Native Initialization")]
-    public static void ProbeMultiVProductNativeInitializationMenu()
-    {
-        ProbeMultiVProductNativeInitialization(false);
-    }
-
     public static void ProbeMultiVProductNativeInitialization(bool quitEditorWhenComplete)
     {
         if (!EnsureSceneLoaded())
@@ -124,35 +106,6 @@ public static class CoSimulationSceneConfigurator
 
         if (quitEditorWhenComplete)
             EditorApplication.Exit(allNative ? 0 : 1);
-    }
-    [MenuItem("Tools/Co-Simulation/Create Simple Controller-Plant Profile Asset")]
-    public static void CreateSimpleControllerPlantProfileAsset()
-    {
-        const string folder = "Assets/CoSimulationProfiles";
-        if (!AssetDatabase.IsValidFolder(folder))
-            AssetDatabase.CreateFolder("Assets", "CoSimulationProfiles");
-
-        CoSimulationProfile profile = CoSimulationProfile.CreateDefaultSimpleProfile();
-        string path = AssetDatabase.GenerateUniqueAssetPath($"{folder}/Simple_ControllerPlant_Profile.asset");
-        AssetDatabase.CreateAsset(profile, path);
-        AssetDatabase.SaveAssets();
-        Selection.activeObject = profile;
-        Debug.Log($"[CoSimulation] Created profile asset: {path}");
-    }
-
-    [MenuItem("Tools/Co-Simulation/Create MultiV Product Draft Profile Asset")]
-    public static void CreateMultiVProductDraftProfileAsset()
-    {
-        const string folder = "Assets/CoSimulationProfiles";
-        if (!AssetDatabase.IsValidFolder(folder))
-            AssetDatabase.CreateFolder("Assets", "CoSimulationProfiles");
-
-        CoSimulationProfile profile = CoSimulationProfile.CreateDefaultMultiVProductProfile();
-        string path = AssetDatabase.GenerateUniqueAssetPath($"{folder}/MultiV_Product_Draft_Profile.asset");
-        AssetDatabase.CreateAsset(profile, path);
-        AssetDatabase.SaveAssets();
-        Selection.activeObject = profile;
-        Debug.Log($"[CoSimulation] Created MultiV draft profile asset: {path}");
     }
     public static void RunShortIntegrationTest(float targetSimulationTimeSeconds, bool quitEditorWhenComplete)
     {
@@ -319,8 +272,8 @@ public static class CoSimulationSceneConfigurator
             adapter,
             controller,
             minimumHealthyCoSimSteps: 1,
-            startSimulationOnPlay: true,
-            runInitialCoSimStepOnStart: true,
+            startSimulationOnPlay: false,
+            runInitialCoSimStepOnStart: false,
             quitEditorWhenComplete: quitEditorWhenComplete,
             exitPlayModeWhenComplete: overrideTargetSimulationTime && !quitEditorWhenComplete);
 
@@ -397,7 +350,7 @@ public static class CoSimulationSceneConfigurator
     private static bool EnsureSceneLoaded()
     {
         Scene scene = EditorSceneManager.GetActiveScene();
-        if (scene.IsValid() && scene.isLoaded && scene.GetRootGameObjects().Length > 0)
+        if (scene.IsValid() && scene.isLoaded && FindSceneComponent<SimulationController>() != null)
             return true;
 
         string scenePath = File.Exists(PreferredScenePath)

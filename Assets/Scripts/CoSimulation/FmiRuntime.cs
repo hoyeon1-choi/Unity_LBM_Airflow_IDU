@@ -19,6 +19,12 @@ public interface IFmi2Runtime : IDisposable
     void Terminate();
 }
 
+public interface IBatchedFmi2Runtime
+{
+    void SetRealBatch(uint[] valueReferences, double[] values);
+    double[] GetRealBatch(uint[] valueReferences);
+}
+
 internal static class FmuNative
 {
     private const string DllName = "FmuNativePlugin";

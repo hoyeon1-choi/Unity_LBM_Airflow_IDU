@@ -442,6 +442,10 @@ public class SimulationController : Singleton<SimulationController>
 
     void Start()
     {
+        bool deferSolverUntilConfirmation = CoSimulationStartupGate.IsWaitingForConfirmation;
+        if (deferSolverUntilConfirmation)
+            runSimulation = false;
+
         if (sceneCache != null)
         {
             sceneCache.ForceRefresh();
@@ -449,6 +453,17 @@ public class SimulationController : Singleton<SimulationController>
         }
 
         UpdateSceneCacheStatus();
+
+        if (deferSolverUntilConfirmation)
+        {
+            ResetAdaptiveOutletRhoFeedback();
+            ResetMassFluxCorrectedOutletTargets();
+            MarkSummaryDirty();
+            Debug.Log(
+                "[SimulationController] Scaling, memory validation, and LBM solver initialization " +
+                "deferred until initial conditions are confirmed.");
+            return;
+        }
 
         RebuildScaling();
         ValidateAndLogMemoryEstimate();
@@ -464,6 +479,8 @@ public class SimulationController : Singleton<SimulationController>
 
         if (autoLogSummaryOnStart)
             Debug.Log(latestSummary);
+
+        scalingDirty = false;
     }
 
 #if UNITY_EDITOR
@@ -499,7 +516,7 @@ public class SimulationController : Singleton<SimulationController>
             RebuildScaling();
             ValidateAndLogMemoryEstimate();
 
-            if (solverRebuildRequired)
+            if (solverRebuildRequired && !CoSimulationStartupGate.IsWaitingForConfirmation)
                 RebuildSolver();
 
             ResetMassFluxCorrectedOutletTargets();
@@ -543,7 +560,7 @@ public class SimulationController : Singleton<SimulationController>
             UpdateSceneCacheStatus();
         }
 
-        if (!runSimulation || externalStepPause || _lbmSolver == null)
+        if (!runSimulation || externalStepPause || CoSimulationStartupGate.IsWaitingForConfirmation || _lbmSolver == null)
             return;
 
         if (readinessStatus == SimulationHealthStatus.Invalid)
@@ -671,6 +688,20 @@ public class SimulationController : Singleton<SimulationController>
 
         MarkSummaryDirty();
         RefreshReadOnlyInspectorNow();
+    }
+
+    public void ApplyInitialRoomTemperatureDegC(float value)
+    {
+        referenceTemperatureDegCInput = value;
+        if (referenceTemperatureDegCInput < tempPhysMinDegC)
+            tempPhysMinDegC = referenceTemperatureDegCInput;
+        if (referenceTemperatureDegCInput > tempPhysMaxDegC)
+            tempPhysMaxDegC = referenceTemperatureDegCInput;
+
+        scalingDirty = true;
+        solverRebuildRequired = true;
+        ResetPhysicalTime();
+        MarkSummaryDirty();
     }
 
     [ContextMenu("Rebuild Solver")]

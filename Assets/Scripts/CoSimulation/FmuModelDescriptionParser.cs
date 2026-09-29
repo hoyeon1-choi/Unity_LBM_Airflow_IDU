@@ -31,6 +31,7 @@ public class FmuModelDescription
     public string modelName = string.Empty;
     public string guid = string.Empty;
     public string modelIdentifier = string.Empty;
+    public bool canHandleVariableCommunicationStepSize = false;
     public bool hasDefaultExperimentTolerance = false;
     public double defaultExperimentTolerance = 0.0;
     public readonly List<FmuVariableInfo> variables = new List<FmuVariableInfo>();
@@ -220,6 +221,10 @@ public static class FmuModelDescriptionParser
             if (element.Name.LocalName == "CoSimulation")
             {
                 description.modelIdentifier = ReadAttribute(element, "modelIdentifier");
+                description.canHandleVariableCommunicationStepSize = string.Equals(
+                    ReadAttribute(element, "canHandleVariableCommunicationStepSize"),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase);
                 break;
             }
         }

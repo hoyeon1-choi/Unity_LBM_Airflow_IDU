@@ -8,12 +8,13 @@ using System.Text;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
-public class ExternalFmi2Runtime : IFmi2Runtime
+public class ExternalFmi2Runtime : IFmi2Runtime, IBatchedFmi2Runtime
 {
     private readonly int commandTimeoutMs;
     private readonly bool launchBundledServer;
     private readonly Dictionary<uint, string> variableNameByValueReference = new Dictionary<uint, string>();
     private readonly ExternalFmuHostManager hostManager;
+    private readonly bool verboseStepLogging;
     private FmuModelDescription modelDescription;
     private string instanceName = string.Empty;
     private bool loaded;
@@ -30,10 +31,12 @@ public class ExternalFmi2Runtime : IFmi2Runtime
         bool launchBundledServer = false,
         string applicationDataPath = null,
         string streamingAssetsPath = null,
-        string persistentDataPath = null)
+        string persistentDataPath = null,
+        bool verboseStepLogging = false)
     {
         this.commandTimeoutMs = Math.Max(1000, commandTimeoutMs);
         this.launchBundledServer = launchBundledServer;
+        this.verboseStepLogging = verboseStepLogging;
         hostManager = new ExternalFmuHostManager(
             applicationDataPath ?? Application.dataPath,
             streamingAssetsPath ?? Application.streamingAssetsPath,
@@ -150,6 +153,31 @@ public class ExternalFmi2Runtime : IFmi2Runtime
         ExecuteRealCommand("set", valueReference, value);
     }
 
+    public void SetRealBatch(uint[] valueReferences, double[] values)
+    {
+        EnsureLoaded();
+        if (valueReferences == null || values == null || valueReferences.Length != values.Length)
+            throw new ArgumentException("FMU Real batch references and values must have the same length.");
+        if (valueReferences.Length == 0)
+            return;
+
+        string[] names = new string[valueReferences.Length];
+        string[] valueTexts = new string[values.Length];
+        for (int i = 0; i < valueReferences.Length; i++)
+        {
+            names[i] = ResolveVariableName(valueReferences[i]);
+            valueTexts[i] = values[i].ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        Execute(
+            "setMany",
+            new Dictionary<string, string>
+            {
+                { "names", string.Join("\n", names) },
+                { "values", string.Join("\n", valueTexts) }
+            });
+    }
+
     public double GetReal(uint valueReference)
     {
         EnsureLoaded();
@@ -170,11 +198,43 @@ public class ExternalFmi2Runtime : IFmi2Runtime
         return value;
     }
 
+    public double[] GetRealBatch(uint[] valueReferences)
+    {
+        EnsureLoaded();
+        if (valueReferences == null)
+            throw new ArgumentNullException(nameof(valueReferences));
+        if (valueReferences.Length == 0)
+            return Array.Empty<double>();
+
+        string[] names = new string[valueReferences.Length];
+        for (int i = 0; i < valueReferences.Length; i++)
+            names[i] = ResolveVariableName(valueReferences[i]);
+
+        Dictionary<string, string> response = Execute(
+            "getMany",
+            new Dictionary<string, string> { { "names", string.Join("\n", names) } });
+        if (!response.TryGetValue("values", out string valuesText))
+            throw new InvalidOperationException($"External FMU host returned no batch values for {instanceName}.");
+
+        string[] tokens = valuesText.Split(new[] { '\n' }, StringSplitOptions.None);
+        if (tokens.Length != valueReferences.Length)
+            throw new InvalidOperationException($"External FMU host returned {tokens.Length} values for {valueReferences.Length} requests on {instanceName}.");
+
+        double[] values = new double[tokens.Length];
+        for (int i = 0; i < tokens.Length; i++)
+        {
+            if (!double.TryParse(tokens[i], NumberStyles.Float, CultureInfo.InvariantCulture, out values[i]))
+                throw new InvalidOperationException($"External FMU host returned an invalid batch Real value for {instanceName}.{names[i]}.");
+        }
+
+        return values;
+    }
+
     public void DoStep(double currentTime, double stepSize)
     {
         EnsureLoaded();
         long startTimestamp = Stopwatch.GetTimestamp();
-        if (logging)
+        if (logging && verboseStepLogging)
             Debug.Log($"[CoSimulation][{instanceName}] External DoStep begin. t={currentTime:F3}s, h={stepSize:F3}s");
 
         Execute(
@@ -185,7 +245,7 @@ public class ExternalFmi2Runtime : IFmi2Runtime
                 { "step", stepSize.ToString("R", CultureInfo.InvariantCulture) }
             });
 
-        if (logging)
+        if (logging && verboseStepLogging)
         {
             double elapsedMs = 1000.0 * (Stopwatch.GetTimestamp() - startTimestamp) / Stopwatch.Frequency;
             Debug.Log($"[CoSimulation][{instanceName}] External DoStep end. t={currentTime:F3}s, h={stepSize:F3}s, elapsed={elapsedMs:F1}ms");
@@ -327,6 +387,9 @@ internal sealed class ExternalFmuHostManager
     private string hostLogPath = string.Empty;
     private string hostLabel = "FMU";
     private int referenceCount;
+    private NamedPipeClientStream persistentPipe;
+    private StreamWriter persistentWriter;
+    private StreamReader persistentReader;
 
     public ExternalFmuHostManager(
         string applicationDataPath,
@@ -415,6 +478,7 @@ internal sealed class ExternalFmuHostManager
     }
     public void Abort(string reason)
     {
+        ClosePersistentConnection();
         Process processToKill = System.Threading.Interlocked.Exchange(ref process, null);
         pipeName = string.Empty;
         if (processToKill == null)
@@ -505,8 +569,9 @@ internal sealed class ExternalFmuHostManager
     {
         int safeTimeoutMs = Math.Max(1000, timeoutMs);
         string activePipeName = pipeName;
+        string persistentRequestLine = requestLine + " keepAlive=1";
         System.Threading.Tasks.Task<Dictionary<string, string>> task =
-            System.Threading.Tasks.Task.Run(() => SendRawBlocking(activePipeName, requestLine, safeTimeoutMs));
+            System.Threading.Tasks.Task.Run(() => SendRawBlocking(activePipeName, persistentRequestLine, safeTimeoutMs));
 
         if (!task.Wait(safeTimeoutMs))
             throw new TimeoutException($"External FMU host command timed out after {safeTimeoutMs} ms. request={requestLine}");
@@ -514,24 +579,40 @@ internal sealed class ExternalFmuHostManager
         return task.GetAwaiter().GetResult();
     }
 
-    private static Dictionary<string, string> SendRawBlocking(string activePipeName, string requestLine, int timeoutMs)
+    private Dictionary<string, string> SendRawBlocking(string activePipeName, string requestLine, int timeoutMs)
     {
-        using (NamedPipeClientStream pipe = new NamedPipeClientStream(".", activePipeName, PipeDirection.InOut))
+        EnsurePersistentConnection(activePipeName, timeoutMs);
+        persistentWriter.WriteLine(requestLine);
+        string responseLine = persistentReader.ReadLine();
+        if (responseLine == null)
+            throw new IOException("External FMU host closed the pipe without a response.");
+
+        return ParseResponse(responseLine);
+    }
+
+    private void EnsurePersistentConnection(string activePipeName, int timeoutMs)
+    {
+        if (persistentPipe != null && persistentPipe.IsConnected)
+            return;
+
+        ClosePersistentConnection();
+        persistentPipe = new NamedPipeClientStream(".", activePipeName, PipeDirection.InOut);
+        persistentPipe.Connect(Math.Max(1000, timeoutMs));
+        persistentWriter = new StreamWriter(persistentPipe, new UTF8Encoding(false), 4096, true)
         {
-            pipe.Connect(Math.Max(1000, timeoutMs));
+            AutoFlush = true
+        };
+        persistentReader = new StreamReader(persistentPipe, Encoding.UTF8, false, 4096, true);
+    }
 
-            using (StreamWriter writer = new StreamWriter(pipe, new UTF8Encoding(false), 4096, true))
-            using (StreamReader reader = new StreamReader(pipe, Encoding.UTF8, false, 4096, true))
-            {
-                writer.AutoFlush = true;
-                writer.WriteLine(requestLine);
-                string responseLine = reader.ReadLine();
-                if (responseLine == null)
-                    throw new IOException("External FMU host closed the pipe without a response.");
-
-                return ParseResponse(responseLine);
-            }
-        }
+    private void ClosePersistentConnection()
+    {
+        try { persistentWriter?.Dispose(); } catch { }
+        try { persistentReader?.Dispose(); } catch { }
+        try { persistentPipe?.Dispose(); } catch { }
+        persistentWriter = null;
+        persistentReader = null;
+        persistentPipe = null;
     }
 
     private void ShutdownHost()
@@ -554,6 +635,7 @@ internal sealed class ExternalFmuHostManager
         }
         finally
         {
+            ClosePersistentConnection();
             if (process != null)
             {
                 process.Dispose();
@@ -581,6 +663,7 @@ internal sealed class ExternalFmuHostManager
         }
         finally
         {
+            ClosePersistentConnection();
             process.Dispose();
             process = null;
             pipeName = string.Empty;

@@ -85,7 +85,41 @@ public class CoSimulationProfile : ScriptableObject
         CoSimConnectionMap map = CreateInstance<CoSimConnectionMap>();
         map.name = $"Runtime_{ProfileName}_ConnectionMap";
         map.SetConnections(connections);
+        NormalizeMultiVIndoorUnitPowerConnections(map);
         return map;
+    }
+
+    private void NormalizeMultiVIndoorUnitPowerConnections(CoSimConnectionMap map)
+    {
+        // Older authored scenes contain an embedded MultiV profile in which one
+        // profile.idu_on signal controls every room. Normalize only the runtime
+        // clone so those scenes gain independent R2-R5 power without rewriting
+        // their serialized profile object.
+        if (map == null || ProfileName.IndexOf("MultiV", StringComparison.OrdinalIgnoreCase) < 0)
+            return;
+
+        for (int room = 2; room <= 5; room++)
+        {
+            string controllerTarget = $"IDU_{room:00}.FOnOff";
+            string productTarget = $"idu_{room:00}_onoff";
+            string roomPowerSignal = $"idu_{room:00}_on";
+            for (int i = 0; i < map.Connections.Count; i++)
+            {
+                CoSimConnection connection = map.Connections[i];
+                if (connection == null ||
+                    !string.Equals(connection.sourceModelId, "profile", StringComparison.Ordinal) ||
+                    !string.Equals(connection.sourceVariableName, "idu_on", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (string.Equals(connection.targetVariableName, controllerTarget, StringComparison.Ordinal) ||
+                    string.Equals(connection.targetVariableName, productTarget, StringComparison.Ordinal))
+                {
+                    connection.sourceVariableName = roomPowerSignal;
+                }
+            }
+        }
     }
 
     public static CoSimulationProfile CreateDefaultSimpleProfile()
@@ -167,7 +201,7 @@ public class CoSimulationProfile : ScriptableObject
         coSimStepSizeSeconds = 1.0;
         useLbmSimulatedTime = true;
         runFmuBeforeLbmStep = false;
-        logEveryCoSimStep = true;
+        logEveryCoSimStep = false;
         airflowModelId = "airflow";
         sensorSignalName = "T_sensor";
         dischargeSignalName = "T_discharge";
@@ -218,7 +252,16 @@ public class CoSimulationProfile : ScriptableObject
             "MULTIV_FMU_WARPPER",
             "product/MULTIV_FMU_WARPPER.fmu")
         {
-            defaultStepSize = 0.1,
+            defaultStepSize = 0.02,
+            useAdaptiveSubsteps = true,
+            adaptiveMinStepSize = 0.02,
+            adaptiveMaxStepSize = 1.0,
+            adaptiveInitialStepSize = 0.02,
+            adaptiveFastCommandThresholdMs = 1000,
+            adaptiveSlowCommandThresholdMs = 5000,
+            adaptiveSuccessesBeforeIncrease = 5,
+            adaptiveIncreaseFactor = 1.25,
+            adaptiveDecreaseFactor = 0.5,
             useExternalRuntime = true,
             fallbackToMockOnNativeFailure = false,
             externalCommandTimeoutMs = 30000,
@@ -238,7 +281,11 @@ public class CoSimulationProfile : ScriptableObject
 
         constantSignals = new List<CoSimConstantSignal>
         {
-            NewRealConstant("profile", "idu_on", 1.0),
+            NewRealConstant("profile", "idu_on", 0.0),
+            NewRealConstant("profile", "idu_02_on", 0.0),
+            NewRealConstant("profile", "idu_03_on", 0.0),
+            NewRealConstant("profile", "idu_04_on", 0.0),
+            NewRealConstant("profile", "idu_05_on", 0.0),
             NewRealConstant("profile", "set_mode", 0.0),
             NewRealConstant("profile", "set_temp", 28.0),
             NewRealConstant("profile", "set_fan", 4.0),
@@ -260,11 +307,11 @@ public class CoSimulationProfile : ScriptableObject
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_HEXPipe", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_HEXPipe", "Product HEX pipe temperature to controller."));
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_Discharge", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_Discharge", "Product discharge temperature to controller."));
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", "ODU_Sensor_Temp_Suction", "Multi_V_S__Set_CFMU", "Multi_V_S.Sensor__Temp_Suction", "Product suction temperature to controller."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Comp__CurFreq", "MULTIV_FMU_WARPPER", "Comp_CurFreq", "Controller compressor frequency to product compressor input."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Fan1__CurRPM", "MULTIV_FMU_WARPPER", "Fan_CurRPM", "Controller fan RPM to product fan input."));
-        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Main_EEV__TarPulse", "MULTIV_FMU_WARPPER", "MAIN_EEV_CurPulse", "Controller main EEV target pulse to product."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Comp__TarFreq", "MULTIV_FMU_WARPPER", "Comp_CurFreq", "Controller compressor target frequency to product compressor input."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.Fan1__TarRPM", "MULTIV_FMU_WARPPER", "Fan_CurRPM", "Controller fan target RPM to product fan input."));
+        connections.Add(NewConnection("Multi_V_S__Set_CFMU", "Multi_V_S.MAIN_EEV__TarPulse", "MULTIV_FMU_WARPPER", "MAIN_EEV_CurPulse", "Controller main EEV target pulse to product."));
         controllerSetpointSignal = new CoSimSignalReference("profile", "set_temp");
-        controllerOutputSignal = new CoSimSignalReference("Multi_V_S__Set_CFMU", "Multi_V_S.Comp__CurFreq");
+        controllerOutputSignal = new CoSimSignalReference("Multi_V_S__Set_CFMU", "Multi_V_S.Comp__TarFreq");
         plantInputSignal = new CoSimSignalReference("MULTIV_FMU_WARPPER", "Comp_CurFreq");
         dischargeOutputSignal = new CoSimSignalReference("MULTIV_FMU_WARPPER", "IDU_01_Air_Temp_Discharge");
 
@@ -272,8 +319,8 @@ public class CoSimulationProfile : ScriptableObject
         {
             new CoSimDebugSignal("LBM_T_sensor", "airflow", "T_sensor"),
             new CoSimDebugSignal("SetTemp", "profile", "set_temp"),
-            new CoSimDebugSignal("CompCurFreq", "Multi_V_S__Set_CFMU", "Multi_V_S.Comp__CurFreq"),
-            new CoSimDebugSignal("FanCurRPM", "Multi_V_S__Set_CFMU", "Multi_V_S.Fan1__CurRPM"),
+            new CoSimDebugSignal("CompTarFreq", "Multi_V_S__Set_CFMU", "Multi_V_S.Comp__TarFreq"),
+            new CoSimDebugSignal("FanTarRPM", "Multi_V_S__Set_CFMU", "Multi_V_S.Fan1__TarRPM"),
             new CoSimDebugSignal("IDU01_T_dis", "MULTIV_FMU_WARPPER", "IDU_01_Air_Temp_Discharge"),
             new CoSimDebugSignal("IDU01_T_suc", "airflow", "T_sensor"),
             new CoSimDebugSignal("IDU01_RH_suc", "airflow", "RH_suction"),
@@ -294,7 +341,7 @@ public class CoSimulationProfile : ScriptableObject
         for (int i = 1; i <= 5; i++)
         {
             string idu = $"idu_{i:00}";
-            values.Add(new CoSimulationRealParameterPreset($"{idu}_onoff", 1.0));
+            values.Add(new CoSimulationRealParameterPreset($"{idu}_onoff", 0.0));
             values.Add(new CoSimulationRealParameterPreset($"{idu}_fan_mode", 4.0));
             values.Add(new CoSimulationRealParameterPreset($"{idu}_pulse", 0.0));
             values.Add(new CoSimulationRealParameterPreset($"{idu}_temp_air", 20.0));
@@ -312,8 +359,9 @@ public class CoSimulationProfile : ScriptableObject
         string suctionTemperature = index == 1 ? "T_sensor" : "T_air_suc";
         string suctionHumidityName = index == 1 ? "RH_suction" : "RH_air_suc";
         string pipeInOutput = index == 2 ? "IDU_02_Sensor_Temp_Pipe_In2" : $"IDU_{index:00}_Sensor_Temp_Pipe_In";
+        string powerSignal = index == 1 ? "idu_on" : $"idu_{index:00}_on";
 
-        connections.Add(NewConnection("profile", "idu_on", "Multi_V_S__Set_CFMU", $"{idu}.FOnOff", "Indoor unit on command."));
+        connections.Add(NewConnection("profile", powerSignal, "Multi_V_S__Set_CFMU", $"{idu}.FOnOff", "Indoor unit on command."));
         connections.Add(NewConnection("profile", "set_mode", "Multi_V_S__Set_CFMU", $"{idu}.SetMode", "Indoor unit mode command."));
         connections.Add(NewConnection("profile", "set_temp", "Multi_V_S__Set_CFMU", $"{idu}.SetTemp", "Indoor unit set temperature."));
         connections.Add(NewConnection("profile", "set_fan", "Multi_V_S__Set_CFMU", $"{idu}.SetFan", "Indoor unit fan command."));
@@ -322,7 +370,7 @@ public class CoSimulationProfile : ScriptableObject
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Sensor_Temp_Pipe_Out", "Multi_V_S__Set_CFMU", $"{idu}.Pipe_Out_Temp", "Product pipe-out temperature to controller."));
         connections.Add(NewConnection(index == 1 ? "airflow" : "profile", index == 1 ? "RH_suction" : "room_humidity_percent", "Multi_V_S__Set_CFMU", $"{idu}.Humidity", "Indoor suction humidity to controller."));
 
-        connections.Add(NewConnection("profile", "idu_on", "MULTIV_FMU_WARPPER", $"{iduLower}_onoff", "Indoor unit on command to product."));
+        connections.Add(NewConnection("profile", powerSignal, "MULTIV_FMU_WARPPER", $"{iduLower}_onoff", "Indoor unit on command to product."));
         connections.Add(NewConnection("Multi_V_S__Set_CFMU", $"{idu}.CurSetFan", "MULTIV_FMU_WARPPER", $"{iduLower}_fan_mode", "Controller fan mode to product."));
         connections.Add(NewConnection("Multi_V_S__Set_CFMU", $"{idu}.EEV_TarPulse", "MULTIV_FMU_WARPPER", $"{iduLower}_pulse", "Controller EEV target pulse to product."));
         connections.Add(NewConnection(chamber, suctionTemperature, "MULTIV_FMU_WARPPER", $"{iduLower}_temp_air", "Indoor suction temperature to product inlet air."));
@@ -391,7 +439,27 @@ public class CoSimulationFmuModelConfig
     public bool fallbackToMockOnNativeFailure = true;
     public int externalCommandTimeoutMs = 30000;
     public bool logging = true;
+    [Tooltip("Enables verbose logging inside the FMU implementation. Keep disabled for performance runs.")]
+    public bool nativeFmuLogging = false;
+    [Tooltip("Writes one Unity log entry before and after every external FMU substep. Keep disabled for normal runs.")]
+    public bool verboseExternalStepLogging = false;
+    [Tooltip("Transfers all Real inputs/outputs for one FMU in one host request.")]
+    public bool batchExternalRealIo = true;
+    [Tooltip("Does not resend an external FMU input when its value has not changed.")]
+    public bool skipUnchangedExternalInputs = true;
+    [Min(0f)] public double unchangedInputTolerance = 1.0e-9;
+    [Tooltip("Positive value overrides modelDescription DefaultExperiment tolerance. Zero uses the FMU default.")]
+    [Min(0f)] public double experimentToleranceOverride = 0.0;
     public double defaultStepSize = 2.0;
+    public bool useAdaptiveSubsteps = false;
+    public double adaptiveMinStepSize = 0.02;
+    public double adaptiveMaxStepSize = 1.0;
+    public double adaptiveInitialStepSize = 0.02;
+    public int adaptiveFastCommandThresholdMs = 1000;
+    public int adaptiveSlowCommandThresholdMs = 5000;
+    public int adaptiveSuccessesBeforeIncrease = 5;
+    public double adaptiveIncreaseFactor = 1.25;
+    public double adaptiveDecreaseFactor = 0.5;
     public bool loadMissingRealParametersFromFmu = true;
     public List<CoSimulationRealParameterPreset> realParameterOverrides =
         new List<CoSimulationRealParameterPreset>();

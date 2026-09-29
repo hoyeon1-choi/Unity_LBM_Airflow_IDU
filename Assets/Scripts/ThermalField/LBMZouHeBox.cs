@@ -152,6 +152,67 @@ public class LBMZouHeBox : MonoBehaviour
             NotifySceneCacheDirty();
     }
 
+    public void SetPower(bool value, bool notifySceneCache = true)
+    {
+        if (power == value)
+            return;
+
+        power = value;
+        Refresh();
+
+        if (notifySceneCache)
+            NotifySceneCacheDirty();
+    }
+
+    /// <summary>
+    /// Sets a ceiling-mounted inlet's discharge angle while preserving its speed/flow rate.
+    /// zero degrees is parallel to the ceiling and 90 degrees points along the inward normal.
+    /// </summary>
+    public void SetCeilingDischargeAngleDeg(float angleDeg, bool notifySceneCache = true)
+    {
+        if (kind != Kind.Inlet)
+        {
+            string caseName = SimulationController.Instance != null
+                ? SimulationController.Instance.ActiveCaseName
+                : "Manual";
+            Debug.LogWarning(
+                $"[LBMZouHeBox][{caseName}] SetCeilingDischargeAngleDeg ignored for non-inlet patch: {name}");
+            return;
+        }
+
+        Refresh();
+        float safeAngleDeg = Mathf.Clamp(angleDeg, 0.0f, 90.0f);
+        Vector3 inwardNormal = GetInwardNormalWorld();
+        Vector3 tangentialDirection = Vector3.ProjectOnPlane(windSpeedPhys, inwardNormal);
+        if (tangentialDirection.sqrMagnitude < 1e-12f)
+        {
+            GetTangentialAxes(out _, out Vector3 tangentB);
+            tangentialDirection = -tangentB;
+        }
+        tangentialDirection.Normalize();
+
+        float radians = safeAngleDeg * Mathf.Deg2Rad;
+        Vector3 direction =
+            tangentialDirection * Mathf.Cos(radians) +
+            inwardNormal * Mathf.Sin(radians);
+
+        float speed = Mathf.Max(windSpeedPhys.magnitude, 0.0f);
+        windSpeedPhys = direction.normalized * speed;
+
+        GetTangentialAxes(out Vector3 tangentA, out Vector3 tangentBForAngles);
+        float inwardComponent = Mathf.Max(Vector3.Dot(direction, inwardNormal), 1e-6f);
+        volumeFlowTangentialAngleAdeg = Mathf.Atan2(
+            Vector3.Dot(direction, tangentA), inwardComponent) * Mathf.Rad2Deg;
+        volumeFlowTangentialAngleBdeg = Mathf.Atan2(
+            Vector3.Dot(direction, tangentBForAngles), inwardComponent) * Mathf.Rad2Deg;
+        volumeFlowTangentialAngleAdeg = Mathf.Clamp(volumeFlowTangentialAngleAdeg, -80.0f, 80.0f);
+        volumeFlowTangentialAngleBdeg = Mathf.Clamp(volumeFlowTangentialAngleBdeg, -80.0f, 80.0f);
+
+        Refresh();
+        if (notifySceneCache)
+            NotifySceneCacheDirty();
+    }
+
     public void SetInletVolumeFlowRateM3ps(float value, bool notifySceneCache = true)
     {
         if (kind != Kind.Inlet)

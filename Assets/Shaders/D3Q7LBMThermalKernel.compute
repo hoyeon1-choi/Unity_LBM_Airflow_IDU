@@ -802,12 +802,22 @@ void collision(uint3 id : SV_DispatchThreadID)
 
     // iterators
     uint i = 0, j = 0, k = 0, ii = 0;
-        
+
     // ------------------------------------------------------------------------
     // Fluid collision (D3Q19, MRT)
     // ------------------------------------------------------------------------
     if (flag == FLUID || flag == RACK)
     {
+        float m_eq[Q_f], tmp_f1[Q_f], tmp_f2[Q_f];
+
+        // Load the D3Q19 distributions once for active fluid cells. Both the
+        // Smagorinsky stress tensor and the MRT transform reuse these values.
+        [unroll]
+        for (i = 0; i < Q_f; ++i)
+        {
+            tmp_f1[i] = load_in_dist(i, idx);
+        }
+
         // Turbulence Model //////////////////////////
         float s_nu_eff = s_nu;
         float s_alpha_eff = s_alpha;
@@ -816,29 +826,29 @@ void collision(uint3 id : SV_DispatchThreadID)
 
         if (turbulence_model == 1) // Smagorinsky
         {
-            float df[Q_f];
-
-            [unroll]
-            for (ii = 0; ii < Q_f; ii++)
-            {
-                df[ii] = load_in_dist(ii, idx) - f_eq_i(ii, rho, u);
-            }
-
-            float P_xx = 0.0, P_yy = 0.0, P_zz = 0.0;
-            float P_xy = 0.0, P_yz = 0.0, P_xz = 0.0;
+            // Sum the non-equilibrium second moment directly:
+            //   Pi_neq = sum_i(e_i e_i f_i) - rho * (cs2 I + u u)
+            // This is algebraically equivalent to sum_i(e_i e_i (f_i-f_eq_i)),
+            // but avoids df[19], 19 equilibrium evaluations and duplicate loads.
+            float P_xx = -rho * (cs2 + u.x * u.x);
+            float P_yy = -rho * (cs2 + u.y * u.y);
+            float P_zz = -rho * (cs2 + u.z * u.z);
+            float P_xy = -rho * u.x * u.y;
+            float P_yz = -rho * u.y * u.z;
+            float P_xz = -rho * u.x * u.z;
 
             [unroll]
             for (ii = 0; ii < Q_f; ii++)
             {
                 float3 ei = (float3)ei_f[ii];
-                float df_i = df[ii];
+                float f_i = tmp_f1[ii];
 
-                P_xx += ei.x * ei.x * df_i;
-                P_yy += ei.y * ei.y * df_i;
-                P_zz += ei.z * ei.z * df_i;
-                P_xy += ei.x * ei.y * df_i;
-                P_yz += ei.y * ei.z * df_i;
-                P_xz += ei.z * ei.x * df_i;
+                P_xx += ei.x * ei.x * f_i;
+                P_yy += ei.y * ei.y * f_i;
+                P_zz += ei.z * ei.z * f_i;
+                P_xy += ei.x * ei.y * f_i;
+                P_yz += ei.y * ei.z * f_i;
+                P_xz += ei.z * ei.x * f_i;
             }
 
             float sumPi =
@@ -919,16 +929,7 @@ void collision(uint3 id : SV_DispatchThreadID)
         float  u_sq  = dot(u, u); // Calculate the square of the velocity
 
         
-        // MRT Collision Model 
-        float m_eq[Q_f], tmp_f1[Q_f], tmp_f2[Q_f];
-
-        // temp1 = f_prev
-        [unroll]
-        for (i = 0; i < Q_f; ++i) 
-        {
-            tmp_f1[i] = load_in_dist(i, idx); 
-        }
-
+        // MRT Collision Model
         // temp2 = m = M_f @ f_prev
         [unroll]
         for (i = 0; i < Q_f; ++i)
@@ -1591,4 +1592,3 @@ void visualize(uint3 id : SV_DispatchThreadID)
     velocity_texture[id] = float4(velocity_rho[idx].xyz, 1.0);
     thermal_texture[id] = temperature[idx];
 }
-

@@ -20,6 +20,7 @@ public class VelocityVisualizer : MonoBehaviour
     [SerializeField] private float updateIntervalSeconds = 1.0f;
 
     private Material _sliceMaterial;
+    private RenderTexture _boundVelocityTexture;
     private Matrix4x4 _unitizeMatrix;
     private bool _initialized;
     private float _nextUpdateRealtime;
@@ -42,7 +43,7 @@ public class VelocityVisualizer : MonoBehaviour
         );
 
         var sc = SimulationController.Instance;
-        _sliceMaterial.SetTexture("_VolumeTex", sc.LBMSolver.VelocityTexture);
+        BindCurrentVelocityTexture(sc);
 
         ApplyPhysicalScale(sc);
         UpdateWorldToVolumeMatrix();
@@ -63,8 +64,21 @@ public class VelocityVisualizer : MonoBehaviour
         var sc = SimulationController.Instance;
         if (sc != null)
         {
+            BindCurrentVelocityTexture(sc);
             ApplyPhysicalScale(sc);
         }
+    }
+
+    private void BindCurrentVelocityTexture(SimulationController sc)
+    {
+        RenderTexture currentTexture = sc != null && sc.LBMSolver != null
+            ? sc.LBMSolver.VelocityTexture
+            : null;
+        if (currentTexture == null || currentTexture == _boundVelocityTexture)
+            return;
+
+        _boundVelocityTexture = currentTexture;
+        _sliceMaterial.SetTexture("_VolumeTex", _boundVelocityTexture);
     }
 
     private void UpdateWorldToVolumeMatrix()

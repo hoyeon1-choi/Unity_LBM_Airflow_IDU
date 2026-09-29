@@ -17,6 +17,7 @@ public class ThermalVisualizer : MonoBehaviour
     [SerializeField] private float updateIntervalSeconds = 1.0f;
 
     private Material _sliceMaterial;
+    private RenderTexture _boundThermalTexture;
     private Matrix4x4 _unitizeMatrix;
     private bool _initialized;
     private float _nextUpdateRealtime;
@@ -39,7 +40,7 @@ public class ThermalVisualizer : MonoBehaviour
         );
 
         var sc = SimulationController.Instance;
-        _sliceMaterial.SetTexture("_VolumeTex", sc.LBMSolver.ThermalTexture);
+        BindCurrentThermalTexture(sc);
 
         ApplyTemperatureScale(sc);
         UpdateWorldToVolumeMatrix();
@@ -60,8 +61,21 @@ public class ThermalVisualizer : MonoBehaviour
         var sc = SimulationController.Instance;
         if (sc != null)
         {
+            BindCurrentThermalTexture(sc);
             ApplyTemperatureScale(sc);
         }
+    }
+
+    private void BindCurrentThermalTexture(SimulationController sc)
+    {
+        RenderTexture currentTexture = sc != null && sc.LBMSolver != null
+            ? sc.LBMSolver.ThermalTexture
+            : null;
+        if (currentTexture == null || currentTexture == _boundThermalTexture)
+            return;
+
+        _boundThermalTexture = currentTexture;
+        _sliceMaterial.SetTexture("_VolumeTex", _boundThermalTexture);
     }
 
     private void UpdateWorldToVolumeMatrix()

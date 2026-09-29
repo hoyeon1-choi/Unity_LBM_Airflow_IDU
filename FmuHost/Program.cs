@@ -105,9 +105,17 @@ internal sealed class FmuHostServer : IDisposable
                 AutoFlush = true
             };
 
-            string? requestLine = reader.ReadLine();
-            string responseLine = HandleRequest(requestLine);
-            writer.WriteLine(responseLine);
+            while (!shutdownRequested && pipe.IsConnected)
+            {
+                string? requestLine = reader.ReadLine();
+                if (requestLine == null)
+                    break;
+
+                string responseLine = HandleRequest(requestLine);
+                writer.WriteLine(responseLine);
+                if (!requestLine.Contains(" keepAlive=1", StringComparison.OrdinalIgnoreCase))
+                    break;
+            }
         }
 
         Dispose();
@@ -151,8 +159,12 @@ internal sealed class FmuHostServer : IDisposable
                     return RegisterInitialString(request);
                 case "set":
                     return SetReal(request);
+                case "setMany":
+                    return SetRealBatch(request);
                 case "get":
                     return GetReal(request);
+                case "getMany":
+                    return GetRealBatch(request);
                 case "step":
                     return DoStep(request);
                 case "unload":
@@ -263,6 +275,45 @@ internal sealed class FmuHostServer : IDisposable
         return ok != 0
             ? Protocol.Ok("value", value.ToString("R", CultureInfo.InvariantCulture))
             : Protocol.Fail("Fmu_GetReal failed: " + FmuNative.GetLastErrorText());
+    }
+
+    private string SetRealBatch(Request request)
+    {
+        IntPtr handle = GetHandle(request);
+        string[] names = SplitBatch(request.Require("names"));
+        string[] valueTexts = SplitBatch(request.Require("values"));
+        if (names.Length != valueTexts.Length)
+            return Protocol.Fail($"setMany names/values length mismatch: {names.Length}/{valueTexts.Length}.");
+
+        for (int i = 0; i < names.Length; i++)
+        {
+            if (!double.TryParse(valueTexts[i], NumberStyles.Float, CultureInfo.InvariantCulture, out double value))
+                return Protocol.Fail($"setMany value is invalid at index {i}: {valueTexts[i]}");
+            if (FmuNative.SetReal(handle, names[i], value) == 0)
+                return Protocol.Fail($"Fmu_SetReal failed at index {i} ({names[i]}): {FmuNative.GetLastErrorText()}");
+        }
+
+        return Protocol.Ok("count", names.Length.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private string GetRealBatch(Request request)
+    {
+        IntPtr handle = GetHandle(request);
+        string[] names = SplitBatch(request.Require("names"));
+        string[] values = new string[names.Length];
+        for (int i = 0; i < names.Length; i++)
+        {
+            if (FmuNative.GetReal(handle, names[i], out double value) == 0)
+                return Protocol.Fail($"Fmu_GetReal failed at index {i} ({names[i]}): {FmuNative.GetLastErrorText()}");
+            values[i] = value.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        return Protocol.Ok("values", string.Join("\n", values));
+    }
+
+    private static string[] SplitBatch(string value)
+    {
+        return value.Split(new[] { '\n' }, StringSplitOptions.None);
     }
 
     private string DoStep(Request request)

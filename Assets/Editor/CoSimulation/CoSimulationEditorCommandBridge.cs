@@ -11,6 +11,7 @@ public static class CoSimulationEditorCommandBridge
     private const string StopPlayModeTriggerRelativePath = "Temp/CoSimulationTests/stop_play_mode.trigger";
     private const float DefaultMultiVTargetSimulationTimeSeconds = 50.0f;
     private const string CommandStatusRelativePath = "Temp/CoSimulationTests/editor_command_status.txt";
+    private const string AutoConfirmSessionKey = "CoSimulation.EditorCommand.AutoConfirm";
 
     private static bool isProcessing;
 
@@ -18,9 +19,9 @@ public static class CoSimulationEditorCommandBridge
     {
         EditorApplication.delayCall += ProcessPendingCommand;
         EditorApplication.update += PollPendingCommand;
+        EditorApplication.playModeStateChanged += HandlePlayModeStateChanged;
     }
 
-    [MenuItem("Tools/Co-Simulation/Command Bridge/Run Pending Command")]
     public static void ProcessPendingCommand()
     {
 
@@ -43,6 +44,7 @@ public static class CoSimulationEditorCommandBridge
                 DefaultMultiVTargetSimulationTimeSeconds);
 
             File.Delete(triggerPath);
+            SessionState.SetBool(AutoConfirmSessionKey, true);
             WriteStatus($"Started MultiV product test. target={targetSimulationTimeSeconds:F3}s, token={token}, time={DateTime.Now:O}");
             Debug.Log($"[CoSimulation] Command bridge starting MultiV product test. target={targetSimulationTimeSeconds:F3}s, token={token}");
             CoSimulationSceneConfigurator.RunMultiVProductDraftTest(
@@ -60,9 +62,34 @@ public static class CoSimulationEditorCommandBridge
         }
     }
 
+    private static void HandlePlayModeStateChanged(PlayModeStateChange state)
+    {
+        if (state != PlayModeStateChange.EnteredPlayMode || !SessionState.GetBool(AutoConfirmSessionKey, false))
+            return;
+
+        SessionState.EraseBool(AutoConfirmSessionKey);
+        EditorApplication.delayCall += ApplyAutomatedStartupConditions;
+    }
+
+    private static void ApplyAutomatedStartupConditions()
+    {
+        CoSimulationOrchestrator orchestrator = UnityEngine.Object.FindFirstObjectByType<CoSimulationOrchestrator>();
+        SimulationController controller = UnityEngine.Object.FindFirstObjectByType<SimulationController>();
+        if (orchestrator == null || controller == null)
+        {
+            WriteStatus("Automated startup confirmation failed: orchestrator or SimulationController was not found.");
+            return;
+        }
+
+        orchestrator.ApplyStartupConditions(30.0f, 50.0f, 35.0f, 70.0f, 28.0f, true, 0, 4, 3, 45.0f);
+        CoSimulationStartupGate.Confirm();
+        controller.SetSimulationRunning(true);
+        WriteStatus($"Automated startup conditions confirmed. time={DateTime.Now:O}");
+        Debug.Log("[CoSimulation] Command bridge confirmed automated R1-on startup conditions.");
+    }
+
     private static void PollPendingCommand()
     {
-
         if (ProcessStopPlayModeCommand())
             return;
         if (File.Exists(ToProjectPath(RunMultiV50sTriggerRelativePath)))

@@ -49,12 +49,24 @@ public class CoSimulationOrchestrator : MonoBehaviour
     [SerializeField, ReadOnly] private int latestTargetInletCount = 0;
     [SerializeField, ReadOnly] private bool nativeFallbackActive = false;
     [SerializeField, ReadOnly] private string runtimeModeSummary = "Not initialized.";
+    [SerializeField, ReadOnly] private float runtimeSetTemperatureDegC = 28.0f;
+    [SerializeField, ReadOnly] private int runtimeIndoorFanMode = 4;
+    [Tooltip("R1 (LBM) power state selected in the startup conditions panel.")]
+    [SerializeField, ReadOnly] private bool runtimeIndoorUnitPowerOn = false;
+    [SerializeField, ReadOnly] private bool runtimeR2PowerOn = false;
+    [SerializeField, ReadOnly] private bool runtimeR3PowerOn = false;
+    [SerializeField, ReadOnly] private bool runtimeR4PowerOn = false;
+    [SerializeField, ReadOnly] private bool runtimeR5PowerOn = false;
+    [SerializeField, ReadOnly] private ulong runtimeControlRevision = 0;
+    [SerializeField, ReadOnly] private double lastCoSimulationWallTimeMs = 0.0;
     [TextArea(3, 8)]
     [SerializeField, ReadOnly] private string lastStatus = "Not initialized.";
 
     private readonly CoSimSignalBus signalBus = new CoSimSignalBus();
     private readonly Dictionary<CoSimSignalKey, CoSimSignalValue> previousStepSignals =
         new Dictionary<CoSimSignalKey, CoSimSignalValue>();
+    private readonly Dictionary<CoSimSignalKey, double> runtimeConstantRealOverrides =
+        new Dictionary<CoSimSignalKey, double>();
     private readonly HashSet<string> fanModeSignalsWithValidControllerOutput =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private CoSimConnectionMap runtimeDefaultConnectionMap;
@@ -67,6 +79,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
     private int activeStepModelIndex;
     private int activeInitializationModelIndex;
     private double activeStepTime;
+    private long activeStepStartTimestamp;
     private bool modelsInitializationCompleted;
     private FmuCoSimulationModel pendingInitializationModel;
     private FmuCoSimulationModel pendingStepModel;
@@ -88,6 +101,195 @@ public class CoSimulationOrchestrator : MonoBehaviour
     public string ActiveFmuModelSummary => activeFmuModelSummary;
     public string LatestDebugSignalSummary => latestDebugSignalSummary;
     public string LastStatus => lastStatus;
+    public IReadOnlyList<FmuCoSimulationModel> FmuModels => fmuModels;
+    public float RuntimeSetTemperatureDegC => runtimeSetTemperatureDegC;
+    public int RuntimeIndoorFanMode => runtimeIndoorFanMode;
+    public bool RuntimeIndoorUnitPowerOn => runtimeIndoorUnitPowerOn;
+    public ulong RuntimeControlRevision => runtimeControlRevision;
+    public double LastCoSimulationWallTimeMs => lastCoSimulationWallTimeMs;
+
+    public void ApplyStartupConditions(
+        float indoorTemperatureDegC,
+        float indoorRelativeHumidityPercent,
+        float outdoorTemperatureDegC,
+        float outdoorRelativeHumidityPercent,
+        float setTemperatureDegC,
+        bool powerOn,
+        int operationMode,
+        int fanMode,
+        int windDirectionPosition,
+        float dischargeAngleDeg)
+    {
+        ResolveReferences();
+        ResetSchedule();
+
+        int safeOperationMode = Mathf.Clamp(operationMode, 0, 2);
+        int safeFanMode = Mathf.Clamp(fanMode, 1, 5);
+        int appliedFanMode = powerOn ? safeFanMode : 0;
+        float safeIndoorHumidity = Mathf.Clamp(indoorRelativeHumidityPercent, 0.0f, 100.0f);
+        float safeOutdoorHumidity = Mathf.Clamp(outdoorRelativeHumidityPercent, 0.0f, 100.0f);
+
+        SetRuntimeConstantReal("profile", "indoor_temp_c", indoorTemperatureDegC);
+        SetRuntimeConstantReal("profile", "room_humidity_percent", safeIndoorHumidity);
+        SetRuntimeConstantReal("profile", "outdoor_temp_c", outdoorTemperatureDegC);
+        SetRuntimeConstantReal("profile", "outdoor_humidity_percent", safeOutdoorHumidity);
+        SetRuntimeConstantReal("profile", "set_temp", setTemperatureDegC);
+        SetRuntimeConstantReal("profile", "idu_on", powerOn ? 1.0 : 0.0);
+        SetRuntimeConstantReal("profile", "idu_02_on", 0.0);
+        SetRuntimeConstantReal("profile", "idu_03_on", 0.0);
+        SetRuntimeConstantReal("profile", "idu_04_on", 0.0);
+        SetRuntimeConstantReal("profile", "idu_05_on", 0.0);
+        SetRuntimeConstantReal("profile", "set_mode", safeOperationMode);
+        SetRuntimeConstantReal("profile", "set_fan", appliedFanMode);
+        SetRuntimeConstantReal("profile", "wind_direction_position", Mathf.Clamp(windDirectionPosition, 1, 6));
+        SetRuntimeConstantReal("profile", "discharge_angle_deg", dischargeAngleDeg);
+
+        runtimeSetTemperatureDegC = setTemperatureDegC;
+        runtimeIndoorFanMode = safeFanMode;
+        runtimeIndoorUnitPowerOn = powerOn;
+        runtimeR2PowerOn = false;
+        runtimeR3PowerOn = false;
+        runtimeR4PowerOn = false;
+        runtimeR5PowerOn = false;
+        runtimeControlRevision++;
+
+        ConfigureFmuInitializationConditions(
+            indoorTemperatureDegC,
+            safeIndoorHumidity,
+            powerOn,
+            safeFanMode);
+
+        lastStatus =
+            $"Startup conditions applied: room={indoorTemperatureDegC:F1}C/{safeIndoorHumidity:F1}%, " +
+            $"outdoor={outdoorTemperatureDegC:F1}C/{safeOutdoorHumidity:F1}%, " +
+            $"setTemperature={setTemperatureDegC:F1}C, R1 power={(powerOn ? "On" : "Off")}, R2-R5 power=Off, " +
+            $"mode={safeOperationMode}, fan={appliedFanMode}, " +
+            $"direction=P{Mathf.Clamp(windDirectionPosition, 1, 6)} ({dischargeAngleDeg:F0} deg).";
+    }
+
+    /// <summary>
+    /// Queues operator changes without resetting the FMUs or the LBM solver. The
+    /// new values are published atomically at the next co-simulation communication
+    /// point, so a value cannot change halfway through a sequential FMU step.
+    /// </summary>
+    public bool TryApplyRuntimeControls(
+        float setTemperatureDegC,
+        int indoorFanMode,
+        out string message)
+    {
+        if (float.IsNaN(setTemperatureDegC) || float.IsInfinity(setTemperatureDegC) ||
+            setTemperatureDegC < -30.0f || setTemperatureDegC > 60.0f)
+        {
+            message = "Set temperature must be a finite value between -30 and 60 C.";
+            return false;
+        }
+
+        if (indoorFanMode < 1 || indoorFanMode > 5)
+        {
+            message = "Indoor fan mode must be between 1 and 5.";
+            return false;
+        }
+
+        runtimeSetTemperatureDegC = setTemperatureDegC;
+        runtimeIndoorFanMode = indoorFanMode;
+        runtimeControlRevision++;
+
+        // Do not publish directly to the current signal bus. If an asynchronous
+        // sequential FMU step is active, direct publication could make only the
+        // later FMUs observe the new command. PublishProfileConstantSignals will
+        // apply both overrides together at the beginning of the next step.
+        SetRuntimeConstantReal("profile", "set_temp", setTemperatureDegC, false);
+        SetRuntimeConstantReal("profile", "set_fan", indoorFanMode, false);
+
+        string powerNote = IsAnyRuntimeIndoorUnitPowerOn()
+            ? string.Empty
+            : " All indoor units are Off, so the fan command is staged until a unit is On.";
+        message =
+            $"Runtime controls queued: setTemperature={setTemperatureDegC:F1}C, " +
+            $"indoorFanMode={indoorFanMode}; effective from the next co-simulation step.{powerNote}";
+        lastStatus = message;
+        string experimentTag = simulationController != null
+            ? simulationController.ActiveCaseName
+            : activeProfileName;
+        Debug.Log($"[CoSimulation][{experimentTag}] {message}", this);
+        return true;
+    }
+
+    public bool IsRuntimeIndoorUnitPowerOn(int room)
+    {
+        switch (room)
+        {
+            case 1: return runtimeIndoorUnitPowerOn;
+            case 2: return runtimeR2PowerOn;
+            case 3: return runtimeR3PowerOn;
+            case 4: return runtimeR4PowerOn;
+            case 5: return runtimeR5PowerOn;
+            default: return false;
+        }
+    }
+
+    /// <summary>
+    /// Queues an independent R2-R5 power command for the next communication
+    /// point. R1 remains owned by the startup-condition power setting.
+    /// </summary>
+    public bool TrySetRuntimeIndoorUnitPower(int room, bool powerOn, out string message)
+    {
+        if (room < 2 || room > 5)
+        {
+            message = "Runtime room power control is available only for R2 through R5.";
+            return false;
+        }
+
+        SetRuntimeIndoorUnitPowerState(room, powerOn);
+        runtimeControlRevision++;
+        SetRuntimeConstantReal("profile", $"idu_{room:00}_on", powerOn ? 1.0 : 0.0, false);
+
+        message =
+            $"R{room} power {(powerOn ? "On" : "Off")} queued; " +
+            "effective from the next co-simulation step.";
+        lastStatus = message;
+        string experimentTag = simulationController != null
+            ? simulationController.ActiveCaseName
+            : activeProfileName;
+        Debug.Log($"[CoSimulation][{experimentTag}] {message}", this);
+        return true;
+    }
+
+    private bool IsAnyRuntimeIndoorUnitPowerOn()
+    {
+        return runtimeIndoorUnitPowerOn || runtimeR2PowerOn || runtimeR3PowerOn ||
+               runtimeR4PowerOn || runtimeR5PowerOn;
+    }
+
+    private void SetRuntimeIndoorUnitPowerState(int room, bool powerOn)
+    {
+        switch (room)
+        {
+            case 1: runtimeIndoorUnitPowerOn = powerOn; break;
+            case 2: runtimeR2PowerOn = powerOn; break;
+            case 3: runtimeR3PowerOn = powerOn; break;
+            case 4: runtimeR4PowerOn = powerOn; break;
+            case 5: runtimeR5PowerOn = powerOn; break;
+        }
+    }
+
+    /// <summary>
+    /// Read-only access for runtime diagnostics and monitoring UI. Values are
+    /// read from the current step bus first, then from the initialized FMU.
+    /// </summary>
+    public bool TryReadRealSignal(string modelId, string variableName, out double value)
+    {
+        if (string.IsNullOrWhiteSpace(modelId) || string.IsNullOrWhiteSpace(variableName))
+        {
+            value = double.NaN;
+            return false;
+        }
+
+        if (TryGetBusReal(modelId, variableName, out value))
+            return true;
+
+        return TryGetFmuReal(modelId, variableName, out value);
+    }
 
     private void Awake()
     {
@@ -120,6 +322,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
         useLbmSimulatedTime = profile.UseLbmSimulatedTime;
         runFmuBeforeLbmStep = profile.RunFmuBeforeLbmStep;
         logEveryCoSimStep = profile.LogEveryCoSimStep;
+        ApplyFmuModelConfigurations(profile);
 
         ApplyPrimaryDebugSignal(profile.ControllerSetpointSignal, ref debugControllerSetpointModelId, ref debugControllerSetpointVariableName);
         ApplyPrimaryDebugSignal(profile.ControllerOutputSignal, ref debugHzModelId, ref debugHzVariableName);
@@ -130,6 +333,33 @@ public class CoSimulationOrchestrator : MonoBehaviour
         runtimeDefaultConnectionMap = null;
         ResetSchedule();
         lastStatus = $"Applied co-sim profile '{activeProfileName}'.";
+    }
+
+    private void ApplyFmuModelConfigurations(CoSimulationProfile profile)
+    {
+        if (profile == null || profile.FmuModels == null || fmuModels == null)
+            return;
+
+        IReadOnlyList<CoSimulationFmuModelConfig> configs = profile.FmuModels;
+        for (int modelIndex = 0; modelIndex < fmuModels.Count; modelIndex++)
+        {
+            FmuCoSimulationModel model = fmuModels[modelIndex];
+            if (model == null || model.IsInitialized || model.IsInitializationPending)
+                continue;
+
+            for (int configIndex = 0; configIndex < configs.Count; configIndex++)
+            {
+                CoSimulationFmuModelConfig config = configs[configIndex];
+                if (config == null ||
+                    !string.Equals(model.ModelId, config.modelId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                model.ConfigureModel(config);
+                break;
+            }
+        }
     }
 
     [ContextMenu("Apply Selected Profile")]
@@ -169,7 +399,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
 
     private void TickIfDue()
     {
-        if (!enableCoSimulation || coSimFailureObserved)
+        if (!enableCoSimulation || coSimFailureObserved || CoSimulationStartupGate.IsWaitingForConfirmation)
             return;
 
         if (coSimStepInProgress)
@@ -207,11 +437,13 @@ public class CoSimulationOrchestrator : MonoBehaviour
         {
             activeStepMap = GetActiveConnectionMap();
             EnsureFmuModels();
+            ConfigureRuntimePowerInitializationInputs();
             SortFmuModelsForMap(activeStepMap);
             signalBus.Clear();
             currentCoSimTime = currentTime;
             coSimStepIndex++;
             activeStepTime = currentTime;
+            activeStepStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             activeStepModelIndex = 0;
             activeInitializationModelIndex = 0;
             modelsInitializationCompleted = false;
@@ -285,8 +517,6 @@ public class CoSimulationOrchestrator : MonoBehaviour
 
     private bool ContinueSequentialModelInitialization()
     {
-        double step = GetSafeStepSize();
-
         if (pendingInitializationModel != null)
         {
             if (!pendingInitializationModel.TryCompleteInitialization())
@@ -306,7 +536,10 @@ public class CoSimulationOrchestrator : MonoBehaviour
                 continue;
             }
 
-            model.BeginInitialize(activeStepTime, 0.0, step);
+            // Initialization must preserve each FMU's configured integration
+            // substep. The co-simulation communication interval is passed to
+            // BeginStep later and must not overwrite this model-level value.
+            model.BeginInitialize(activeStepTime, 0.0, model.DefaultStepSize);
             if (!model.TryCompleteInitialization())
             {
                 pendingInitializationModel = model;
@@ -332,6 +565,9 @@ public class CoSimulationOrchestrator : MonoBehaviour
         UpdateReadOnlyDebugValues(activeStepStatus.ToString());
         WriteCsvRow();
         completedCoSimStepCount++;
+        lastCoSimulationWallTimeMs = 1000.0 *
+            (System.Diagnostics.Stopwatch.GetTimestamp() - activeStepStartTimestamp) /
+            System.Diagnostics.Stopwatch.Frequency;
 
         if (logEveryCoSimStep)
         {
@@ -340,7 +576,8 @@ public class CoSimulationOrchestrator : MonoBehaviour
                 $"T_sensor={latestSensorTemperatureDegC:F3}C, T_set={latestControllerSetpointDegC:F3}C, " +
                 $"Hz={latestHz:F3}, plantHz={latestPlantHzInput:F3}, " +
                 $"T_dis={latestDischargeTemperatureDegC:F3}C, applied={latestAppliedInletTemperatureDegC:F3}C, " +
-                $"targets={latestTargetInletCount}, runtime={runtimeModeSummary}, status={lastStatus}");
+                $"targets={latestTargetInletCount}, wall={lastCoSimulationWallTimeMs:F1}ms, " +
+                $"runtime={runtimeModeSummary}, status={lastStatus}");
         }
 
         double step = GetSafeStepSize();
@@ -502,25 +739,143 @@ public class CoSimulationOrchestrator : MonoBehaviour
 
     private void PublishProfileConstantSignals(StringBuilder status)
     {
-        if (coSimulationProfile == null || coSimulationProfile.ConstantSignals == null)
-            return;
-
+        SynchronizeRuntimePowerOverrides();
         int published = 0;
-        for (int i = 0; i < coSimulationProfile.ConstantSignals.Count; i++)
+        if (coSimulationProfile != null && coSimulationProfile.ConstantSignals != null)
         {
-            CoSimConstantSignal signal = coSimulationProfile.ConstantSignals[i];
-            if (signal == null || !signal.enabled || string.IsNullOrWhiteSpace(signal.modelId) ||
-                string.IsNullOrWhiteSpace(signal.variableName))
+            for (int i = 0; i < coSimulationProfile.ConstantSignals.Count; i++)
             {
-                continue;
-            }
+                CoSimConstantSignal signal = coSimulationProfile.ConstantSignals[i];
+                if (signal == null || !signal.enabled || string.IsNullOrWhiteSpace(signal.modelId) ||
+                    string.IsNullOrWhiteSpace(signal.variableName))
+                {
+                    continue;
+                }
 
-            signalBus.Publish(signal.Key, signal.ToSignalValue(currentCoSimTime));
+                signalBus.Publish(signal.Key, signal.ToSignalValue(currentCoSimTime));
+                published++;
+            }
+        }
+
+        foreach (KeyValuePair<CoSimSignalKey, double> pair in runtimeConstantRealOverrides)
+        {
+            signalBus.Publish(pair.Key, CoSimSignalValue.FromReal(pair.Value, currentCoSimTime));
             published++;
         }
 
         if (published > 0)
             status.Append($"Published profile constants: count={published}. ");
+    }
+
+    private void SetRuntimeConstantReal(
+        string modelId,
+        string variableName,
+        double value,
+        bool publishImmediately = true)
+    {
+        CoSimSignalKey key = new CoSimSignalKey(modelId, variableName);
+        runtimeConstantRealOverrides[key] = value;
+        if (publishImmediately)
+            signalBus.Publish(key, CoSimSignalValue.FromReal(value, currentCoSimTime));
+    }
+
+    private void SynchronizeRuntimePowerOverrides()
+    {
+        runtimeConstantRealOverrides[new CoSimSignalKey("profile", "idu_on")] =
+            runtimeIndoorUnitPowerOn ? 1.0 : 0.0;
+        runtimeConstantRealOverrides[new CoSimSignalKey("profile", "idu_02_on")] =
+            runtimeR2PowerOn ? 1.0 : 0.0;
+        runtimeConstantRealOverrides[new CoSimSignalKey("profile", "idu_03_on")] =
+            runtimeR3PowerOn ? 1.0 : 0.0;
+        runtimeConstantRealOverrides[new CoSimSignalKey("profile", "idu_04_on")] =
+            runtimeR4PowerOn ? 1.0 : 0.0;
+        runtimeConstantRealOverrides[new CoSimSignalKey("profile", "idu_05_on")] =
+            runtimeR5PowerOn ? 1.0 : 0.0;
+    }
+
+    private void ConfigureRuntimePowerInitializationInputs()
+    {
+        if (fmuModels == null)
+            return;
+
+        for (int i = 0; i < fmuModels.Count; i++)
+        {
+            FmuCoSimulationModel model = fmuModels[i];
+            if (model == null || model.IsInitialized ||
+                !string.Equals(model.ModelId, "MULTIV_FMU_WARPPER", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            for (int room = 1; room <= 5; room++)
+            {
+                bool powerOn = IsRuntimeIndoorUnitPowerOn(room);
+                string prefix = $"idu_{room:00}";
+                model.SetInitialRealInputValue($"{prefix}_onoff", powerOn ? 1.0 : 0.0);
+                model.SetInitialRealInputValue(
+                    $"{prefix}_fan_mode",
+                    runtimeIndoorFanMode);
+            }
+        }
+    }
+
+    private void ConfigureFmuInitializationConditions(
+        float indoorTemperatureDegC,
+        float indoorRelativeHumidityPercent,
+        bool powerOn,
+        int fanMode)
+    {
+        if (fmuModels == null)
+            return;
+
+        double roomTemperatureKelvin = indoorTemperatureDegC + 273.15;
+        double waterMassFraction = RelativeHumidityToWaterMassFraction(
+            indoorTemperatureDegC,
+            indoorRelativeHumidityPercent,
+            100000.0);
+
+        for (int i = 0; i < fmuModels.Count; i++)
+        {
+            FmuCoSimulationModel model = fmuModels[i];
+            if (model == null)
+                continue;
+
+            if (string.Equals(model.ModelId, "MULTIV_FMU_WARPPER", StringComparison.Ordinal))
+            {
+                for (int room = 1; room <= 5; room++)
+                {
+                    string prefix = $"idu_{room:00}";
+                    bool roomPowerOn = room == 1 && powerOn;
+                    model.SetInitialRealInputValue($"{prefix}_onoff", roomPowerOn ? 1.0 : 0.0);
+                    // Keep a valid staged fan value even while Off. The connection
+                    // guard still forces the live product input to zero while Off,
+                    // and can use this value during the first step after an On toggle.
+                    model.SetInitialRealInputValue($"{prefix}_fan_mode", fanMode);
+                    model.SetInitialRealInputValue($"{prefix}_temp_air", indoorTemperatureDegC);
+                    model.SetInitialRealInputValue($"{prefix}_RH_air", indoorRelativeHumidityPercent);
+                }
+            }
+            else if (model.ModelId.StartsWith("Simple_Chamber_R", StringComparison.Ordinal))
+            {
+                model.SetInitialRealParameterValue("Room.T_start", roomTemperatureKelvin);
+                model.SetInitialRealParameterValue("Room.X_start[1]", waterMassFraction);
+            }
+        }
+    }
+
+    private static double RelativeHumidityToWaterMassFraction(
+        double temperatureDegC,
+        double relativeHumidityPercent,
+        double pressurePa)
+    {
+        // Magnus saturation-pressure approximation. The chamber FMUs expect water mass fraction,
+        // while the startup UI intentionally exposes the more familiar relative humidity [%].
+        double saturationPressurePa = 610.94 * Math.Exp(
+            17.625 * temperatureDegC / (temperatureDegC + 243.04));
+        double vaporPressurePa = saturationPressurePa * Math.Max(0.0, Math.Min(100.0, relativeHumidityPercent)) / 100.0;
+        vaporPressurePa = Math.Min(vaporPressurePa, pressurePa * 0.98);
+        double humidityRatio = 0.62198 * vaporPressurePa / Math.Max(pressurePa - vaporPressurePa, 1.0);
+        return humidityRatio / (1.0 + humidityRatio);
     }
 
     private void RememberCurrentStepSignals()
@@ -756,6 +1111,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
         FmuCoSimulationModel model,
         StringBuilder status)
     {
+        List<string> outputNames = new List<string>();
         HashSet<string> publishedVariables = new HashSet<string>(StringComparer.Ordinal);
         foreach (CoSimConnection connection in map.EnabledConnections)
         {
@@ -765,7 +1121,20 @@ public class CoSimulationOrchestrator : MonoBehaviour
             if (!publishedVariables.Add(connection.sourceVariableName))
                 continue;
 
-            CoSimSignalValue value = model.GetOutput(connection.sourceVariableName);
+            outputNames.Add(connection.sourceVariableName);
+        }
+
+        Dictionary<string, CoSimSignalValue> outputs = model.GetOutputs(outputNames);
+        publishedVariables.Clear();
+        foreach (CoSimConnection connection in map.EnabledConnections)
+        {
+            if (!string.Equals(connection.sourceModelId, model.ModelId, StringComparison.Ordinal))
+                continue;
+
+            if (!publishedVariables.Add(connection.sourceVariableName))
+                continue;
+
+            CoSimSignalValue value = outputs[connection.sourceVariableName];
             if (ShouldPublishStoppedCurSetFan(
                     model,
                     connection.sourceVariableName,

@@ -641,6 +641,9 @@ public class ThermalSolver
         {
             foreach (var box in _zhBoxes)
             {
+                if (box == null || !box.Power)
+                    continue;
+
                 box.Refresh();
 
                 int a = (box.NormalAxis == LBMZouHeBox.Axis.X) ? 0 :

@@ -137,7 +137,7 @@ $failure = ""
 $activeStepNumber = 0
 $activeStage = "Initialization"
 
-Write-Warning "Cooling-mode profile: the unavailable Multi_V_S.4Way_Valve__OnOff connection is disabled; reversing_valve_mode_flag=0 is used."
+Write-Warning "Cooling-mode profile: Multi_V_S.4Way_Valve__OnOff remains disabled by design; reversing_valve_mode_flag=0 is used."
 
 try {
     $controllerCache = Expand-Fmu "controller\Multi_V_S__Set_CFMU.fmu" "Multi_V_S__Set_CFMU"
@@ -264,9 +264,9 @@ $activeStage = "Controller"
         Step-Fmu $controller $time $CommunicationStepSeconds
         $controllerWatch.Stop()
 
-        $compHz = Get-Real $controller "Multi_V_S.Comp__CurFreq"
-        $fanRpm = Get-Real $controller "Multi_V_S.Fan1__CurRPM"
-        $mainEev = Get-Real $controller "Multi_V_S.Main_EEV__TarPulse"
+        $compHz = Get-Real $controller "Multi_V_S.Comp__TarFreq"
+        $fanRpm = Get-Real $controller "Multi_V_S.Fan1__TarRPM"
+        $mainEev = Get-Real $controller "Multi_V_S.MAIN_EEV__TarPulse"
         $fanModes = @{}
         $iduPulses = @{}
         foreach ($index in 1..5) {
@@ -275,7 +275,7 @@ $activeStage = "Controller"
             $iduPulses[$index] = Get-Real $controller "${prefix}.EEV_TarPulse"
         }
 
-        # New controller package has no 4Way_Valve__OnOff output; cooling-mode zero is explicit.
+        # The 4Way_Valve__OnOff output is intentionally not connected; cooling-mode zero is explicit.
 $activeStage = "ControllerToProductTransfer"
         Set-Real $product "Comp_CurFreq" $compHz
         Set-Real $product "Fan_CurRPM" $fanRpm

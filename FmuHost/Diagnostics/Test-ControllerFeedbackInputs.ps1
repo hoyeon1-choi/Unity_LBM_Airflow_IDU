@@ -101,9 +101,9 @@ $controllerOutputs = @(
         "IDU_{0:D2}.EEV_TarPulse" -f $_
     }
 ) + @(
-    "Multi_V_S.Comp__CurFreq",
-    "Multi_V_S.Fan1__CurRPM",
-    "Multi_V_S.Main_EEV__TarPulse"
+    "Multi_V_S.Comp__TarFreq",
+    "Multi_V_S.Fan1__TarRPM",
+    "Multi_V_S.MAIN_EEV__TarPulse"
 )
 
 function Convert-ToRequestValue([string]$value) {

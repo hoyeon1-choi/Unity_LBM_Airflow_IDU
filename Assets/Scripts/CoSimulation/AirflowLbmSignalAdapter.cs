@@ -39,7 +39,9 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
     [Header("Read-Only Status")]
     [SerializeField, ReadOnly] private float latestSensorTemperatureDegC = 0.0f;
     [SerializeField, ReadOnly] private float latestAppliedDischargeTemperatureDegC = 0.0f;
+    [Tooltip("R1 suction humidity proxy. LBM currently has no humidity transport, so this remains at the configured indoor RH.")]
     [SerializeField, ReadOnly] private float latestRelativeHumidityPercent = 50.0f;
+    [SerializeField, ReadOnly] private float latestDischargeRelativeHumidityPercent = 0.0f;
     [SerializeField, ReadOnly] private float latestAppliedMassFlowKgPerSecond = 0.0f;
     [SerializeField, ReadOnly] private int targetInletCount = 0;
     [SerializeField, ReadOnly] private string targetInletNames = string.Empty;
@@ -53,7 +55,11 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
     public SensorTemperatureSource SensorSource => sensorSource;
     public float LatestSensorTemperatureDegC => latestSensorTemperatureDegC;
     public float LatestAppliedDischargeTemperatureDegC => latestAppliedDischargeTemperatureDegC;
+    public float LatestRelativeHumidityPercent => latestRelativeHumidityPercent;
+    public float LatestDischargeRelativeHumidityPercent => latestDischargeRelativeHumidityPercent;
+    public float LatestAppliedMassFlowKgPerSecond => latestAppliedMassFlowKgPerSecond;
     public int TargetInletCount => targetInletCount;
+    public string TargetInletNames => targetInletNames;
     public string LastStatus => lastStatus;
     public SimulationResultMetrics LatestMetrics => resultSampler != null ? resultSampler.LatestMetrics : null;
 
@@ -91,6 +97,18 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
     {
         targetInletCount = CountValidInletTargets();
         targetInletNames = BuildTargetNamesText();
+    }
+
+    public void ApplyInitialIndoorConditions(float temperatureDegC, float relativeHumidityPercent)
+    {
+        fallbackTemperatureDegC = temperatureDegC;
+        fallbackRelativeHumidityPercent = Mathf.Clamp(relativeHumidityPercent, 0.0f, 100.0f);
+        latestSensorTemperatureDegC = fallbackTemperatureDegC;
+        latestRelativeHumidityPercent = fallbackRelativeHumidityPercent;
+        warnedInvalidMetrics = false;
+        lastStatus =
+            $"Startup indoor conditions applied: {fallbackTemperatureDegC:F1} degC, " +
+            $"RH={latestRelativeHumidityPercent:F1}%.";
     }
 
     public bool TryGetSignal(CoSimSignalKey key, out CoSimSignalValue value)
@@ -154,8 +172,10 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
 
         if (isHumidity)
         {
-            latestRelativeHumidityPercent = Mathf.Clamp((float)real, 0.0f, 100.0f);
-            lastStatus = $"Stored {key}={latestRelativeHumidityPercent:F2}% as LBM humidity proxy.";
+            latestDischargeRelativeHumidityPercent = Mathf.Clamp((float)real, 0.0f, 100.0f);
+            lastStatus =
+                $"Stored {key}={latestDischargeRelativeHumidityPercent:F2}% separately from " +
+                $"the R1 suction RH proxy ({latestRelativeHumidityPercent:F2}%).";
             return true;
         }
 
