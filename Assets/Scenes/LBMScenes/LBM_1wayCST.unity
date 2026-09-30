@@ -2314,8 +2314,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 911ea887e117857439dc1100ff7e0b8c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  solverPreset: 1
-  runSimulation: 1
+  solverPreset: 3
+  runSimulation: 0
   externalStepPause: 0
   externalStepPauseReason: 
   domain: {fileID: 43662410}
@@ -2342,12 +2342,29 @@ MonoBehaviour:
   turbulenceModelConstant: 0.03
   turbulentPrandtl: 0.7
   wallFunctionEnabled: 0
-  enableCaseStudyExecution: 0
+  enableCaseStudyExecution: 1
   selectedCaseStudy: 0
-  setTargetTimeWhenApplyingCaseStudy: 0
-  caseStudyTargetSimulationTimeSeconds: 30
-  activeCaseName: Manual
-  caseStudySummary: No case study preset applied.
+  activeCaseName: A0_Baseline
+  caseStudySummary: '=== Case Study ===
+
+    Active Case      : A0_Baseline
+
+    Execution
+    Enabled: True
+
+    dxPhys           : 0.0400 m
+
+    tauFluidMin      : 0.5600
+
+    tauThermalMin   
+    : 0.5600
+
+    Turbulence       : Smagorinsky, C=0.030
+
+    Target Run Time  :
+    0.010 s
+
+    Meaning          : Current conservative clamp baseline.'
   enableAdaptiveOutletRhoFeedback: 1
   adaptiveOutletRhoGain: 0.1
   adaptiveOutletRhoMaxOffset: 0.01
@@ -2381,7 +2398,7 @@ MonoBehaviour:
   readOnlyInspectorUpdateIntervalSeconds: 1
   contourPlotUpdateIntervalSeconds: 1
   contourPlotUpdateIntervalSteps: 1
-  readOnlyInspectorUpdateStatus: Not updated
+  readOnlyInspectorUpdateStatus: Updated at t=0.000s, step=0, interval=1.00s
   useTargetSimulationTime: 1
   targetSimulationTimeSeconds: 0.01
   targetTimeReached: 0
@@ -2392,99 +2409,115 @@ MonoBehaviour:
   simulatedTimeErrorSeconds: 0
   tau_f: 0.56
   tau_T: 0.56
-  T_ref: 0.6
-  referenceTemperatureDegC: 20
+  T_ref: 1
+  referenceTemperatureDegC: 30
   csLat: 0.57735026
-  targetWindSpeedLat: 0.17320508
-  speedScalePhysToLat: 0.08660254
-  dtPhys: 0.0017320508
-  gravityLat: -0.0014715
+  targetWindSpeedLat: 0.14433756
+  speedScalePhysToLat: 0.07216878
+  dtPhys: 0.0028867512
+  gravityLat: -0.00204375
   maxDomainLengthPhys: 8
-  maxDomainLengthLat: 400
+  maxDomainLengthLat: 200
   maxWindSpeedPhys: 2
-  maxWindSpeedLat: 0.17320508
+  maxWindSpeedLat: 0.14433756
   nuLat: 0.020000001
   alphaLat: 0.015000001
-  nuPhys: 0.0046188026
-  alphaPhys: 0.0034641016
-  nuPhysTargetReadOnly: 0
-  alphaPhysTargetReadOnly: 0
-  tauFRaw: 0.5
-  tauTRaw: 0.5
-  tauFWasClamped: 0
-  tauTWasClamped: 0
-  nuPhysEffectiveRatio: 0
-  alphaPhysEffectiveRatio: 0
-  machNumber: 0.3
-  reynoldsNumber: 3464.1013
-  reynoldsNumberPhys: 3464.1013
+  nuPhys: 0.011085126
+  alphaPhys: 0.008313844
+  nuPhysTargetReadOnly: 0.000015
+  alphaPhysTargetReadOnly: 0.000021126762
+  tauFRaw: 0.5000812
+  tauTRaw: 0.50015247
+  tauFWasClamped: 1
+  tauTWasClamped: 1
+  nuPhysEffectiveRatio: 739.0084
+  alphaPhysEffectiveRatio: 393.52194
+  machNumber: 0.25
+  reynoldsNumber: 1443.3755
+  reynoldsNumberPhys: 1443.3756
   prandtlNumber: 1.3333334
-  nx: 250
-  ny: 100
-  nz: 400
-  N: 10000000
+  nx: 125
+  ny: 50
+  nz: 200
+  N: 1250000
   stepCount: 0
   simulatedTimeSeconds: 0
   simulatedTimeMinutes: 0
-  latestSummary: "=== Case Summary ===\nPreset          : FastPreview\nDomain [m]     
-    : 0.000 x 0.000 x 0.000\nCell size [m]   : 0.05000\nGrid            : 250 x 100
-    x 400 (10,000,000 cells)\nEstimated memory: 2403.3 MiB\nSimulation time : 0.000
-    s\n\n=== Boundary Summary ===\r\nNo Zou-He inlet/outlet boxes found.\r\n\n\n===
-    Solver Summary ===\ndtPhys [s]      : 1.732051E-003\nmaxMach limit   : 0.250\nMach           
-    : 0.3000\ntau_f / tau_T   : 0.5600 / 0.5600\nnu / alpha phys : 4.6188E-003 /
-    3.4641E-003\nRe / Pr         : 3.4641E+003 / 1.3333\nCollision       : MRT, Smagorinsky\n\n===
-    Stability Summary ===\nStatus          : Warning\nMach            : 0.3000 (recommended
-    <= 0.15)\ntau_f / tau_T   : 0.5600 / 0.5600 (recommended >= 0.55)\nPr             
-    : 1.3333\nBuffer safe     : True\n\n=== Run Readiness ===\nStatus : Invalid\nInlets
-    : 0, Outlets : 0\nErrors :\n  - At least one inlet boundary is required.\r\n 
-    - At least one outlet boundary is required.\r\nWarnings :\n  - Mach number is
-    high: Ma=0.3000. Lower maxMach for better stability.\r\n\n\n=== Recommendation
-    ===\nFix Invalid readiness items before running.\n\n=== LBM Simulation Summary
-    ===\r\nDomain Size [m]         : 0.0000 x 0.0000 x 0.0000\r\nGrid Size [cells]      
-    : 250 x 100 x 400\r\ndx_phys [m]             : 0.050000\r\ndt_phys [s]            
-    : 1.732051E-003\r\nStep Count              : 0\r\nPhysical Time [s]       : 0.000000\r\ntau_f
-    / tau_T           : 0.560000 / 0.560000\r\nnu_phys [m^2/s]         : 4.618803E-003\r\nalpha_phys
-    [m^2/s]      : 3.464102E-003\r\nMach Number             : 0.300000\r\nReynolds
-    Number (phys)  : 3464.101\r\nPrandtl Number          : 1.333333\r\nMax Wind Speed
+  latestSummary: "=== Case Summary ===\nPreset          : Custom\nActive Case    
+    : A0_Baseline\nDomain [m]      : 5.000 x 2.000 x 8.000\nCell size [m]   : 0.04000\nGrid           
+    : 125 x 50 x 200 (1,250,000 cells)\nEstimated memory: 300.4 MiB\nSimulation time
+    : 0.000 s\n\n=== Case Study ===\nActive Case      : A0_Baseline\nExecution Enabled:
+    True\ndxPhys           : 0.0400 m\ntauFluidMin      : 0.5600\ntauThermalMin   
+    : 0.5600\nTurbulence       : Smagorinsky, C=0.030\nTarget Run Time  : 0.010 s\nMeaning         
+    : Current conservative clamp baseline.\n\n=== Boundary Summary ===\r\nNo Zou-He
+    inlet/outlet boxes found.\r\n\n\n=== Solver Summary ===\ndtPhys [s]      : 2.886751E-003\nmaxMach
+    limit   : 0.250\nMach            : 0.2500\ntau_f / tau_T   : 0.5001->0.5600 /
+    0.5002->0.5600\nnu / alpha phys : 1.1085E-002 / 8.3138E-003\ntarget ratio   
+    : nu x739.01, alpha x393.52\nRe / Pr         : 1.4434E+003 / 1.3333\nCollision      
+    : MRT, Smagorinsky\n\n=== Scaling Diagnostics ===\nActive Case      : A0_Baseline\ntau_f
+    raw/clamp  : 0.500081 -> 0.560000 (min=0.5600, max=4.0000, clamped=True)\ntau_T
+    raw/clamp  : 0.500153 -> 0.560000 (min=0.5600, max=4.0000, clamped=True)\nnu
+    target/effect : 1.5000E-005 / 1.1085E-002 (x739.01)\nalpha target/eff : 2.1127E-005
+    / 8.3138E-003 (x393.52)\nmaxMach limit    : 0.2500\nRe / Pr          : 1.4434E+003
+    / 1.3333\n\n=== Stability Summary ===\nStatus          : Warning\nMach           
+    : 0.2500 (recommended <= 0.15)\ntau_f / tau_T   : 0.5600 / 0.5600 (case-study
+    warning below 0.53, invalid <= 0.5)\nPr              : 1.3333\nBuffer safe    
+    : True\n\n=== Run Readiness ===\nStatus : Invalid\nInlets : 0, Outlets : 0\nErrors
+    :\n  - At least one inlet boundary is required.\r\n  - At least one outlet boundary
+    is required.\r\nWarnings :\n  - Mach number is high: Ma=0.2500. Lower maxMach
+    for better stability.\r\n\n\n=== Recommendation ===\nFix Invalid readiness items
+    before running.\n\n=== LBM Simulation Summary ===\r\nDomain Size [m]        
+    : 5.0000 x 2.0000 x 8.0000\r\nGrid Size [cells]       : 125 x 50 x 200\r\ndx_phys
+    [m]             : 0.040000\r\ndt_phys [s]             : 2.886751E-003\r\nStep
+    Count              : 0\r\nPhysical Time [s]       : 0.000000\r\ntau_f / tau_T          
+    : 0.560000 / 0.560000\r\nnu_phys [m^2/s]         : 1.108513E-002\r\nalpha_phys
+    [m^2/s]      : 8.313844E-003\r\nMach Number             : 0.250000\r\nReynolds
+    Number (phys)  : 1443.376\r\nPrandtl Number          : 1.333333\r\nMax Wind Speed
     [m/s]    : 2.000000\r\nCollision Model          : MRT\r\nTurbulence Model        
     : Smagorinsky\r\nSGS Constant             : 0.030000\r\nTurbulent Prandtl       
     : 0.700000\r\nWall Function            : Off\r\n\r\nNo active Zou-He patches.\r\n\n\n===
-    Temperature Mapping ===\nTemp Range [degC]        : 10.00 ~ 30.00\nReference
-    Temp [degC]    : 20.00\nReference Temp [LBM]     : 0.600000\n\n=== Stop Condition
-    ===\nUse Target Simulation Time : True\nTarget Simulation Time [s] : 600.000\nTarget
+    Temperature Mapping ===\nTemp Range [degC]        : 0.00 ~ 30.00\nReference Temp
+    [degC]    : 30.00\nReference Temp [LBM]     : 1.000000\n\n=== Stop Condition
+    ===\nUse Target Simulation Time : True\nTarget Simulation Time [s] : 0.010\nTarget
     Time Reached        : False\n\n=== Mass-Flux Corrected Outlet ===\nEnable                   
     : True\nUse Inlet Abs Flow Target : True\nTotal Outlet Area [m^2]   : 0.000000\nTarget
     Outlet Normal [m/s]: 0.000000\nDebug Inlet Flow Sampler  : 0.000000\nDebug Inlet
     Flow Direct   : 0.000000\nDebug Outlet Area Direct  : 0.000000\nDebug Target
     Applied Cnt  : 0\n\n=== Result Metrics ===\n[Case / Time]\nStep                 
-    : 0\nSimulation Time       : 0.000 s\ndtPhys                : 0.000000E+000 s\nPreset               
-    : -\n[Thermal Result]\nRoom Avg Temp         : - degC\nRoom Min / Max Temp  
-    : - / - degC\nRoom Temp StdDev      : - degC\nInlet Avg Temp        : - degC\nOutlet
-    Avg Temp       : - degC\n[Flow Result]\nInlet Avg Speed       : - m/s\nOutlet
-    Avg Speed      : - m/s\nInlet Flow            : - m3/s (- CMM)\nOutlet Flow          
-    : - m3/s (- CMM)\nRelative Imbalance    : -\nMax Speed             : 0.0000 m/s\n[Stability
-    / Conservation]\nMax Mach              : 0.000000\nAvg Density           : 0.000000\nDensity
-    StdDev        : 0.000000\nMass Residual         : 0.0000E+000\nMass Status          
-    : -\ntau_f / tau_T         : 0.0000 / 0.0000\nRe / Pr               : 0.0000E+000
-    / 0.0000\nStability Status      : -\nReadiness Status      : -\n[Debug Counters]\nThermal
-    Clamp In/Out  : 0 / 0\nFluid Clamp In/Out    : 0 / 0\nStatus                :
-    -"
+    : 0\nSimulation Time       : 0.000 s\ndxPhys                : 0.000000 m\ndtPhys               
+    : 0.000000E+000 s\nPreset                : -\nCase                  : -\nReadback
+    Mode         : -\n[Thermal Result]\nRoom Avg Temp         : - degC\nRoom Min
+    / Max Temp   : - / - degC\nRoom Temp StdDev      : - degC\nInlet Avg Temp       
+    : - degC\nOutlet Avg Temp       : - degC\n[Flow Result]\nInlet Avg Speed      
+    : - m/s\nOutlet Avg Speed      : - m/s\nInlet Flow            : - m3/s (- CMM)\nOutlet
+    Flow           : - m3/s (- CMM)\nRelative Imbalance    : -\nMax Speed            
+    : - m/s\n[Stability / Conservation]\nMax Mach              : -\nAvg Density          
+    : -\nDensity StdDev        : -\nMass Residual         : -\nMass Status          
+    : -\n[Solver Diagnostics]\ntau_f raw -> clamped  : 0.000000 -> 0.000000 (min=0.0000,
+    clamped=False)\ntau_T raw -> clamped  : 0.000000 -> 0.000000 (min=0.0000, clamped=False)\nnu
+    target/effective   : 0.0000E+000 / 0.0000E+000 (x0.00)\nalpha target/effect  
+    : 0.0000E+000 / 0.0000E+000 (x0.00)\nMax Mach Limit        : 0.0000\nRe / Pr              
+    : 0.0000E+000 / 0.0000\nStability Status      : -\nReadiness Status      : -\n[Debug
+    Counters]\nThermal Clamp In/Out  : 0 / 0\nFluid Clamp In/Out    : 0 / 0\nStatus               
+    : -"
   caseSummary: '=== Case Summary ===
 
-    Preset          : FastPreview
+    Preset          : Custom
 
-    Domain
-    [m]      : 0.000 x 0.000 x 0.000
+    Active Case    
+    : A0_Baseline
 
-    Cell size [m]   : 0.05000
+    Domain [m]      : 5.000 x 2.000 x 8.000
 
-    Grid           
-    : 250 x 100 x 400 (10,000,000 cells)
+    Cell size [m]  
+    : 0.04000
 
-    Estimated memory: 2403.3 MiB
+    Grid            : 125 x 50 x 200 (1,250,000 cells)
 
-    Simulation
-    time : 0.000 s'
+    Estimated
+    memory: 300.4 MiB
+
+    Simulation time : 0.000 s'
   boundarySummary: '=== Boundary Summary ===
 
     No Zou-He inlet/outlet boxes found.
@@ -2492,58 +2525,81 @@ MonoBehaviour:
 '
   solverSummary: '=== Solver Summary ===
 
-    dtPhys [s]      : 1.732051E-003
+    dtPhys [s]      : 2.886751E-003
 
     maxMach
     limit   : 0.250
 
-    Mach            : 0.3000
+    Mach            : 0.2500
 
-    tau_f / tau_T   : 0.5600 /
-    0.5600
+    tau_f / tau_T   : 0.5001->0.5600
+    / 0.5002->0.5600
 
-    nu / alpha phys : 4.6188E-003 / 3.4641E-003
+    nu / alpha phys : 1.1085E-002 / 8.3138E-003
 
-    Re / Pr        
-    : 3.4641E+003 / 1.3333
+    target
+    ratio    : nu x739.01, alpha x393.52
 
-    Collision       : MRT, Smagorinsky'
-  scalingDiagnosticsSummary: 
+    Re / Pr         : 1.4434E+003 / 1.3333
+
+    Collision      
+    : MRT, Smagorinsky'
+  scalingDiagnosticsSummary: '=== Scaling Diagnostics ===
+
+    Active Case      :
+    A0_Baseline
+
+    tau_f raw/clamp  : 0.500081 -> 0.560000 (min=0.5600, max=4.0000,
+    clamped=True)
+
+    tau_T raw/clamp  : 0.500153 -> 0.560000 (min=0.5600, max=4.0000,
+    clamped=True)
+
+    nu target/effect : 1.5000E-005 / 1.1085E-002 (x739.01)
+
+    alpha
+    target/eff : 2.1127E-005 / 8.3138E-003 (x393.52)
+
+    maxMach limit    : 0.2500
+
+    Re
+    / Pr          : 1.4434E+003 / 1.3333'
   stabilitySummary: '=== Stability Summary ===
 
     Status          : Warning
 
     Mach           
-    : 0.3000 (recommended <= 0.15)
+    : 0.2500 (recommended <= 0.15)
 
-    tau_f / tau_T   : 0.5600 / 0.5600 (recommended
-    >= 0.55)
+    tau_f / tau_T   : 0.5600 / 0.5600 (case-study
+    warning below 0.53, invalid <= 0.5)
 
     Pr              : 1.3333
 
-    Buffer safe     : True'
+    Buffer
+    safe     : True'
   recommendationSummary: '=== Recommendation ===
 
     Fix Invalid readiness items
     before running.'
   readinessSummary: "=== Run Readiness ===\nStatus : Invalid\nInlets : 0, Outlets
     : 0\nErrors :\n  - At least one inlet boundary is required.\r\n  - At least one
-    outlet boundary is required.\r\nWarnings :\n  - Mach number is high: Ma=0.3000.
+    outlet boundary is required.\r\nWarnings :\n  - Mach number is high: Ma=0.2500.
     Lower maxMach for better stability.\r\n"
   stabilityStatus: 1
   readinessStatus: 2
-  estimatedDistributionBuffersMB: 1983.6426
-  estimatedCoreBuffersMB: 2212.5244
-  estimatedTexturesMB: 190.73486
-  estimatedTotalGpuMemoryMB: 2403.2593
-  perDirectionBufferMB: 38.146973
+  estimatedDistributionBuffersMB: 247.95532
+  estimatedCoreBuffersMB: 276.56555
+  estimatedTexturesMB: 23.841858
+  estimatedTotalGpuMemoryMB: 300.4074
+  perDirectionBufferMB: 4.7683716
   estimatedSingleBufferSafe: 1
   avgRoomTemperatureDegC: 0
   inletAverageTemperatureDegC: 0
   outletAverageTemperatureDegC: 0
   inletAverageSpeedPhys: 0
   outletAverageSpeedPhys: 0
-  resultMetricsStatus: Result sampler not initialized.
+  resultMetricsStatus: 
   inletAverageNormalSpeedPhys: 0
   outletAverageNormalSpeedPhys: 0
   inletFlowRatePhysSigned: 0
@@ -2572,26 +2628,26 @@ MonoBehaviour:
   resultSampler: {fileID: 101745642}
   enableTimeSeriesLogging: 1
   enableSummaryLogging: 1
-  experimentTag: baseline
+  experimentTag: A0_Baseline
   writeIntervalSeconds: 2
   writeOnlyWhenTimeAdvanced: 1
   autoWriteSummaryWhenSimulationStops: 1
   skipInvalidMetricRows: 1
   skipRowsWhenSamplerTimeDoesNotMatch: 1
   samplerTimeToleranceSeconds: 0.25
-  saveLocationMode: 1
-  resultsFolderName: LBMResults_test
+  saveLocationMode: 0
+  resultsFolderName: LBMResults
   customFolderPath: 
   timeSeriesPrefix: lbm_timeseries
   summaryFilePrefix: lbm_summary
   schemaMismatchHandling: 0
-  resolvedBaseFolder: D:\2_FFD\0_Unity\LBMUnity_1wayCST_FMU_Interagtion_PlatForm\LBMResults_test
-  timeSeriesFilePath: D:\2_FFD\0_Unity\LBMUnity_1wayCST_FMU_Interagtion_PlatForm\LBMResults_test\lbm_timeseries_baseline.csv
-  summaryFilePath: D:\2_FFD\0_Unity\LBMUnity_1wayCST_FMU_Interagtion_PlatForm\LBMResults_test\lbm_summary_baseline.csv
+  resolvedBaseFolder: C:/Users/hoyeon1.choi/AppData/LocalLow/DefaultCompany/MyLBM\LBMResults
+  timeSeriesFilePath: C:/Users/hoyeon1.choi/AppData/LocalLow/DefaultCompany/MyLBM\LBMResults\lbm_timeseries_A0_Baseline.csv
+  summaryFilePath: C:/Users/hoyeon1.choi/AppData/LocalLow/DefaultCompany/MyLBM\LBMResults\lbm_summary_A0_Baseline.csv
   lastWrittenSimTime: -1
-  nextScheduledSimTime: 0
-  lastWriteStatus: Idle
-  csvSchemaStatus: 'time-series: current schema; summary: current schema'
+  nextScheduledSimTime: 2
+  lastWriteStatus: Experiment tag set to 'A0_Baseline'.
+  csvSchemaStatus: 'time-series: no file; summary: no file'
   summaryWrittenForCurrentRun: 0
 --- !u!114 &101745642
 MonoBehaviour:
@@ -2611,9 +2667,14 @@ MonoBehaviour:
   logMetricsToConsole: 1
   requireFlowDiagnostics: 1
   readbackMode: 0
+  logStabilityGuardrailWarnings: 1
+  rapidGrowthFactor: 2
+  densityStdDevGrowthFloor: 0.0001
+  massResidualGrowthFloor: 0.0001
   latestMetrics:
     stepCount: 0
     simulationTimeSeconds: 0
+    dxPhys: 0
     dtPhys: 0
     preset: 
     caseName: 
@@ -2695,7 +2756,7 @@ MonoBehaviour:
     hasValidInletAverage: 0
     hasValidOutletAverage: 0
     statusMessage: 
-  nextSampleSimTimeSeconds: 0
+  nextSampleSimTimeSeconds: 2
   lastRequestedSampleSimTimeSeconds: -1
   lastCompletedSampleSimTimeSeconds: -1
   skippedSamplesWhileReadbackBusy: 0
@@ -2971,7 +3032,7 @@ Transform:
   m_GameObject: {fileID: 183542625}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: -0.7071068}
-  m_LocalPosition: {x: 0, y: 0.5, z: 0.2}
+  m_LocalPosition: {x: 0, y: 0.5, z: 0.225}
   m_LocalScale: {x: 0.19, y: 0.009, z: 0.005}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3062,15 +3123,15 @@ MonoBehaviour:
   targetFlowRateM3psCached: 0.11312
   targetFlowRateCMMCached: 6.7872
   boundarySummary: "[Inlet] InletBox\n  Input mode         : Velocity\n  Plane /
-    Normal     : +Y, planeIndex=49\n  Patch area         : 0.080000 m^2 (50 cells)\n 
+    Normal     : +Y, planeIndex=48\n  Patch area         : 0.080000 m^2 (50 cells)\n 
     Velocity (phys)    : (0.0000, -1.4140, -1.4140) m/s\n  Velocity magnitude : 1.9997
     m/s\n  Normal speed       : -1.4140 m/s (plane signed)\n  Inward normal speed:
     1.4140 m/s\n  Flow rate          : 0.113120 m^3/s (6.787 CMM)\n  Signed flow       
-    : -0.113120 m^3/s\n  Velocity (lattice) : (0.000000, -0.061228, -0.061228)\n 
+    : -0.113120 m^3/s\n  Velocity (lattice) : (0.000000, -0.102047, -0.102047)\n 
     Flow direction     : (0.0000, -0.7071, -0.7071)\n  Tangential axes    : A=+X,
     B=+Z\n  Tangential angles  : A=0.00 deg, B=0.00 deg\n  Inlet temp (degC)  : 10.00\n 
     Inlet temp (LBM)   : 0.333333\n  Warning            : None\n  Cell bounds       
-    : x:[50,74] y:[49,49] z:[139,140]"
+    : x:[50,74] y:[48,48] z:[139,140]"
   windSpeedPhys: {x: 0, y: -1.414, z: -1.414}
   volumeFlowRateUnit: 1
   volumeFlowRateM3ps: 0.1
@@ -3092,14 +3153,14 @@ MonoBehaviour:
   fluidOffset: 0
   snappedAxis: 1
   snappedSign: 1
-  planeIndex: 49
+  planeIndex: 48
   minIdx:
     x: 50
-    y: 49
+    y: 48
     z: 139
   maxIdx:
     x: 74
-    y: 49
+    y: 48
     z: 140
   faceNormalWorld: {x: 0, y: 1, z: -0.000000119209275}
   planeNormalWorld: {x: 0, y: 1, z: 0}
@@ -3287,6 +3348,7 @@ GameObject:
   - component: {fileID: 244419492}
   - component: {fileID: 244419494}
   - component: {fileID: 244419493}
+  - component: {fileID: 244419497}
   m_Layer: 0
   m_Name: VelocityDisplayCamera
   m_TagString: MainCamera
@@ -3333,7 +3395,7 @@ Camera:
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 65
+    m_Bits: 321
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 8400000, guid: 413e671a038e6134e9dbe0def4fa5ccb, type: 2}
   m_TargetDisplay: 0
@@ -3357,6 +3419,33 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d8388e77df6a6154f8678bda529839cb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &244419497
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 244419491}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57e6df0372ce4ca99db273d8734aa791, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  inputArea: {fileID: 470581401}
+  domainRoot: {fileID: 730200000002}
+  orbitDegreesPerViewport: 180
+  panSpeedMultiplier: 1
+  zoomSensitivity: 0.75
+  enableRKeyReset: 1
+  minimumPitch: -80
+  maximumPitch: 80
+  minimumDistance: 1
+  maximumDistance: 30
+  minimumOrthographicSize: 0.5
+  maximumOrthographicSize: 12
+  domainClearance: 0.25
+  fallbackDomainCenter: {x: 0, y: 1, z: 0}
+  fallbackDomainSize: {x: 5, y: 2, z: 8}
 --- !u!114 &244419494
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3369,7 +3458,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_RenderShadows: 0
+  m_RenderShadows: 1
   m_RequiresDepthTextureOption: 1
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
@@ -4663,6 +4752,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 446385849}
+  - component: {fileID: 446385850}
   m_Layer: 0
   m_Name: Contours
   m_TagString: Untagged
@@ -4689,6 +4779,34 @@ Transform:
   - {fileID: 1620988993}
   m_Father: {fileID: 43662414}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &446385850
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 446385848}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a02f02bb73d4be9b75b7a27692e6ed4, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  domainTransform: {fileID: 43662414}
+  velocityHorizontalRenderer: {fileID: 53839411}
+  velocityVerticalRenderer: {fileID: 1620988996}
+  temperatureHorizontalRenderer: {fileID: 626742634}
+  temperatureVerticalRenderer: {fileID: 2114682016}
+  velocityColorBar: {fileID: 394810597}
+  temperatureColorBar: {fileID: 1663177517}
+  velocityOverlayParent: {fileID: 432488140}
+  temperatureOverlayParent: {fileID: 369370076}
+  buildRuntimeOverlays: 1
+  showVelocity: 1
+  showTemperature: 1
+  showHorizontal: 1
+  showVertical: 1
+  overlaySize: {x: 440, y: 74}
+  overlayAnchoredPosition: {x: -100, y: 180}
 --- !u!1 &457540297
 GameObject:
   m_ObjectHideFlags: 0
@@ -4704,7 +4822,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &457540298
 Transform:
   m_ObjectHideFlags: 0
@@ -5653,15 +5771,15 @@ MonoBehaviour:
   targetFlowRateM3psCached: 0.00128
   targetFlowRateCMMCached: 0.076799996
   boundarySummary: "[Inlet] inletBox (1)\n  Input mode         : Velocity\n  Plane
-    / Normal     : +Z, planeIndex=203\n  Patch area         : 0.001600 m^2 (1 cells)\n 
+    / Normal     : +Z, planeIndex=198\n  Patch area         : 0.001600 m^2 (1 cells)\n 
     Velocity (phys)    : (0.0000, 0.0000, -0.8000) m/s\n  Velocity magnitude : 0.8000
     m/s\n  Normal speed       : -0.8000 m/s (plane signed)\n  Inward normal speed:
     0.8000 m/s\n  Flow rate          : 0.001280 m^3/s (0.077 CMM)\n  Signed flow       
-    : -0.001280 m^3/s\n  Velocity (lattice) : (0.000000, 0.000000, -0.034641)\n 
+    : -0.001280 m^3/s\n  Velocity (lattice) : (0.000000, 0.000000, -0.057735)\n 
     Flow direction     : (0.0000, 0.0000, -1.0000)\n  Tangential axes    : A=+X,
     B=+Y\n  Tangential angles  : A=0.00 deg, B=0.00 deg\n  Inlet temp (degC)  : 20.00\n 
     Inlet temp (LBM)   : 0.666667\n  Warning            : None\n  Cell bounds       
-    : x:[137,137] y:[21,21] z:[203,203]"
+    : x:[123,123] y:[21,21] z:[198,198]"
   windSpeedPhys: {x: 0, y: 0, z: -0.8}
   volumeFlowRateUnit: 1
   volumeFlowRateM3ps: 0.1
@@ -5683,15 +5801,15 @@ MonoBehaviour:
   fluidOffset: 0
   snappedAxis: 2
   snappedSign: 1
-  planeIndex: 203
+  planeIndex: 198
   minIdx:
-    x: 137
+    x: 123
     y: 21
-    z: 203
+    z: 198
   maxIdx:
-    x: 137
+    x: 123
     y: 21
-    z: 203
+    z: 198
   faceNormalWorld: {x: 0, y: 0, z: 1}
   planeNormalWorld: {x: 0, y: 0, z: 1}
   drawPatchBounds: 1
@@ -6053,6 +6171,7 @@ GameObject:
   - component: {fileID: 781123606}
   - component: {fileID: 781123605}
   - component: {fileID: 781123604}
+  - component: {fileID: 781123608}
   m_Layer: 0
   m_Name: ThermalDisplayCamera
   m_TagString: MainCamera
@@ -6072,6 +6191,33 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d8388e77df6a6154f8678bda529839cb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &781123608
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 781123603}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 57e6df0372ce4ca99db273d8734aa791, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  inputArea: {fileID: 136373377}
+  domainRoot: {fileID: 730200000002}
+  orbitDegreesPerViewport: 180
+  panSpeedMultiplier: 1
+  zoomSensitivity: 0.75
+  enableRKeyReset: 1
+  minimumPitch: -80
+  maximumPitch: 80
+  minimumDistance: 1
+  maximumDistance: 30
+  minimumOrthographicSize: 0.5
+  maximumOrthographicSize: 12
+  domainClearance: 0.25
+  fallbackDomainCenter: {x: 0, y: 1, z: 0}
+  fallbackDomainSize: {x: 5, y: 2, z: 8}
 --- !u!114 &781123605
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6084,7 +6230,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_RenderShadows: 0
+  m_RenderShadows: 1
   m_RequiresDepthTextureOption: 1
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
@@ -6155,7 +6301,7 @@ Camera:
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 129
+    m_Bits: 385
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 8400000, guid: fa45dc2ed2b1d7f4aa4f7d8b0d0f5f41, type: 2}
   m_TargetDisplay: 0
@@ -7226,7 +7372,7 @@ Transform:
   m_GameObject: {fileID: 1053814182}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: 0, y: 0.5, z: 0.3}
+  m_LocalPosition: {x: 0, y: 0.5, z: 0.275}
   m_LocalScale: {x: 0.19, y: 0.029, z: 0.005}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -7251,13 +7397,13 @@ MonoBehaviour:
   targetFlowRateM3psCached: 0
   targetFlowRateCMMCached: 0
   boundarySummary: "[Outlet] OutletBox\n  Input mode         : AutoMassBalancedOutlet\n 
-    Plane / Normal     : +Y, planeIndex=49\n  Patch area         : 0.240000 m^2 (150
+    Plane / Normal     : +Y, planeIndex=48\n  Patch area         : 0.240000 m^2 (150
     cells)\n  Outlet rho target  : 0.900000\n  Base rho target    : 0.900000\n  Adaptive
     offset    : 0.000000\n  Flux correction    : True\n  Target normal phys : 0.0000
     m/s\n  Target normal lat  : 0.000000\n  Target flow         : 0.000000 m^3/s
     (0.000 CMM)\n  Normal blend       : 0.200\n  Rho anchor         : 0.000\n  Warning           
     : None\n  Force Full Blend    : True\n  Force Zero RhoAnchor: True\n  Cell bounds       
-    : x:[50,74] y:[49,49] z:[157,162]"
+    : x:[50,74] y:[48,48] z:[157,162]"
   windSpeedPhys: {x: 0, y: 2, z: 0}
   volumeFlowRateUnit: 1
   volumeFlowRateM3ps: 0.1
@@ -7279,14 +7425,14 @@ MonoBehaviour:
   fluidOffset: 0
   snappedAxis: 1
   snappedSign: 1
-  planeIndex: 49
+  planeIndex: 48
   minIdx:
     x: 50
-    y: 49
+    y: 48
     z: 157
   maxIdx:
     x: 74
-    y: 49
+    y: 48
     z: 162
   faceNormalWorld: {x: -0, y: 1, z: 0.000000119209275}
   planeNormalWorld: {x: 0, y: 1, z: 0}
@@ -8080,9 +8226,28 @@ MonoBehaviour:
   m_GameObject: {fileID: 1151835616}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 19105, guid: 0000000000000000e000000000000000, type: 0}
+  m_Script: {fileID: 11500000, guid: 01614664b831546d2ae94a42149d80ac, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  m_SendPointerHoverToParent: 1
+  m_MoveRepeatDelay: 0.5
+  m_MoveRepeatRate: 0.1
+  m_XRTrackingOrigin: {fileID: 0}
+  m_ActionsAsset: {fileID: 0}
+  m_PointAction: {fileID: 0}
+  m_MoveAction: {fileID: 0}
+  m_SubmitAction: {fileID: 0}
+  m_CancelAction: {fileID: 0}
+  m_LeftClickAction: {fileID: 0}
+  m_MiddleClickAction: {fileID: 0}
+  m_RightClickAction: {fileID: 0}
+  m_ScrollWheelAction: {fileID: 0}
+  m_TrackedDevicePositionAction: {fileID: 0}
+  m_TrackedDeviceOrientationAction: {fileID: 0}
+  m_DeselectOnBackgroundClick: 1
+  m_PointerBehavior: 0
+  m_CursorLockBehavior: 0
+  m_ScrollDeltaPerTick: 6
 --- !u!1 &1180171041
 GameObject:
   m_ObjectHideFlags: 0
@@ -25669,6 +25834,302 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &730200000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730200000002}
+  - component: {fileID: 730200000003}
+  m_Layer: 8
+  m_Name: DisplayEnvironmentRoot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &730200000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730200000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 730200000011}
+  - {fileID: 730200000013}
+  - {fileID: 730200000019}
+  - {fileID: 730200000021}
+  - {fileID: 730200000023}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &730200000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730200000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 40b279af90c24a59a4a0862c9be1f908, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  domainCenter: {x: 0, y: 1, z: 0}
+  domainSize: {x: 5, y: 2, z: 8}
+  shellThickness: 0.16
+  indoorUnitCeilingPosition: {x: 0, y: 2, z: 2}
+  floorMaterial: {fileID: 2100000, guid: 5c2951d57af843098095edbde1ccd13f, type: 2}
+  wallMaterial: {fileID: 2100000, guid: 65d844d416ce4e609206ec43e956fa8e, type: 2}
+  wallInteriorMaterial: {fileID: 2100000, guid: 0d69f5b8b8fc438f8bff05beb7536b98, type: 2}
+  ceilingMaterial: {fileID: 2100000, guid: 986c42ff053f4057a011fa5ca70fcbd7, type: 2}
+  indoorUnitMaterial: {fileID: 2100000, guid: a01a499e242ab864fa3e485df9b7f9a7, type: 2}
+  windowFrameMaterial: {fileID: 2100000, guid: bd0c72300a6f4bb394c69ea48351f080, type: 2}
+  windowGlassMaterial: {fileID: 2100000, guid: a931df6fd335a394d89e9640431a8e0a, type: 2}
+  televisionMaterial: {fileID: 2100000, guid: 2ef3042a26cf487a84f3ad570b7572e1, type: 2}
+  televisionDeskMaterial: {fileID: 2100000, guid: 4ea4f78092504482a1451670d4222518, type: 2}
+  airPurifierMaterial: {fileID: 2100000, guid: 0d1d868b7ccf41ba8f0c5d32f9688644, type: 2}
+  airPurifierDarkMaterial: {fileID: 2100000, guid: b8f4c1352ea64898bd58f37777f96b12, type: 2}
+  windowOpeningSize: {x: 3.6, y: 1.9}
+  windowOpeningCenter: {x: 0, y: 1}
+  televisionCenter: {x: 2.46, y: 1.05, z: 0}
+  televisionWidth: 1.25
+  televisionDeskWidth: 1.55
+  airPurifierFloorPosition: {x: 2.05, y: 0, z: -3.45}
+  airPurifierHeight: 0.85
+  showWalls: 1
+  showCameraSideWalls: 0
+  showCeiling: 0
+  showFurniture: 1
+  environmentBuilt: 0
+  lastStatus: Not built.
+--- !u!1 &730200000010
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730200000011}
+  m_Layer: 8
+  m_Name: FloorVisual
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &730200000011
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730200000010}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 730200000002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &730200000012
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730200000013}
+  m_Layer: 8
+  m_Name: WallVisuals
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &730200000013
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730200000012}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 730200000015}
+  - {fileID: 730200000017}
+  m_Father: {fileID: 730200000002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &730200000014
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730200000015}
+  m_Layer: 8
+  m_Name: CutawayWalls
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &730200000015
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730200000014}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 730200000013}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &730200000016
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730200000017}
+  m_Layer: 8
+  m_Name: CameraSideWalls
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &730200000017
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730200000016}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 730200000013}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &730200000018
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730200000019}
+  m_Layer: 8
+  m_Name: CeilingVisual
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &730200000019
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730200000018}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 730200000002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &730200000020
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730200000021}
+  m_Layer: 8
+  m_Name: IndoorUnitVisual
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &730200000021
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730200000020}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 730200000002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &730200000022
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 730200000023}
+  m_Layer: 8
+  m_Name: OptionalFurniture
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &730200000023
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 730200000022}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 730200000002}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -25692,3 +26153,4 @@ SceneRoots:
   - {fileID: 906129461}
   - {fileID: 201009858}
   - {fileID: 730100000002}
+  - {fileID: 730200000002}

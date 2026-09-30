@@ -54,10 +54,9 @@ public static class CaseStudyBatchRunner
         var controller = Object.FindFirstObjectByType<SimulationController>();
         if (controller != null && !controller.CaseStudyExecutionEnabled)
         {
-            Debug.LogWarning(
-                "[CaseStudyBatchRunner] Case study execution is disabled in SimulationController. " +
-                "Enable it in the Case Study section before running.");
-            return;
+            controller.SetCaseStudyExecutionEnabled(true);
+            Debug.Log(
+                "[CaseStudyBatchRunner] Case study execution was enabled for this explicit A0-A4 batch run.");
         }
 
         CaseStudyRuntimeRunner.CreateDefaultRunner(quitWhenComplete);

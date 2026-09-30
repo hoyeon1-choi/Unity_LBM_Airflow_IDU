@@ -7,6 +7,7 @@ public class SimulationResultMetrics
     [Header("Case / Time")]
     public ulong stepCount;
     public float simulationTimeSeconds;
+    public float dxPhys;
     public float dtPhys;
     public string preset;
     public string caseName;
@@ -109,6 +110,7 @@ public class SimulationResultMetrics
     {
         stepCount = 0;
         simulationTimeSeconds = 0f;
+        dxPhys = 0f;
         dtPhys = 0f;
         preset = "";
         caseName = "";
@@ -208,6 +210,7 @@ public class SimulationResultMetrics
             $"[Case / Time]\n" +
             $"Step                  : {stepCount}\n" +
             $"Simulation Time       : {simulationTimeSeconds:F3} s\n" +
+            $"dxPhys                : {dxPhys:F6} m\n" +
             $"dtPhys                : {dtPhys:E6} s\n" +
             $"Preset                : {SafeText(preset)}\n" +
             $"Case                  : {SafeText(caseName)}\n" +

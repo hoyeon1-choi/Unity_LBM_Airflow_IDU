@@ -348,3 +348,31 @@ tau가 0.5에 가까우면 불안정해질 수 있으므로 아래 경고를 추
 - FMU 초기 입력값과 순환 연결 정책을 product co-simulation profile에 명시하십시오. 순환 연결은 기본적으로 이전 step 출력을 사용하는 one-step delay 방식으로 처리하고, 지연을 허용할 수 없는 제품은 별도의 fixed-point iteration 정책을 명시해야 합니다.
 - 비동기 실행은 Unity UI를 막지 않기 위한 것이며 FMU 실행 순서를 비결정적으로 만드는 병렬 실행을 의미하지 않습니다.
 - timeout 또는 FMU 오류가 발생하면 해당 step을 완료로 기록하지 말고 실패 상태를 보존하십시오. 외부 호스트 정리와 LBM pause 해제 후 명시적인 재초기화 절차를 따르십시오.
+
+## Bootstrap 및 런타임 UI 시작 성능 원칙
+
+과거 `ApplicationBootstrap` 실행 시 `Simulation Set-up` 창이 활성화되기까지 약 30초가 걸리는 회귀가 발생했습니다. Unity `Editor.log` 분석 결과 LBM 씬 로드는 약 1.58초였지만, Monitoring 씬 Integration이 약 28.85초 소요되었습니다. 주원인은 `CoSimulationMonitoringDashboard.Awake()`에서 한글 TMP 폰트를 `GlyphRenderMode.SDF8`로 생성하고 전체 글리프를 동기 추가한 작업이었습니다.
+
+다른 기능을 추가하거나 UI를 변경할 때 다음 원칙을 반드시 지키십시오.
+
+- 사용자가 가장 먼저 조작해야 하는 화면을 최우선으로 표시하십시오. Bootstrap의 첫 프레임은 `Simulation Set-up` 표시를 위해 양보하고, 입력에 불필요한 씬과 기능은 초기 화면의 critical path에서 제외하십시오.
+- Monitoring 씬처럼 초기 설정에 필요하지 않은 씬은 `Simulation Set-up` 확인 후 로드하십시오.
+- `Awake`, `OnEnable`, `Start`에서 아래와 같은 무거운 동기 작업을 수행하지 마십시오.
+  - 대용량 TMP SDF atlas 생성 또는 전체 한글 글리프 사전 생성
+  - 대규모 UI hierarchy 생성/재구축 및 반복적인 Canvas 강제 rebuild
+  - FMU 압축 해제, 외부 프로세스 시작 대기, 파일 전체 검색
+  - 대규모 GPU buffer/texture 생성 또는 동기 GPU readback
+  - 전체 Scene object를 대상으로 하는 반복 검색·복사·직렬화
+- `LoadSceneAsync`도 Scene Integration과 `Awake` 실행은 메인 스레드를 오래 점유할 수 있습니다. API 이름이 Async라는 이유만으로 UI가 응답한다고 가정하지 마십시오.
+- 런타임 TMP 폰트가 필요하면 프로젝트에 포함된 persistent `TMP_FontAsset`을 우선 사용하십시오. Windows 시스템 폰트를 런타임 생성해야 한다면 기본적으로 `SDFAA` 또는 `SDFAA_HINTED`를 사용하고, `SDF8`/`SDF16`/`SDF32` 및 대량의 `TryAddCharacters` 호출은 실측 근거 없이 사용하지 마십시오.
+- 무거운 초기화가 불가피하면 여러 프레임으로 분할하거나 사용자 입력 이후로 지연하십시오. 단, Unity API와 TMP FontEngine API를 검증 없이 `Task.Run`에서 호출하지 마십시오.
+- Bootstrap, Monitoring UI, 폰트, 씬 로딩 순서를 수정할 때는 각 구간의 `Time.realtimeSinceStartupAsDouble` 경과 시간을 Case/태그가 포함된 로그로 남기십시오.
+- 성능 검증 시 Unity `Editor.log`의 `Loaded scene` 항목에서 `Deserialize`, `Integration`, `Total Operation Time`을 확인하십시오. Console 로그 시각만 보고 병목을 추정하지 마십시오.
+- Editor domain reload 및 스크립트 compile 시간은 애플리케이션 시작 시간과 분리해서 보고하십시오.
+- 최소 수동 회귀 검증은 다음과 같습니다.
+  1. Bootstrap 씬에서 Play를 시작합니다.
+  2. 첫 프레임부터 `Simulation Set-up` 또는 로딩 상태가 표시되는지 확인합니다.
+  3. LBM 씬 준비 후 Set-up 시작 버튼이 수 초 내 활성화되는지 확인합니다.
+  4. 조건 적용 후 Monitoring 화면이 표시되는 동안 UI가 장시간 멈추지 않는지 확인합니다.
+  5. `Editor.log`에서 개별 씬 Integration이 비정상적으로 증가하지 않았는지 이전 기준과 비교합니다.
+- 목표 기준은 Editor domain reload를 제외하고 Set-up 조작 가능 상태까지 3초 내외입니다. 동일 워크스테이션에서 이전 측정 대비 2배 이상 또는 2초 이상 증가하면 성능 회귀로 간주하고 원인을 확인하십시오.

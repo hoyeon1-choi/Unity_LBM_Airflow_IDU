@@ -1,0 +1,57 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="ReferenceFMUs">
+      <UniqueIdentifier>{1120f966-8655-4972-ba50-cacf1572b628}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ReferenceFMUs\include">
+      <UniqueIdentifier>{10452752-41bc-413e-9926-d4006f87d089}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ReferenceFMUs\src">
+      <UniqueIdentifier>{d6c75c0e-7fea-422c-9317-c58591dddaf4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ReferenceFMUs\model">
+      <UniqueIdentifier>{9d69d9dd-c1ea-4ca9-a597-7411a54fd932}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Utils">
+      <UniqueIdentifier>{4ae54436-85cd-42fb-b887-525002a2f1ab}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\Library\ReferenceFMUs\include\cosimulation.h">
+      <Filter>ReferenceFMUs\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Library\ReferenceFMUs\include\fmi2Functions.h">
+      <Filter>ReferenceFMUs\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Library\ReferenceFMUs\include\fmi2FunctionTypes.h">
+      <Filter>ReferenceFMUs\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Library\ReferenceFMUs\include\fmi2TypesPlatform.h">
+      <Filter>ReferenceFMUs\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Library\ReferenceFMUs\include\model.h">
+      <Filter>ReferenceFMUs\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Library\Utils\BuildInfo.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\Library\ReferenceFMUs\src\cosimulation.c">
+      <Filter>ReferenceFMUs\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Library\ReferenceFMUs\src\fmi2Functions.c">
+      <Filter>ReferenceFMUs\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Library\ReferenceFMUs\model\model_dll_init.cpp">
+      <Filter>ReferenceFMUs\model</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Library\ReferenceFMUs\model\model.cpp">
+      <Filter>ReferenceFMUs\model</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Library\Utils\BuildInfo.cpp">
+      <Filter>Utils</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

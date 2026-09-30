@@ -111,6 +111,32 @@ public class AirflowLbmSignalAdapter : MonoBehaviour, ICoSimSignalProvider, ICoS
             $"RH={latestRelativeHumidityPercent:F1}%.";
     }
 
+    public void ApplyRuntimeInletControls(bool powerOn, float dischargeAngleDeg)
+    {
+        ResolveReferences();
+        if (inletTargets == null || inletTargets.Length == 0)
+            AutoCollectInletTargets();
+
+        int applied = 0;
+        for (int i = 0; i < inletTargets.Length; i++)
+        {
+            LBMZouHeBox target = inletTargets[i];
+            if (target == null || target.PatchKind != LBMZouHeBox.Kind.Inlet)
+                continue;
+
+            target.SetCeilingDischargeAngleDeg(dischargeAngleDeg, false);
+            target.SetPower(powerOn, false);
+            applied++;
+        }
+
+        targetInletCount = applied;
+        targetInletNames = BuildTargetNamesText();
+        lastStatus =
+            $"Applied runtime inlet controls to {applied} target(s): " +
+            $"power={(powerOn ? "On" : "Off")}, angle={dischargeAngleDeg:F0} deg.";
+        SyncDynamicBoundaryInputsNow();
+    }
+
     public bool TryGetSignal(CoSimSignalKey key, out CoSimSignalValue value)
     {
         value = default;

@@ -1,0 +1,64 @@
+[24.05.31] ver 5.0.0
+ - Reference FMU 포함
+ - CFMU Cluster 기능 추가
+ - CFMU Selector 기능 추가
+ - Cluster 내 메모리 통신 기능 추가
+ - CFMU 시뮬레이션 가속 제한 기능 추가
+	※ CFMU 연산에 소요된 시간만 고려함 (다른 시뮬레이션 tool의 연산 시간은 고려하지 않음)
+
+[24.06.11] ver 5.1.0
+ - 실제 시리얼 통신과 CFMU 모델 연결 기능 추가
+ 
+[24.06.13] ver 5.1.1
+ - 모든 CFMU dll 파일이 동일 폴더에 위치하도록 수정
+ - SetTimeAccelerationLimit 버그 수정
+ - FMI2 variableNamingConvection 기본값을 'structured'로 변경
+	- 상위 CFMU 이름과 하위 CFMU 변수명 사이의 구분자를 '__'에서 '.'으로 변경
+ - TimeEvent와 ExternalEvent 생성시 이름을 부여하도록 변경 (디버깅 추적 목적)
+ - ExternalEvent가 특정 상황에서 정상적으로 reset 되지 않는 버그 수정
+
+[24.06.17] ver 5.1.2
+ - MemoryReceiver에 새로운 데이터의 수신 여부를 알려주는 dataReceivedFlagPtr 변수 추가
+ - MemoryTransmitter에 buffer 기능을 추가
+
+[24.06.20] ver 5.1.3
+ - 변수의 현재값을 주기적으로(period 간격) csv 파일로 저장하는 기능 구현
+ - TimeUnit의 자료형을 double로 변경 (단위는 변경없음 : nanosecond)
+
+[24.06.25] ver 5.1.4
+ - SerialCommDevice에서 Port명 파라미터 변경시 open fail 문제 수정
+
+[24.06.26] ver 5.1.5
+ - TimeAccelerationLimit의 음수 설정이 가능하도록 자료형을 double로 변경
+ - Print'X' 함수에서 시뮬레이션 시간과 현재 시간의 속도 비율을 출력하는 기능 추가 = 가속 비율
+
+[24.06.28] ver 5.1.6
+ - CFMU Selector의 decrtipion을 사용자가 직접 입력 가능하도록 변경
+
+[24.07.17] ver 5.1.7
+ - MemoryTransmitter에서 송신 데이터를 buffer에 저장해두고, 나중에 데이터를 한 번에 Read하는 함수 추가 : ReadDataFromBuffer
+ - MemoryReceiver에서 buffer에 다수의 데이터를 한 번에 Write하고, 레지스터에서 데이터를 한 개씩 수신하는 함수 추가 : WriteDataToBuffer
+ - 파라미터를 JSON 포맷으로 read/write하는 기능 추가
+ - CFMU API 추가
+ - 7-Zip 의존성 삭제
+
+[24.08.28] ver 5.1.8 (deprecated)
+ - 유저가 MemoryTransmitter/MemoryReceiver을 enable/disable 할 수 있도록 레지스터 변수를 등록하는 기능 추가
+
+[24.09.11] ver 5.1.8
+ - CSVWriter에 write interval을 설정할 수 있는 기능 추가 (period가 짧더라도, 지정된 간격에 도달해야 write row가 실행됨)
+
+[24.10.07] ver 5.1.9
+ - 입출력 변수의 모니터링을 CSV 파일로 저장하는 기능 추가
+   - 파라미터 설정을 통해 활성화 가능함. "CreateMonitoring(CSV)"
+   - 로깅 간격은 period와 동일
+ - Intel hex 포맷, 지원 가능한 RecordType 추가. (모든 RecordType 지원)
+
+[00.00.00] ver 5.1.10
+ - 파라미터 json 파일 parsing 실패시 예외처리 추가
+ - FMU 빌드시 parameters.json 파일도 함께 생성
+ - Selector 기능 버그 수정
+   - 내부적으로 관리하는 변수 이름 앞에 모델명을 추가하여 구분되도록 수정
+
+[TODO]
+ - 

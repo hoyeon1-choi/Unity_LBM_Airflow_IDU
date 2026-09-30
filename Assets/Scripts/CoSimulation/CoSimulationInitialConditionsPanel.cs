@@ -22,7 +22,7 @@ public static class CoSimulationStartupGate
 }
 
 [DefaultExecutionOrder(-32700)]
-[AddComponentMenu("Co-Simulation/Initial Conditions Panel")]
+[AddComponentMenu("Co-Simulation/Simulation Set-up Panel")]
 public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
 {
     public enum OperationMode
@@ -46,31 +46,24 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
     private const float DefaultOutdoorTemperatureDegC = 35.0f;
     private const float DefaultOutdoorHumidityPercent = 70.0f;
     private const float DefaultSetTemperatureDegC = 28.0f;
-
-    private static readonly string[] ModeLabels = { "냉방", "제습", "난방" };
-    private static readonly string[] FanLabels = { "미풍", "약", "중", "강", "파워" };
-    private static readonly string[] DirectionLabels =
-    {
-        "P1\n15°", "P2\n30°", "P3\n45°", "P4\n60°", "P5\n75°", "P6\n90°"
-    };
+    private const float DefaultTargetSimulationTimeSeconds = 30.0f;
 
     private string indoorTemperatureText;
     private string indoorHumidityText;
     private string outdoorTemperatureText;
     private string outdoorHumidityText;
-    private string setTemperatureText;
-    private bool powerOn;
-    private int operationModeIndex;
-    private int fanStrengthIndex;
-    private int windDirectionIndex;
+    private string targetSimulationTimeText;
     private string validationMessage = string.Empty;
     private bool relevantSceneFound;
     private bool applicationStartupScene;
     private Rect windowRect;
+    private Vector2 scrollPosition;
     private GUIStyle titleStyle;
     private GUIStyle sectionStyle;
     private GUIStyle errorStyle;
     private GUIStyle hintStyle;
+    private GUIStyle bodyStyle;
+    private GUIStyle buttonStyle;
     private Font runtimeFont;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -88,7 +81,7 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
     private void Awake()
     {
         ResetDefaults();
-        windowRect = new Rect(0.0f, 0.0f, 610.0f, 600.0f);
+        windowRect = new Rect(0.0f, 0.0f, 610.0f, 470.0f);
         string activeScenePath = SceneManager.GetActiveScene().path ?? string.Empty;
         applicationStartupScene =
             activeScenePath.EndsWith("ApplicationBootstrap.unity", StringComparison.OrdinalIgnoreCase) ||
@@ -116,8 +109,8 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
             return;
 
         EnsureStyles();
-        windowRect.width = Mathf.Min(610.0f, Screen.width - 24.0f);
-        windowRect.height = 600.0f;
+        windowRect.width = Mathf.Min(610.0f, Mathf.Max(300.0f, Screen.width - 24.0f));
+        windowRect.height = Mathf.Min(470.0f, Mathf.Max(300.0f, Screen.height - 24.0f));
         windowRect.x = (Screen.width - windowRect.width) * 0.5f;
         windowRect.y = Mathf.Max(12.0f, (Screen.height - windowRect.height) * 0.5f);
 
@@ -126,7 +119,7 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
         GUI.color = new Color(0.02f, 0.03f, 0.05f, 0.98f);
         GUI.DrawTexture(new Rect(0.0f, 0.0f, Screen.width, Screen.height), Texture2D.whiteTexture);
         GUI.color = previousColor;
-        windowRect = GUI.ModalWindow(GetInstanceID(), windowRect, DrawWindow, "시뮬레이션 초기 조건");
+        windowRect = GUI.ModalWindow(GetInstanceID(), windowRect, DrawWindow, "Simulation Set-up");
     }
 
     private void DrawWindow(int id)
@@ -135,28 +128,21 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
         GUILayout.Label("시뮬레이션 시작 전에 기본 조건을 확인해 주세요.", titleStyle);
         GUILayout.Space(10.0f);
 
+        scrollPosition = GUILayout.BeginScrollView(
+            scrollPosition,
+            false,
+            true,
+            GUILayout.ExpandHeight(true));
+
         DrawNumericField("실내온도", ref indoorTemperatureText, "℃");
         DrawNumericField("실내상대습도", ref indoorHumidityText, "%");
         DrawNumericField("실외온도", ref outdoorTemperatureText, "℃");
         DrawNumericField("실외상대습도", ref outdoorHumidityText, "%");
 
-        GUILayout.Space(8.0f);
-        powerOn = DrawToggleRow("R1(LBM) 전원", powerOn, powerOn ? "On" : "Off");
-
         GUILayout.Space(10.0f);
-        GUILayout.Label("제품 운전 설정", sectionStyle);
-        bool previousEnabled = GUI.enabled;
-        GUI.enabled = powerOn;
-        DrawNumericField("설정온도", ref setTemperatureText, "℃");
-        GUILayout.Label("운전모드", hintStyle);
-        operationModeIndex = GUILayout.SelectionGrid(operationModeIndex, ModeLabels, 3, GUILayout.Height(34.0f));
-        GUILayout.Label("바람세기", hintStyle);
-        fanStrengthIndex = GUILayout.SelectionGrid(fanStrengthIndex, FanLabels, 5, GUILayout.Height(34.0f));
-        GUILayout.Label("바람방향 (천장면과 취출기류의 각도)", hintStyle);
-        windDirectionIndex = GUILayout.SelectionGrid(windDirectionIndex, DirectionLabels, 6, GUILayout.Height(48.0f));
-        GUI.enabled = previousEnabled;
-        if (!powerOn)
-            GUILayout.Label("R1 전원을 On으로 전환하면 위 제품 운전 설정을 변경할 수 있습니다. R2~R5는 통합창에서 제어합니다.", hintStyle);
+        GUILayout.Label("Simulation", sectionStyle);
+        DrawNumericField("Target simulation time", ref targetSimulationTimeText, "s");
+        GUILayout.Label("제품 운전 조건은 시뮬레이션 시작 후 오른쪽 모니터링 창에서 변경합니다.", hintStyle);
 
         if (!string.IsNullOrEmpty(validationMessage))
             GUILayout.Label(validationMessage, errorStyle);
@@ -164,13 +150,14 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
         if (!relevantSceneFound)
             GUILayout.Label("\uC2DC\uBBAC\uB808\uC774\uC158 Scene\uC744 \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4...", hintStyle);
 
-        GUILayout.FlexibleSpace();
+        GUILayout.EndScrollView();
+        GUILayout.Space(6.0f);
         bool previousButtonEnabled = GUI.enabled;
         GUI.enabled = previousButtonEnabled && relevantSceneFound;
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button("기본값 복원", GUILayout.Height(38.0f)))
+        if (GUILayout.Button("기본값 복원", buttonStyle, GUILayout.Height(38.0f)))
             ResetDefaults();
-        if (GUILayout.Button("조건 적용 후 시뮬레이션 시작", GUILayout.Height(38.0f)))
+        if (GUILayout.Button("조건 적용 후 시뮬레이션 시작", buttonStyle, GUILayout.Height(38.0f)))
             TryApplyAndStart();
         GUILayout.EndHorizontal();
         GUI.enabled = previousButtonEnabled;
@@ -179,19 +166,10 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
     private void DrawNumericField(string label, ref string value, string unit)
     {
         GUILayout.BeginHorizontal(GUILayout.Height(32.0f));
-        GUILayout.Label(label, GUILayout.Width(185.0f));
+        GUILayout.Label(label, bodyStyle, GUILayout.Width(185.0f));
         value = GUILayout.TextField(value, GUILayout.Width(170.0f));
-        GUILayout.Label(unit, GUILayout.Width(40.0f));
+        GUILayout.Label(unit, bodyStyle, GUILayout.Width(40.0f));
         GUILayout.EndHorizontal();
-    }
-
-    private static bool DrawToggleRow(string label, bool value, string state)
-    {
-        GUILayout.BeginHorizontal(GUILayout.Height(32.0f));
-        GUILayout.Label(label, GUILayout.Width(185.0f));
-        bool updated = GUILayout.Toggle(value, state, GUILayout.Width(170.0f));
-        GUILayout.EndHorizontal();
-        return updated;
     }
 
     private void TryApplyAndStart()
@@ -203,15 +181,15 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
             !TryParse(indoorHumidityText, out float indoorHumidity) ||
             !TryParse(outdoorTemperatureText, out float outdoorTemperature) ||
             !TryParse(outdoorHumidityText, out float outdoorHumidity) ||
-            !TryParse(setTemperatureText, out float setTemperature))
+            !TryParse(targetSimulationTimeText, out float targetSimulationTime))
         {
-            validationMessage = "온도와 습도는 숫자로 입력해 주세요.";
+            validationMessage = "온도, 습도, 목표 시뮬레이션 시간은 숫자로 입력해 주세요.";
             return;
         }
 
-        if (setTemperature < -30.0f || setTemperature > 60.0f)
+        if (targetSimulationTime <= 0.0f)
         {
-            validationMessage = "설정온도는 -30~60℃ 범위로 입력해 주세요.";
+            validationMessage = "Target simulation time must be greater than zero.";
             return;
         }
 
@@ -238,7 +216,17 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
 
         CoSimulationOrchestrator orchestrator = FindFirstObjectByType<CoSimulationOrchestrator>();
         AirflowLbmSignalAdapter airflow = FindFirstObjectByType<AirflowLbmSignalAdapter>();
+        float setTemperature = DefaultSetTemperatureDegC;
+        // The setup screen no longer exposes product controls, so start R1 with
+        // a valid cooling preset. The monitoring panel can turn it off later.
+        bool powerOn = true;
+        int operationModeIndex = (int)OperationMode.Cooling;
+        int fanStrengthIndex = (int)FanStrength.High - 1;
+        int windDirectionIndex = 2;
         float dischargeAngle = (windDirectionIndex + 1) * 15.0f;
+
+        controller.SetTargetSimulationTime(targetSimulationTime);
+        controller.SetCaseStudyExecutionEnabled(false);
 
         controller.ApplyInitialRoomTemperatureDegC(indoorTemperature);
         airflow?.ApplyInitialIndoorConditions(indoorTemperature, indoorHumidity);
@@ -267,10 +255,12 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
 
         string tag = orchestrator != null ? orchestrator.ProfileName : controller.ActiveCaseName;
         Debug.Log(
-            $"[Initial Conditions][{tag}] room={indoorTemperature:F1}C/{indoorHumidity:F1}%, " +
+            $"[Simulation Set-up][{tag}] room={indoorTemperature:F1}C/{indoorHumidity:F1}%, " +
             $"outdoor={outdoorTemperature:F1}C/{outdoorHumidity:F1}%, R1 power={(powerOn ? "On" : "Off")}, R2-R5 power=Off, " +
-            $"setTemperature={setTemperature:F1}C, mode={ModeLabels[operationModeIndex]}, fan={FanLabels[fanStrengthIndex]}, " +
-            $"direction=P{windDirectionIndex + 1} ({dischargeAngle:F0} deg). Simulation started.");
+            $"remoteDefaults=setTemperature={setTemperature:F1}C/mode={operationModeIndex}/fan={fanStrengthIndex + 1}/" +
+            $"direction=P{windDirectionIndex + 1} ({dischargeAngle:F0} deg), " +
+            $"targetTime={targetSimulationTime.ToString("F3", CultureInfo.InvariantCulture)}s. " +
+            "Simulation started.");
 
         Destroy(gameObject);
     }
@@ -315,11 +305,7 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
         indoorHumidityText = DefaultIndoorHumidityPercent.ToString("0.0", CultureInfo.InvariantCulture);
         outdoorTemperatureText = DefaultOutdoorTemperatureDegC.ToString("0.0", CultureInfo.InvariantCulture);
         outdoorHumidityText = DefaultOutdoorHumidityPercent.ToString("0.0", CultureInfo.InvariantCulture);
-        setTemperatureText = DefaultSetTemperatureDegC.ToString("0.0", CultureInfo.InvariantCulture);
-        powerOn = false;
-        operationModeIndex = (int)OperationMode.Cooling;
-        fanStrengthIndex = (int)FanStrength.High - 1;
-        windDirectionIndex = 2;
+        targetSimulationTimeText = DefaultTargetSimulationTimeSeconds.ToString("0.0", CultureInfo.InvariantCulture);
         validationMessage = string.Empty;
     }
 
@@ -336,7 +322,17 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
 
         runtimeFont = Font.CreateDynamicFontFromOSFont(
             new[] { "Malgun Gothic", "맑은 고딕", "Arial" }, 18);
-        GUI.skin.font = runtimeFont;
+        // Do not assign this transient font to the global GUI.skin. The Editor reuses that
+        // skin while restoring script state, so destroying the font would leave a stale
+        // native reference and warn on the next domain reload.
+        bodyStyle = new GUIStyle(GUI.skin.label)
+        {
+            font = runtimeFont
+        };
+        buttonStyle = new GUIStyle(GUI.skin.button)
+        {
+            font = runtimeFont
+        };
         titleStyle = new GUIStyle(GUI.skin.label)
         {
             font = runtimeFont,
@@ -362,7 +358,17 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
 
     private void OnDestroy()
     {
+        // Detach every local GUIStyle before releasing the transient font.
+        if (titleStyle != null) titleStyle.font = null;
+        if (sectionStyle != null) sectionStyle.font = null;
+        if (errorStyle != null) errorStyle.font = null;
+        if (hintStyle != null) hintStyle.font = null;
+        if (bodyStyle != null) bodyStyle.font = null;
+        if (buttonStyle != null) buttonStyle.font = null;
+
         if (runtimeFont != null)
             Destroy(runtimeFont);
+
+        runtimeFont = null;
     }
 }

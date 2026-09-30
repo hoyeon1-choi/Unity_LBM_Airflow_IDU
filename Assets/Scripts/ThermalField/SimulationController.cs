@@ -26,7 +26,13 @@ public enum CaseStudyPreset
     A1_FluidTau_0530_Thermal_0560_Off,
     A2_FluidTau_0510_Thermal_0560_Off,
     A3_FluidTau_0510_Thermal_0530_Off,
-    A4_FluidTau_0510_Thermal_0530_Smag003
+    A4_FluidTau_0510_Thermal_0530_Smag003,
+    B1_FluidTau_0515_Thermal_0535_Off,
+    B2_FluidTau_0510_Thermal_0530_Off,
+    B3_FluidTau_0505_Thermal_0525_Off,
+    B4_FluidTau_0510_Thermal_0530_Smag003,
+    B5_FluidTau_0510_Thermal_0530_Smag006,
+    B6_FluidTau_0510_Thermal_0530_Smag010
 }
 
 public class SimulationController : Singleton<SimulationController>
@@ -95,11 +101,8 @@ public class SimulationController : Singleton<SimulationController>
 
     [Header("Case Study")]
     [Tooltip("Enable this before running A0-A4 case-study automation. Keep it off to prevent accidental long runs.")]
-    [SerializeField] private bool enableCaseStudyExecution = false;
-    [SerializeField] private CaseStudyPreset selectedCaseStudy = CaseStudyPreset.A0_Baseline;
-    [Tooltip("Apply the AGENTS.md short-run target time when a case-study preset is applied.")]
-    [SerializeField] private bool setTargetTimeWhenApplyingCaseStudy = true;
-    [SerializeField] private float caseStudyTargetSimulationTimeSeconds = 30.0f;
+    [SerializeField, HideInInspector] private bool enableCaseStudyExecution = false;
+    [SerializeField, HideInInspector] private CaseStudyPreset selectedCaseStudy = CaseStudyPreset.A0_Baseline;
     [SerializeField, ReadOnly] private string activeCaseName = "Manual";
     [TextArea(3, 8)]
     [SerializeField, ReadOnly] private string caseStudySummary = "No case study preset applied.";
@@ -376,6 +379,7 @@ public class SimulationController : Singleton<SimulationController>
     public float TargetSimulationTimeSeconds => targetSimulationTimeSeconds;
     public bool TargetTimeReached => targetTimeReached;
     public bool CaseStudyExecutionEnabled => enableCaseStudyExecution;
+    public CaseStudyPreset SelectedCaseStudy => selectedCaseStudy;
     public bool IsSolverReadyForReadback
     {
         get
@@ -417,6 +421,31 @@ public class SimulationController : Singleton<SimulationController>
         runSimulation = running;
         if (running)
             targetTimeReached = false;
+    }
+
+    public void SetSelectedCaseStudy(CaseStudyPreset preset)
+    {
+        selectedCaseStudy = preset;
+        MarkSummaryDirty();
+    }
+
+    public void SetCaseStudyExecutionEnabled(bool enabled)
+    {
+        enableCaseStudyExecution = enabled;
+        if (!enabled)
+        {
+            activeCaseName = "Manual";
+            TryApplyExperimentTagToLogger(activeCaseName);
+        }
+        MarkSummaryDirty();
+    }
+
+    public void SetTargetSimulationTime(float seconds, bool enabled = true)
+    {
+        useTargetSimulationTime = enabled;
+        targetSimulationTimeSeconds = Mathf.Max(0.0f, seconds);
+        targetTimeReached = false;
+        MarkSummaryDirty();
     }
 
     public void SetExternalStepPause(bool paused, string reason = null)
@@ -782,6 +811,23 @@ public class SimulationController : Singleton<SimulationController>
         ApplySelectedCaseStudy();
     }
 
+    [ContextMenu("Apply Next Case Study")]
+    public void ApplyNextCaseStudy()
+    {
+        int next = (int)selectedCaseStudy + 1;
+        if (next > (int)CaseStudyPreset.B6_FluidTau_0510_Thermal_0530_Smag010)
+            next = (int)CaseStudyPreset.A0_Baseline;
+
+        selectedCaseStudy = (CaseStudyPreset)next;
+        ApplySelectedCaseStudy();
+    }
+
+    [ContextMenu("Return To Case Study Baseline")]
+    public void ReturnToCaseStudyBaseline()
+    {
+        ApplyCaseStudyA0Baseline();
+    }
+
     public void ApplyCaseStudyPreset(CaseStudyPreset preset)
     {
         ApplyCaseStudyPresetInternal(preset, false);
@@ -807,12 +853,6 @@ public class SimulationController : Singleton<SimulationController>
         tauThermalMax = 4.0f;
         turbulenceModel = definition.TurbulenceModel;
         turbulenceModelConstant = definition.TurbulenceConstant;
-
-        if (setTargetTimeWhenApplyingCaseStudy)
-        {
-            useTargetSimulationTime = true;
-            targetSimulationTimeSeconds = Mathf.Max(0.0f, caseStudyTargetSimulationTimeSeconds);
-        }
 
         SyncLegacyTauClampFields();
         scalingDirty = true;
@@ -959,6 +999,60 @@ public class SimulationController : Singleton<SimulationController>
                     TurbulenceModel.Smagorinsky,
                     0.03f,
                     "Reduced fluid/thermal diffusion with light Smagorinsky stabilization.");
+
+            case CaseStudyPreset.B1_FluidTau_0515_Thermal_0535_Off:
+                return new CaseStudyDefinition(
+                    "B1_FluidTau_0515_Thermal_0535_Off",
+                    0.515f,
+                    0.535f,
+                    TurbulenceModel.None,
+                    0.0f,
+                    "Secondary sweep: moderate fluid and thermal diffusion reduction.");
+
+            case CaseStudyPreset.B2_FluidTau_0510_Thermal_0530_Off:
+                return new CaseStudyDefinition(
+                    "B2_FluidTau_0510_Thermal_0530_Off",
+                    0.510f,
+                    0.530f,
+                    TurbulenceModel.None,
+                    0.0f,
+                    "Secondary sweep reference without a turbulence model.");
+
+            case CaseStudyPreset.B3_FluidTau_0505_Thermal_0525_Off:
+                return new CaseStudyDefinition(
+                    "B3_FluidTau_0505_Thermal_0525_Off",
+                    0.505f,
+                    0.525f,
+                    TurbulenceModel.None,
+                    0.0f,
+                    "Secondary sweep near the fluid relaxation stability limit.");
+
+            case CaseStudyPreset.B4_FluidTau_0510_Thermal_0530_Smag003:
+                return new CaseStudyDefinition(
+                    "B4_FluidTau_0510_Thermal_0530_Smag003",
+                    0.510f,
+                    0.530f,
+                    TurbulenceModel.Smagorinsky,
+                    0.03f,
+                    "Secondary sweep with Smagorinsky Cs=0.03.");
+
+            case CaseStudyPreset.B5_FluidTau_0510_Thermal_0530_Smag006:
+                return new CaseStudyDefinition(
+                    "B5_FluidTau_0510_Thermal_0530_Smag006",
+                    0.510f,
+                    0.530f,
+                    TurbulenceModel.Smagorinsky,
+                    0.06f,
+                    "Secondary sweep with Smagorinsky Cs=0.06.");
+
+            case CaseStudyPreset.B6_FluidTau_0510_Thermal_0530_Smag010:
+                return new CaseStudyDefinition(
+                    "B6_FluidTau_0510_Thermal_0530_Smag010",
+                    0.510f,
+                    0.530f,
+                    TurbulenceModel.Smagorinsky,
+                    0.10f,
+                    "Secondary sweep with Smagorinsky Cs=0.10.");
 
             case CaseStudyPreset.A0_Baseline:
             default:
@@ -1316,31 +1410,45 @@ public class SimulationController : Singleton<SimulationController>
                 AppendReadinessLine(warnings, $"Estimated GPU memory is high: {estimatedTotalGpuMemoryMB:F1} MiB.");
         }
 
-        int inletCount = 0;
-        int outletCount = 0;
+        int configuredInletCount = 0;
+        int configuredOutletCount = 0;
+        int activeInletCount = 0;
+        int activeOutletCount = 0;
         bool hasBadPatch = false;
         if (sceneCache != null && sceneCache.ZouHeBoxes != null)
         {
             foreach (var box in sceneCache.ZouHeBoxes)
             {
-                if (box == null || !box.Power)
+                if (box == null)
                     continue;
 
                 if (box.PatchKind == LBMZouHeBox.Kind.Inlet)
-                    inletCount++;
+                {
+                    configuredInletCount++;
+                    if (box.Power)
+                        activeInletCount++;
+                }
                 else
-                    outletCount++;
+                {
+                    configuredOutletCount++;
+                    if (box.Power)
+                        activeOutletCount++;
+                }
 
-                if (box.PatchCellCount == 0)
+                if (box.Power && box.PatchCellCount == 0)
                     hasBadPatch = true;
             }
         }
 
-        if (inletCount == 0)
+        if (configuredInletCount == 0)
             AppendReadinessLine(errors, "At least one inlet boundary is required.");
+        else if (activeInletCount == 0)
+            AppendReadinessLine(warnings, "All configured inlet boundaries are currently Off. Flow remains zero until R1 is enabled.");
 
-        if (outletCount == 0)
+        if (configuredOutletCount == 0)
             AppendReadinessLine(errors, "At least one outlet boundary is required.");
+        else if (activeOutletCount == 0)
+            AppendReadinessLine(warnings, "All configured outlet boundaries are currently Off.");
 
         if (hasBadPatch)
             AppendReadinessLine(errors, "One or more boundary patches have zero cells.");
@@ -1358,7 +1466,8 @@ public class SimulationController : Singleton<SimulationController>
         readinessSummary =
             $"=== Run Readiness ===\n" +
             $"Status : {readinessStatus}\n" +
-            $"Inlets : {inletCount}, Outlets : {outletCount}\n" +
+            $"Inlets : {activeInletCount}/{configuredInletCount} active, " +
+            $"Outlets : {activeOutletCount}/{configuredOutletCount} active\n" +
             $"Errors :\n{(errors.Length > 0 ? errors.ToString() : "  None\n")}" +
             $"Warnings :\n{(warnings.Length > 0 ? warnings.ToString() : "  None\n")}";
 
@@ -1722,6 +1831,48 @@ public class SimulationController : Singleton<SimulationController>
 
         UpdateMemoryEstimateReadOnly();
         UpdateScalingDiagnosticsSummary();
+        LogScalingGuardrails();
+    }
+
+    private void LogScalingGuardrails()
+    {
+        string caseTag = string.IsNullOrWhiteSpace(activeCaseName) ? "Manual" : activeCaseName;
+
+        if (tauFWasClamped)
+        {
+            string diffusionRisk = tau_f > tauFRaw
+                ? "Jet momentum diffusion may be excessive."
+                : "Effective momentum diffusion is below the requested target.";
+            Debug.LogWarning(
+                $"[LBM Scaling][{caseTag}] tau_f raw={tauFRaw:F6} was clamped to {tau_f:F6}. " +
+                $"nuPhys target={nuPhysTargetReadOnly:E4}, effective={nuPhys:E4}, ratio={nuPhysEffectiveRatio:F2}x. " +
+                diffusionRisk);
+        }
+
+        if (tauTWasClamped)
+        {
+            string diffusionRisk = tau_T > tauTRaw
+                ? "Thermal diffusion may be excessive."
+                : "Effective thermal diffusion is below the requested target.";
+            Debug.LogWarning(
+                $"[LBM Scaling][{caseTag}] tau_T raw={tauTRaw:F6} was clamped to {tau_T:F6}. " +
+                $"alphaPhys target={alphaPhysTargetReadOnly:E4}, effective={alphaPhys:E4}, ratio={alphaPhysEffectiveRatio:F2}x. " +
+                diffusionRisk);
+        }
+
+        if (tauFluidMin < 0.51f)
+        {
+            Debug.LogWarning(
+                $"[LBM Stability][{caseTag}] tauFluidMin={tauFluidMin:F4} is close to 0.5. " +
+                "NaN, density growth, Mach, and mass residual must be monitored; the requested value was not raised automatically.");
+        }
+
+        if (tauThermalMin < 0.51f)
+        {
+            Debug.LogWarning(
+                $"[LBM Stability][{caseTag}] tauThermalMin={tauThermalMin:F4} is close to 0.5. " +
+                "Thermal oscillation and clamp counters must be monitored; the requested value was not raised automatically.");
+        }
     }
 
     private void NormalizeTauClampFields()

@@ -138,8 +138,9 @@ public class CaseStudyRuntimeRunner : MonoBehaviour
 
     private void WriteRunLog()
     {
-        string projectRoot = Directory.GetParent(Application.dataPath).FullName;
-        string reportDir = Path.Combine(projectRoot, "CaseStudyReports");
+        string reportDir = metricsFileLogger != null
+            ? metricsFileLogger.ResolvedBaseFolder
+            : Path.Combine(Application.persistentDataPath, "LBMResults");
         Directory.CreateDirectory(reportDir);
         string path = Path.Combine(reportDir, "case_study_run_log.txt");
         File.WriteAllText(path, runLog.ToString(), Encoding.UTF8);

@@ -26,6 +26,12 @@ public class SimulationResultSampler : MonoBehaviour
     [Tooltip("FullMetrics reads velocity/rho for flow, Mach, density and mass residual. TemperatureOnly is faster but only valid for temperature graph/result values.")]
     [SerializeField] private ReadbackMode readbackMode = ReadbackMode.FullMetrics;
 
+    [Header("Stability Guardrails")]
+    [SerializeField] private bool logStabilityGuardrailWarnings = true;
+    [Min(1.01f), SerializeField] private float rapidGrowthFactor = 2.0f;
+    [Min(0.0f), SerializeField] private float densityStdDevGrowthFloor = 1e-4f;
+    [Min(0.0f), SerializeField] private float massResidualGrowthFloor = 1e-4f;
+
     [Header("Read-Only Metrics")]
     [SerializeField, ReadOnly] private SimulationResultMetrics latestMetrics = new SimulationResultMetrics();
     [SerializeField, ReadOnly] private float nextSampleSimTimeSeconds = 0.0f;
@@ -40,6 +46,8 @@ public class SimulationResultSampler : MonoBehaviour
     private bool _requestInFlight = false;
     private PendingFullMetricsReadback _pendingFullMetricsReadback;
     private PendingTemperatureReadback _pendingTemperatureReadback;
+    private float _previousDensityStdDev = -1.0f;
+    private float _previousMassResidualNormalized = -1.0f;
 
     public SimulationResultMetrics LatestMetrics => latestMetrics;
 
@@ -78,6 +86,8 @@ public class SimulationResultSampler : MonoBehaviour
         lastRequestedSampleSimTimeSeconds = -1.0f;
         lastCompletedSampleSimTimeSeconds = -1.0f;
         skippedSamplesWhileReadbackBusy = 0;
+        _previousDensityStdDev = -1.0f;
+        _previousMassResidualNormalized = -1.0f;
 
         float interval = GetSafeSampleInterval();
         float simTime = simulationController != null ? simulationController.SimulatedTimeSeconds : 0.0f;
@@ -858,6 +868,8 @@ public class SimulationResultSampler : MonoBehaviour
             latestMetrics.massResidualNormalized,
             latestMetrics.relativeFlowImbalance);
 
+        LogStabilityGuardrails();
+
         if (clampData.Length >= 4)
         {
             latestMetrics.thermalInletClampCount = clampData[0];
@@ -1088,6 +1100,7 @@ public class SimulationResultSampler : MonoBehaviour
     {
         latestMetrics.stepCount = sampleStepCount;
         latestMetrics.simulationTimeSeconds = sampleTimeSeconds;
+        latestMetrics.dxPhys = simulationController.CellSize;
         latestMetrics.dtPhys = simulationController.DtPhys;
         latestMetrics.preset = simulationController.SolverPresetName;
         latestMetrics.caseName = simulationController.ActiveCaseName;
@@ -1113,6 +1126,57 @@ public class SimulationResultSampler : MonoBehaviour
         latestMetrics.prandtlNumber = simulationController.PrandtlNumber;
         latestMetrics.stabilityStatus = simulationController.StabilityStatus.ToString();
         latestMetrics.readinessStatus = simulationController.ReadinessStatus.ToString();
+    }
+
+    private void LogStabilityGuardrails()
+    {
+        if (!logStabilityGuardrailWarnings)
+            return;
+
+        string caseTag = string.IsNullOrWhiteSpace(latestMetrics.caseName)
+            ? "Manual"
+            : latestMetrics.caseName;
+
+        if (latestMetrics.hasValidVelocityDiagnostic && latestMetrics.maxMach > 0.30f)
+        {
+            Debug.LogWarning(
+                $"[LBM Stability][{caseTag}] sampled Max Mach={latestMetrics.maxMach:F4} exceeds 0.30. " +
+                $"Check compressibility as well as tau clamp/effective viscosity (tau_f={latestMetrics.tauF:F4}, " +
+                $"nu ratio={latestMetrics.nuPhysEffectiveRatio:F2}x)." );
+        }
+
+        if (latestMetrics.hasValidDensityDiagnostic)
+        {
+            float factor = Mathf.Max(rapidGrowthFactor, 1.01f);
+            bool densityGrowingRapidly =
+                _previousDensityStdDev >= 0.0f &&
+                latestMetrics.densityStdDev >= densityStdDevGrowthFloor &&
+                latestMetrics.densityStdDev > _previousDensityStdDev * factor;
+
+            bool residualGrowingRapidly =
+                _previousMassResidualNormalized >= 0.0f &&
+                latestMetrics.massResidualNormalized >= massResidualGrowthFloor &&
+                latestMetrics.massResidualNormalized > _previousMassResidualNormalized * factor;
+
+            if (densityGrowingRapidly)
+            {
+                Debug.LogWarning(
+                    $"[LBM Stability][{caseTag}] densityStdDev increased rapidly: " +
+                    $"{_previousDensityStdDev:E4} -> {latestMetrics.densityStdDev:E4}. " +
+                    "Review Mach, tau proximity to 0.5, and boundary stability.");
+            }
+
+            if (residualGrowingRapidly)
+            {
+                Debug.LogWarning(
+                    $"[LBM Stability][{caseTag}] mass residual worsened rapidly: " +
+                    $"{_previousMassResidualNormalized:E4} -> {latestMetrics.massResidualNormalized:E4}. " +
+                    "Review the mass-flux corrected outlet response, Mach, and tau clamp/effective viscosity.");
+            }
+
+            _previousDensityStdDev = latestMetrics.densityStdDev;
+            _previousMassResidualNormalized = latestMetrics.massResidualNormalized;
+        }
     }
 
     private abstract class PendingReadbackBase : System.IDisposable

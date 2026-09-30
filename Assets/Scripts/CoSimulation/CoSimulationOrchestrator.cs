@@ -50,8 +50,11 @@ public class CoSimulationOrchestrator : MonoBehaviour
     [SerializeField, ReadOnly] private bool nativeFallbackActive = false;
     [SerializeField, ReadOnly] private string runtimeModeSummary = "Not initialized.";
     [SerializeField, ReadOnly] private float runtimeSetTemperatureDegC = 28.0f;
+    [SerializeField, ReadOnly] private int runtimeOperationMode = 0;
     [SerializeField, ReadOnly] private int runtimeIndoorFanMode = 4;
-    [Tooltip("R1 (LBM) power state selected in the startup conditions panel.")]
+    [SerializeField, ReadOnly] private int runtimeWindDirectionPosition = 3;
+    [SerializeField, ReadOnly] private float runtimeDischargeAngleDeg = 45.0f;
+    [Tooltip("R1 (LBM) power state selected from the runtime monitoring controls.")]
     [SerializeField, ReadOnly] private bool runtimeIndoorUnitPowerOn = false;
     [SerializeField, ReadOnly] private bool runtimeR2PowerOn = false;
     [SerializeField, ReadOnly] private bool runtimeR3PowerOn = false;
@@ -80,7 +83,9 @@ public class CoSimulationOrchestrator : MonoBehaviour
     private int activeInitializationModelIndex;
     private double activeStepTime;
     private long activeStepStartTimestamp;
+    private ulong activeStepRuntimeControlRevision;
     private bool modelsInitializationCompleted;
+    private bool runtimeLbmBoundaryDirty;
     private FmuCoSimulationModel pendingInitializationModel;
     private FmuCoSimulationModel pendingStepModel;
 
@@ -103,7 +108,10 @@ public class CoSimulationOrchestrator : MonoBehaviour
     public string LastStatus => lastStatus;
     public IReadOnlyList<FmuCoSimulationModel> FmuModels => fmuModels;
     public float RuntimeSetTemperatureDegC => runtimeSetTemperatureDegC;
+    public int RuntimeOperationMode => runtimeOperationMode;
     public int RuntimeIndoorFanMode => runtimeIndoorFanMode;
+    public int RuntimeWindDirectionPosition => runtimeWindDirectionPosition;
+    public float RuntimeDischargeAngleDeg => runtimeDischargeAngleDeg;
     public bool RuntimeIndoorUnitPowerOn => runtimeIndoorUnitPowerOn;
     public ulong RuntimeControlRevision => runtimeControlRevision;
     public double LastCoSimulationWallTimeMs => lastCoSimulationWallTimeMs;
@@ -145,12 +153,16 @@ public class CoSimulationOrchestrator : MonoBehaviour
         SetRuntimeConstantReal("profile", "discharge_angle_deg", dischargeAngleDeg);
 
         runtimeSetTemperatureDegC = setTemperatureDegC;
+        runtimeOperationMode = safeOperationMode;
         runtimeIndoorFanMode = safeFanMode;
+        runtimeWindDirectionPosition = Mathf.Clamp(windDirectionPosition, 1, 6);
+        runtimeDischargeAngleDeg = Mathf.Clamp(dischargeAngleDeg, 0.0f, 90.0f);
         runtimeIndoorUnitPowerOn = powerOn;
         runtimeR2PowerOn = false;
         runtimeR3PowerOn = false;
         runtimeR4PowerOn = false;
         runtimeR5PowerOn = false;
+        runtimeLbmBoundaryDirty = false;
         runtimeControlRevision++;
 
         ConfigureFmuInitializationConditions(
@@ -177,6 +189,21 @@ public class CoSimulationOrchestrator : MonoBehaviour
         int indoorFanMode,
         out string message)
     {
+        return TryApplyRuntimeControls(
+            setTemperatureDegC,
+            runtimeOperationMode,
+            indoorFanMode,
+            runtimeWindDirectionPosition,
+            out message);
+    }
+
+    public bool TryApplyRuntimeControls(
+        float setTemperatureDegC,
+        int operationMode,
+        int indoorFanMode,
+        int windDirectionPosition,
+        out string message)
+    {
         if (float.IsNaN(setTemperatureDegC) || float.IsInfinity(setTemperatureDegC) ||
             setTemperatureDegC < -30.0f || setTemperatureDegC > 60.0f)
         {
@@ -190,8 +217,24 @@ public class CoSimulationOrchestrator : MonoBehaviour
             return false;
         }
 
+        if (operationMode < 0 || operationMode > 2)
+        {
+            message = "Operation mode must be between 0 and 2.";
+            return false;
+        }
+
+        if (windDirectionPosition < 1 || windDirectionPosition > 6)
+        {
+            message = "Wind direction position must be between 1 and 6.";
+            return false;
+        }
+
         runtimeSetTemperatureDegC = setTemperatureDegC;
+        runtimeOperationMode = operationMode;
         runtimeIndoorFanMode = indoorFanMode;
+        runtimeWindDirectionPosition = windDirectionPosition;
+        runtimeDischargeAngleDeg = windDirectionPosition * 15.0f;
+        runtimeLbmBoundaryDirty = true;
         runtimeControlRevision++;
 
         // Do not publish directly to the current signal bus. If an asynchronous
@@ -199,14 +242,19 @@ public class CoSimulationOrchestrator : MonoBehaviour
         // later FMUs observe the new command. PublishProfileConstantSignals will
         // apply both overrides together at the beginning of the next step.
         SetRuntimeConstantReal("profile", "set_temp", setTemperatureDegC, false);
+        SetRuntimeConstantReal("profile", "set_mode", operationMode, false);
         SetRuntimeConstantReal("profile", "set_fan", indoorFanMode, false);
+        SetRuntimeConstantReal("profile", "wind_direction_position", windDirectionPosition, false);
+        SetRuntimeConstantReal("profile", "discharge_angle_deg", runtimeDischargeAngleDeg, false);
 
         string powerNote = IsAnyRuntimeIndoorUnitPowerOn()
             ? string.Empty
             : " All indoor units are Off, so the fan command is staged until a unit is On.";
         message =
             $"Runtime controls queued: setTemperature={setTemperatureDegC:F1}C, " +
-            $"indoorFanMode={indoorFanMode}; effective from the next co-simulation step.{powerNote}";
+            $"mode={operationMode}, indoorFanMode={indoorFanMode}, " +
+            $"direction=P{windDirectionPosition} ({runtimeDischargeAngleDeg:F0} deg); " +
+            $"effective from the next co-simulation step.{powerNote}";
         lastStatus = message;
         string experimentTag = simulationController != null
             ? simulationController.ActiveCaseName
@@ -229,20 +277,23 @@ public class CoSimulationOrchestrator : MonoBehaviour
     }
 
     /// <summary>
-    /// Queues an independent R2-R5 power command for the next communication
-    /// point. R1 remains owned by the startup-condition power setting.
+    /// Queues an indoor-unit power command for the next communication point.
+    /// R1 also updates the LBM inlet boundary after the active FMU step completes.
     /// </summary>
     public bool TrySetRuntimeIndoorUnitPower(int room, bool powerOn, out string message)
     {
-        if (room < 2 || room > 5)
+        if (room < 1 || room > 5)
         {
-            message = "Runtime room power control is available only for R2 through R5.";
+            message = "Runtime room power control is available for R1 through R5.";
             return false;
         }
 
         SetRuntimeIndoorUnitPowerState(room, powerOn);
+        if (room == 1)
+            runtimeLbmBoundaryDirty = true;
         runtimeControlRevision++;
-        SetRuntimeConstantReal("profile", $"idu_{room:00}_on", powerOn ? 1.0 : 0.0, false);
+        string powerSignal = room == 1 ? "idu_on" : $"idu_{room:00}_on";
+        SetRuntimeConstantReal("profile", powerSignal, powerOn ? 1.0 : 0.0, false);
 
         message =
             $"R{room} power {(powerOn ? "On" : "Off")} queued; " +
@@ -444,6 +495,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
             coSimStepIndex++;
             activeStepTime = currentTime;
             activeStepStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+            activeStepRuntimeControlRevision = runtimeControlRevision;
             activeStepModelIndex = 0;
             activeInitializationModelIndex = 0;
             modelsInitializationCompleted = false;
@@ -556,6 +608,8 @@ public class CoSimulationOrchestrator : MonoBehaviour
 
     private void CompleteActiveStep()
     {
+        ApplyPendingRuntimeLbmBoundaryControls();
+
         bool appliedToAirflow = TransferConnectionsToReceiver(
             activeStepMap, airflowAdapter.ModelId, airflowAdapter, activeStepStatus);
         if (appliedToAirflow)
@@ -583,6 +637,28 @@ public class CoSimulationOrchestrator : MonoBehaviour
         double step = GetSafeStepSize();
         nextCoSimTime = activeStepTime + step;
         ClearActiveStepState();
+    }
+
+    private void ApplyPendingRuntimeLbmBoundaryControls()
+    {
+        if (!runtimeLbmBoundaryDirty)
+            return;
+
+        // A command entered after this communication point was published belongs
+        // to the next step. Do not let the LBM boundary observe it early.
+        if (runtimeControlRevision > activeStepRuntimeControlRevision)
+            return;
+
+        if (airflowAdapter == null)
+            return;
+
+        airflowAdapter.ApplyRuntimeInletControls(
+            runtimeIndoorUnitPowerOn,
+            runtimeDischargeAngleDeg);
+        runtimeLbmBoundaryDirty = false;
+        activeStepStatus?.Append(
+            $"Applied R1 LBM remote controls: power={(runtimeIndoorUnitPowerOn ? "On" : "Off")}, " +
+            $"direction=P{runtimeWindDirectionPosition} ({runtimeDischargeAngleDeg:F0} deg). ");
     }
 
     private void FailActiveStep(Exception ex)
@@ -617,6 +693,7 @@ public class CoSimulationOrchestrator : MonoBehaviour
         activeStepStatus = null;
         activeStepModelIndex = 0;
         activeInitializationModelIndex = 0;
+        activeStepRuntimeControlRevision = 0;
         modelsInitializationCompleted = false;
         pendingInitializationModel = null;
         pendingStepModel = null;

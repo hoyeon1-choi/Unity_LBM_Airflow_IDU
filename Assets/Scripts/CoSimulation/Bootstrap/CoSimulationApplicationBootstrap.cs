@@ -38,10 +38,18 @@ public sealed class CoSimulationApplicationBootstrap : MonoBehaviour
 
     private IEnumerator Start()
     {
+        // Present the Simulation Set-up overlay before any additive scene work starts.
+        // Starting LoadSceneAsync during the very first frame can keep that frame from
+        // reaching OnGUI while Unity integrates scene objects on the main thread.
+        startupState = "Presenting Simulation Set-up";
+        yield return null;
+
+        double lbmLoadStartedAt = Time.realtimeSinceStartupAsDouble;
         startupState = "Loading LBM scene";
         yield return LoadSceneIfNeeded(simulationScenePath, "LBM");
         if (!string.IsNullOrEmpty(lastError))
             yield break;
+        Debug.Log($"{LogTag} LBM scene ready in {Time.realtimeSinceStartupAsDouble - lbmLoadStartedAt:F3}s.");
 
         Scene simulationScene = SceneManager.GetSceneByPath(simulationScenePath);
         if (makeSimulationSceneActive && simulationScene.IsValid() && simulationScene.isLoaded)
@@ -52,10 +60,23 @@ public sealed class CoSimulationApplicationBootstrap : MonoBehaviour
 
         if (loadMonitoringScene)
         {
+            // The monitoring dashboard is not needed to enter initial conditions. Its
+            // authored TMP hierarchy and runtime Korean font used to add about 30 seconds
+            // to the critical path before the set-up window became interactive.
+            startupState = "Waiting for Simulation Set-up";
+            while (CoSimulationStartupGate.IsWaitingForConfirmation)
+                yield return null;
+
+            // Let the confirmed set-up repaint once before monitoring initialization.
+            yield return null;
+            double monitoringLoadStartedAt = Time.realtimeSinceStartupAsDouble;
             startupState = "Loading monitoring scene";
             yield return LoadSceneIfNeeded(monitoringScenePath, "Monitoring");
             if (!string.IsNullOrEmpty(lastError))
                 yield break;
+            Debug.Log(
+                $"{LogTag} Monitoring scene ready in " +
+                $"{Time.realtimeSinceStartupAsDouble - monitoringLoadStartedAt:F3}s.");
         }
 
         if (makeSimulationSceneActive && simulationScene.IsValid() && simulationScene.isLoaded)

@@ -66,8 +66,12 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
     private Button signalGraphPageButton;
     private Button setTemperatureDecreaseButton;
     private Button setTemperatureIncreaseButton;
+    private Button operationModeDecreaseButton;
+    private Button operationModeIncreaseButton;
     private Button indoorFanDecreaseButton;
     private Button indoorFanIncreaseButton;
+    private Button windDirectionDecreaseButton;
+    private Button windDirectionIncreaseButton;
     private TMP_Text overviewPageButtonLabel;
     private TMP_Text signalGraphPageButtonLabel;
     private CoSimulationSignalGraphPanel signalGraphPanel;
@@ -355,7 +359,7 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
         }
         TMP_Text indoorPanelTitle = FindChildComponent<TMP_Text>(overview, "IndoorPanel/PanelHeader/Title");
         if (indoorPanelTitle != null)
-            indoorPanelTitle.text = "실내공간 연동 · R1 전원은 초기조건, R2~R5는 클릭 제어";
+            indoorPanelTitle.text = "실내공간 연동 · R1~R5 전원 클릭 제어";
         EnsureIndoorPowerControls(overview.Find("IndoorPanel/IndoorTable"));
 
         Transform temperaturePanel = overview.Find("TemperatureChartPanel");
@@ -412,7 +416,7 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
 
         Transform overview = overviewPageRoot.transform;
         ConfigureHorizontalLayout(overview.Find("Chain"), true);
-        ConfigureVerticalLayout(overview.Find("EquipmentPanel/ControlColumn"));
+        ConfigureCompactControlColumn(overview.Find("EquipmentPanel/ControlColumn"));
         ConfigureVerticalLayout(overview.Find("EquipmentPanel/ProductColumn"));
         ConfigureVerticalLayout(overview.Find("IndoorPanel/IndoorTable"));
         ConfigureVerticalLayout(overview.Find("StatusPanel/LbmMetrics"));
@@ -459,6 +463,106 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
 
         for (int i = 0; i < root.childCount; i++)
             ConfigureHorizontalLayout(root.GetChild(i), false);
+    }
+
+    private static void ConfigureCompactControlColumn(Transform controlColumn)
+    {
+        if (controlColumn == null)
+            return;
+
+        VerticalLayoutGroup vertical = controlColumn.GetComponent<VerticalLayoutGroup>();
+        if (vertical != null)
+        {
+            vertical.spacing = 2.0f;
+            vertical.childControlWidth = true;
+            vertical.childControlHeight = true;
+            vertical.childForceExpandWidth = true;
+            vertical.childForceExpandHeight = false;
+        }
+
+        for (int i = 0; i < controlColumn.childCount; i++)
+        {
+            Transform child = controlColumn.GetChild(i);
+            bool isSection = string.Equals(child.name, "Section", StringComparison.Ordinal);
+            LayoutElement childLayout = child.GetComponent<LayoutElement>();
+            if (childLayout == null)
+                childLayout = child.gameObject.AddComponent<LayoutElement>();
+
+            float height = isSection ? 21.0f : 18.0f;
+            childLayout.minHeight = height;
+            childLayout.preferredHeight = height;
+            childLayout.flexibleHeight = 0.0f;
+
+            TMP_Text directText = child.GetComponent<TMP_Text>();
+            if (directText != null)
+            {
+                directText.fontSize = 12.0f;
+                directText.enableAutoSizing = true;
+                directText.fontSizeMin = 9.0f;
+                directText.fontSizeMax = 12.0f;
+            }
+
+            HorizontalLayoutGroup horizontal = child.GetComponent<HorizontalLayoutGroup>();
+            if (horizontal == null)
+                continue;
+
+            horizontal.padding = new RectOffset(4, 4, 0, 0);
+            horizontal.spacing = 2.0f;
+            horizontal.childControlWidth = true;
+            horizontal.childControlHeight = true;
+            horizontal.childForceExpandWidth = false;
+            horizontal.childForceExpandHeight = true;
+
+            TMP_Text label = FindChildComponent<TMP_Text>(child, "Label");
+            if (label != null)
+            {
+                label.fontSize = 10.0f;
+                label.enableAutoSizing = true;
+                label.fontSizeMin = 8.0f;
+                label.fontSizeMax = 10.0f;
+            }
+
+            TMP_Text value = FindChildComponent<TMP_Text>(child, "Value");
+            if (value != null)
+            {
+                value.fontSize = 11.0f;
+                value.enableAutoSizing = true;
+                value.fontSizeMin = 8.0f;
+                value.fontSizeMax = 11.0f;
+
+                LayoutElement valueLayout = value.GetComponent<LayoutElement>();
+                if (valueLayout != null)
+                {
+                    valueLayout.minWidth = 46.0f;
+                    valueLayout.preferredWidth = 50.0f;
+                    valueLayout.flexibleWidth = 0.0f;
+                }
+            }
+
+            ConfigureCompactControlButton(child.Find("Decrease"));
+            ConfigureCompactControlButton(child.Find("Increase"));
+        }
+    }
+
+    private static void ConfigureCompactControlButton(Transform buttonTransform)
+    {
+        if (buttonTransform == null)
+            return;
+
+        LayoutElement layout = buttonTransform.GetComponent<LayoutElement>();
+        if (layout != null)
+        {
+            layout.minWidth = 20.0f;
+            layout.preferredWidth = 20.0f;
+            layout.flexibleWidth = 0.0f;
+        }
+
+        TMP_Text label = FindChildComponent<TMP_Text>(buttonTransform, "Label");
+        if (label != null)
+        {
+            label.fontSize = 12.0f;
+            label.enableAutoSizing = false;
+        }
     }
 
     private static void ConfigureHorizontalLayout(Transform root, bool forceExpandWidth)
@@ -605,6 +709,7 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
 
     private TMP_FontAsset CreateRuntimeFontAsset()
     {
+        double startedAt = Time.realtimeSinceStartupAsDouble;
         string[] fontFamilies =
         {
             preferredSystemFontFamily,
@@ -621,10 +726,9 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
 
             try
             {
-                // Use the font file directly. Going through the legacy dynamic Font API first can
-                // rasterize a system font at a small intermediate size and defeats the benefit of
-                // increasing the TMP atlas resolution. SDF8 supersampling keeps 12-15 px labels
-                // readable without changing the dashboard's logical resolution or render target.
+                // Use the font file directly. SDFAA keeps small dashboard labels anti-aliased
+                // without SDF8's eight-times supersampling cost. SDF8 made Monitoring scene
+                // integration block the Unity main thread for roughly 30 seconds on startup.
                 TMP_FontAsset runtimeFont = null;
                 if (TryGetWindowsFontFile(family, out string fontFilePath))
                 {
@@ -633,7 +737,7 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
                         0,
                         sdfSamplingPointSize,
                         sdfAtlasPadding,
-                        GlyphRenderMode.SDF8,
+                        GlyphRenderMode.SDFAA_HINTED,
                         2048,
                         2048);
                 }
@@ -676,7 +780,8 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
 
                 Debug.Log(
                     $"[CoSim Monitor] Runtime SDF font='{family}', pointSize={sdfSamplingPointSize}, " +
-                    $"renderMode={runtimeFont.atlasRenderMode}, atlasMode={runtimeFont.atlasPopulationMode}.");
+                    $"renderMode={runtimeFont.atlasRenderMode}, atlasMode={runtimeFont.atlasPopulationMode}, " +
+                    $"elapsed={Time.realtimeSinceStartupAsDouble - startedAt:F3}s.");
                 return runtimeFont;
             }
             catch (Exception exception)
@@ -835,7 +940,7 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
     {
         // The monitoring canvas can be rendered on Display 2, where Unity's
         // EventSystem occasionally reports the pointer against Display 1. Keep a
-        // narrow release-based fallback for these four controls as well.
+        // narrow release-based fallback for the runtime remote-control buttons as well.
         if (!dashboardVisible || showingSignalGraphPage || Mouse.current == null ||
             !Mouse.current.leftButton.wasReleasedThisFrame ||
             lastRuntimeControlInputFrame == Time.frameCount)
@@ -845,13 +950,21 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
 
         Vector2 pointerPosition = Mouse.current.position.ReadValue();
         if (ContainsScreenPoint(setTemperatureDecreaseButton, pointerPosition))
-            AdjustRuntimeControls(-0.5f, 0);
+            AdjustRuntimeControls(-0.5f, 0, 0, 0);
         else if (ContainsScreenPoint(setTemperatureIncreaseButton, pointerPosition))
-            AdjustRuntimeControls(0.5f, 0);
+            AdjustRuntimeControls(0.5f, 0, 0, 0);
+        else if (ContainsScreenPoint(operationModeDecreaseButton, pointerPosition))
+            AdjustRuntimeControls(0.0f, -1, 0, 0);
+        else if (ContainsScreenPoint(operationModeIncreaseButton, pointerPosition))
+            AdjustRuntimeControls(0.0f, 1, 0, 0);
         else if (ContainsScreenPoint(indoorFanDecreaseButton, pointerPosition))
-            AdjustRuntimeControls(0.0f, -1);
+            AdjustRuntimeControls(0.0f, 0, -1, 0);
         else if (ContainsScreenPoint(indoorFanIncreaseButton, pointerPosition))
-            AdjustRuntimeControls(0.0f, 1);
+            AdjustRuntimeControls(0.0f, 0, 1, 0);
+        else if (ContainsScreenPoint(windDirectionDecreaseButton, pointerPosition))
+            AdjustRuntimeControls(0.0f, 0, 0, -1);
+        else if (ContainsScreenPoint(windDirectionIncreaseButton, pointerPosition))
+            AdjustRuntimeControls(0.0f, 0, 0, 1);
     }
 
     private void PollRoomPowerButtons()
@@ -864,7 +977,7 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
         }
 
         Vector2 pointerPosition = Mouse.current.position.ReadValue();
-        for (int room = 2; room <= 5; room++)
+        for (int room = 1; room <= 5; room++)
         {
             if (indoorRows.TryGetValue(room, out IndoorRowView row) &&
                 ContainsScreenPoint(row.powerButton, pointerPosition))
@@ -898,7 +1011,11 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
         RefreshRoomPowerControls();
     }
 
-    private void AdjustRuntimeControls(float setTemperatureDelta, int indoorFanDelta)
+    private void AdjustRuntimeControls(
+        float setTemperatureDelta,
+        int operationModeDelta,
+        int indoorFanDelta,
+        int windDirectionDelta)
     {
         // Prevent a Display 2 fallback click and the normal Button event from
         // applying the same increment twice in one frame.
@@ -914,8 +1031,18 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
             orchestrator.RuntimeSetTemperatureDegC + setTemperatureDelta,
             -30.0f,
             60.0f);
+        int operationMode = Mathf.Clamp(orchestrator.RuntimeOperationMode + operationModeDelta, 0, 2);
         int fanMode = Mathf.Clamp(orchestrator.RuntimeIndoorFanMode + indoorFanDelta, 1, 5);
-        if (!orchestrator.TryApplyRuntimeControls(setTemperature, fanMode, out string message))
+        int windDirection = Mathf.Clamp(
+            orchestrator.RuntimeWindDirectionPosition + windDirectionDelta,
+            1,
+            6);
+        if (!orchestrator.TryApplyRuntimeControls(
+                setTemperature,
+                operationMode,
+                fanMode,
+                windDirection,
+                out string message))
         {
             string experimentTag = simulationController != null
                 ? simulationController.ActiveCaseName
@@ -1023,21 +1150,74 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
                 metricValues["indoorFanMode"] = fanValue;
         }
 
+        Transform operationModeRow = controlColumn.Find("operationMode");
+        if (operationModeRow == null)
+        {
+            AddMetric((RectTransform)controlColumn, "operationMode", "운전모드", string.Empty);
+            operationModeRow = controlColumn.Find("operationMode");
+        }
+        else
+        {
+            TMP_Text modeValue = FindChildComponent<TMP_Text>(operationModeRow, "Value");
+            if (modeValue != null)
+                metricValues["operationMode"] = modeValue;
+        }
+
+        Transform windDirectionRow = controlColumn.Find("windDirection");
+        if (windDirectionRow == null)
+        {
+            AddMetric((RectTransform)controlColumn, "windDirection", "바람방향", string.Empty);
+            windDirectionRow = controlColumn.Find("windDirection");
+        }
+        else
+        {
+            TMP_Text directionValue = FindChildComponent<TMP_Text>(windDirectionRow, "Value");
+            if (directionValue != null)
+                metricValues["windDirection"] = directionValue;
+        }
+
+        if (operationModeRow != null)
+            operationModeRow.SetSiblingIndex(setTemperatureRow.GetSiblingIndex() + 1);
+        if (indoorFanRow != null)
+            indoorFanRow.SetSiblingIndex(operationModeRow != null
+                ? operationModeRow.GetSiblingIndex() + 1
+                : setTemperatureRow.GetSiblingIndex() + 1);
+        if (windDirectionRow != null)
+            windDirectionRow.SetSiblingIndex(indoorFanRow != null
+                ? indoorFanRow.GetSiblingIndex() + 1
+                : setTemperatureRow.GetSiblingIndex() + 1);
+
         ConfigureRuntimeControlRow(
             setTemperatureRow,
             "설정온도",
             out setTemperatureDecreaseButton,
             out setTemperatureIncreaseButton);
         ConfigureRuntimeControlRow(
+            operationModeRow,
+            "운전모드",
+            out operationModeDecreaseButton,
+            out operationModeIncreaseButton);
+        ConfigureRuntimeControlRow(
             indoorFanRow,
             "실내팬",
             out indoorFanDecreaseButton,
             out indoorFanIncreaseButton);
+        ConfigureRuntimeControlRow(
+            windDirectionRow,
+            "바람방향",
+            out windDirectionDecreaseButton,
+            out windDirectionIncreaseButton);
 
-        BindRuntimeControlButton(setTemperatureDecreaseButton, () => AdjustRuntimeControls(-0.5f, 0));
-        BindRuntimeControlButton(setTemperatureIncreaseButton, () => AdjustRuntimeControls(0.5f, 0));
-        BindRuntimeControlButton(indoorFanDecreaseButton, () => AdjustRuntimeControls(0.0f, -1));
-        BindRuntimeControlButton(indoorFanIncreaseButton, () => AdjustRuntimeControls(0.0f, 1));
+        BindRuntimeControlButton(setTemperatureDecreaseButton, () => AdjustRuntimeControls(-0.5f, 0, 0, 0));
+        BindRuntimeControlButton(setTemperatureIncreaseButton, () => AdjustRuntimeControls(0.5f, 0, 0, 0));
+        BindRuntimeControlButton(operationModeDecreaseButton, () => AdjustRuntimeControls(0.0f, -1, 0, 0));
+        BindRuntimeControlButton(operationModeIncreaseButton, () => AdjustRuntimeControls(0.0f, 1, 0, 0));
+        BindRuntimeControlButton(indoorFanDecreaseButton, () => AdjustRuntimeControls(0.0f, 0, -1, 0));
+        BindRuntimeControlButton(indoorFanIncreaseButton, () => AdjustRuntimeControls(0.0f, 0, 1, 0));
+        BindRuntimeControlButton(windDirectionDecreaseButton, () => AdjustRuntimeControls(0.0f, 0, 0, -1));
+        BindRuntimeControlButton(windDirectionIncreaseButton, () => AdjustRuntimeControls(0.0f, 0, 0, 1));
+
+        ConfigureCompactControlColumn(controlColumn);
     }
 
     private void ConfigureRuntimeControlRow(
@@ -1069,8 +1249,9 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
         LayoutElement valueLayout = valueText != null ? valueText.GetComponent<LayoutElement>() : null;
         if (valueLayout != null)
         {
-            valueLayout.preferredWidth = 58.0f;
-            valueLayout.minWidth = 50.0f;
+            valueLayout.preferredWidth = 50.0f;
+            valueLayout.minWidth = 46.0f;
+            valueLayout.flexibleWidth = 0.0f;
         }
 
         decreaseButton = EnsureRuntimeControlButton(row, "Decrease", "-");
@@ -1099,15 +1280,15 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
         button.colors = colors;
 
         LayoutElement buttonLayout = rect.gameObject.AddComponent<LayoutElement>();
-        buttonLayout.preferredWidth = 28.0f;
-        buttonLayout.minWidth = 25.0f;
+        buttonLayout.preferredWidth = 20.0f;
+        buttonLayout.minWidth = 20.0f;
         buttonLayout.flexibleWidth = 0.0f;
 
         TMP_Text buttonLabel = CreateText(
             rect,
             "Label",
             label,
-            15,
+            12,
             FontStyle.Bold,
             Vector2.zero,
             Vector2.one,
@@ -1128,7 +1309,7 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
     private void BuildIndoorPanel(RectTransform root)
     {
         RectTransform panel = CreatePanel(root, "IndoorPanel", new Vector2(0.415f, 0.36f), new Vector2(0.985f, 0.805f));
-        AddPanelTitle(panel, "실내공간 연동 · R1 전원은 초기조건, R2~R5는 클릭 제어");
+        AddPanelTitle(panel, "실내공간 연동 · R1~R5 전원 클릭 제어");
 
         RectTransform table = CreateRect(panel, "IndoorTable", new Vector2(0.015f, 0.04f), new Vector2(0.985f, 0.88f), Vector2.zero, Vector2.zero);
         VerticalLayoutGroup vertical = table.gameObject.AddComponent<VerticalLayoutGroup>();
@@ -1190,11 +1371,8 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
 
             powerButton.transform.SetSiblingIndex(2);
             powerButton.onClick.RemoveAllListeners();
-            if (room >= 2)
-            {
-                int capturedRoom = room;
-                powerButton.onClick.AddListener(() => ToggleRoomPower(capturedRoom));
-            }
+            int capturedRoom = room;
+            powerButton.onClick.AddListener(() => ToggleRoomPower(capturedRoom));
         }
     }
 
@@ -1398,9 +1576,13 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
         double indoorFanMode = orchestrator != null
             ? orchestrator.RuntimeIndoorFanMode
             : Read("Multi_V_S__Set_CFMU", "IDU_01.SetFan");
+        int operationMode = orchestrator != null ? orchestrator.RuntimeOperationMode : 0;
+        int windDirection = orchestrator != null ? orchestrator.RuntimeWindDirectionPosition : 3;
 
         SetMetric("setTemp", setTemperature, "°C", 1);
         SetMetric("indoorFanMode", indoorFanMode, "단", 0);
+        SetMetricText("operationMode", OperationModeLabel(operationMode));
+        SetMetricText("windDirection", $"P{windDirection} {windDirection * 15}°");
 
         bool interactable = orchestrator != null;
         if (setTemperatureDecreaseButton != null)
@@ -1411,6 +1593,14 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
             indoorFanDecreaseButton.interactable = interactable && indoorFanMode > 1.0;
         if (indoorFanIncreaseButton != null)
             indoorFanIncreaseButton.interactable = interactable && indoorFanMode < 5.0;
+        if (operationModeDecreaseButton != null)
+            operationModeDecreaseButton.interactable = interactable && operationMode > 0;
+        if (operationModeIncreaseButton != null)
+            operationModeIncreaseButton.interactable = interactable && operationMode < 2;
+        if (windDirectionDecreaseButton != null)
+            windDirectionDecreaseButton.interactable = interactable && windDirection > 1;
+        if (windDirectionIncreaseButton != null)
+            windDirectionIncreaseButton.interactable = interactable && windDirection < 6;
     }
 
     private void RefreshModelNode(string viewKey, string modelId)
@@ -1508,7 +1698,7 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
             bool powerOn = orchestrator != null && orchestrator.IsRuntimeIndoorUnitPowerOn(room);
             row.powerLabel.text = powerOn ? "ON" : "OFF";
             row.powerLabel.color = powerOn ? Color.white : mutedColor;
-            row.powerButton.interactable = orchestrator != null && room >= 2;
+            row.powerButton.interactable = orchestrator != null;
 
             Color normal = powerOn
                 ? new Color(0.10f, 0.42f, 0.25f, 1.0f)
@@ -1583,6 +1773,26 @@ public sealed class CoSimulationMonitoringDashboard : MonoBehaviour
             return;
         text.text = IsFinite(value) ? $"{value.ToString("F" + decimals, CultureInfo.InvariantCulture)} {unit}".TrimEnd() : "—";
         text.color = IsFinite(value) ? textColor : mutedColor;
+    }
+
+    private void SetMetricText(string key, string value)
+    {
+        if (!metricValues.TryGetValue(key, out TMP_Text text))
+            return;
+
+        text.text = string.IsNullOrWhiteSpace(value) ? "—" : value;
+        text.color = string.IsNullOrWhiteSpace(value) ? mutedColor : textColor;
+    }
+
+    private static string OperationModeLabel(int mode)
+    {
+        switch (mode)
+        {
+            case 0: return "냉방";
+            case 1: return "제습";
+            case 2: return "난방";
+            default: return "—";
+        }
     }
 
     private static bool IsFinite(double value)
