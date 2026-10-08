@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:VisualElement name="KpiCard" class="kpi-card kpi-card--mock">
+        <ui:Label name="KpiIcon" text="KPI" class="kpi-card__icon" />
+        <ui:VisualElement class="kpi-card__content">
+            <ui:Label name="KpiLabel" text="Metric" class="kpi-card__label" />
+            <ui:VisualElement class="kpi-card__value-row">
+                <ui:Label name="KpiValue" text="0.0" class="kpi-card__value" />
+                <ui:Label name="KpiUnit" text="" class="kpi-card__unit" />
+            </ui:VisualElement>
+            <ui:Label name="KpiStatus" text="Mock data" class="kpi-card__status kpi-card__status--mock" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

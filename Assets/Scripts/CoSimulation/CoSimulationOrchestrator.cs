@@ -6,6 +6,8 @@ using UnityEngine;
 [DefaultExecutionOrder(-100)]
 public class CoSimulationOrchestrator : MonoBehaviour
 {
+    private const int RuntimeIndoorUnitCount = 5;
+
     [Header("Co-Simulation")]
     [SerializeField] private CoSimulationProfile coSimulationProfile;
     [SerializeField] private bool enableCoSimulation = true;
@@ -52,6 +54,10 @@ public class CoSimulationOrchestrator : MonoBehaviour
     [SerializeField, ReadOnly] private float runtimeSetTemperatureDegC = 28.0f;
     [SerializeField, ReadOnly] private int runtimeOperationMode = 0;
     [SerializeField, ReadOnly] private int runtimeIndoorFanMode = 4;
+    [SerializeField, ReadOnly] private float[] runtimeRoomSetTemperaturesDegC =
+        { 28.0f, 28.0f, 28.0f, 28.0f, 28.0f };
+    [SerializeField, ReadOnly] private int[] runtimeRoomOperationModes = { 0, 0, 0, 0, 0 };
+    [SerializeField, ReadOnly] private int[] runtimeRoomIndoorFanModes = { 4, 4, 4, 4, 4 };
     [SerializeField, ReadOnly] private int runtimeWindDirectionPosition = 3;
     [SerializeField, ReadOnly] private float runtimeDischargeAngleDeg = 45.0f;
     [Tooltip("R1 (LBM) power state selected from the runtime monitoring controls.")]
@@ -116,6 +122,30 @@ public class CoSimulationOrchestrator : MonoBehaviour
     public ulong RuntimeControlRevision => runtimeControlRevision;
     public double LastCoSimulationWallTimeMs => lastCoSimulationWallTimeMs;
 
+    public float GetRuntimeSetTemperatureDegC(int room)
+    {
+        EnsureRuntimeRoomControlState();
+        return room >= 1 && room <= RuntimeIndoorUnitCount
+            ? runtimeRoomSetTemperaturesDegC[room - 1]
+            : runtimeSetTemperatureDegC;
+    }
+
+    public int GetRuntimeOperationMode(int room)
+    {
+        EnsureRuntimeRoomControlState();
+        return room >= 1 && room <= RuntimeIndoorUnitCount
+            ? runtimeRoomOperationModes[room - 1]
+            : runtimeOperationMode;
+    }
+
+    public int GetRuntimeIndoorFanMode(int room)
+    {
+        EnsureRuntimeRoomControlState();
+        return room >= 1 && room <= RuntimeIndoorUnitCount
+            ? runtimeRoomIndoorFanModes[room - 1]
+            : runtimeIndoorFanMode;
+    }
+
     public void ApplyStartupConditions(
         float indoorTemperatureDegC,
         float indoorRelativeHumidityPercent,
@@ -141,20 +171,25 @@ public class CoSimulationOrchestrator : MonoBehaviour
         SetRuntimeConstantReal("profile", "room_humidity_percent", safeIndoorHumidity);
         SetRuntimeConstantReal("profile", "outdoor_temp_c", outdoorTemperatureDegC);
         SetRuntimeConstantReal("profile", "outdoor_humidity_percent", safeOutdoorHumidity);
-        SetRuntimeConstantReal("profile", "set_temp", setTemperatureDegC);
         SetRuntimeConstantReal("profile", "idu_on", powerOn ? 1.0 : 0.0);
         SetRuntimeConstantReal("profile", "idu_02_on", 0.0);
         SetRuntimeConstantReal("profile", "idu_03_on", 0.0);
         SetRuntimeConstantReal("profile", "idu_04_on", 0.0);
         SetRuntimeConstantReal("profile", "idu_05_on", 0.0);
-        SetRuntimeConstantReal("profile", "set_mode", safeOperationMode);
-        SetRuntimeConstantReal("profile", "set_fan", appliedFanMode);
+        EnsureRuntimeRoomControlState();
+        for (int room = 1; room <= RuntimeIndoorUnitCount; room++)
+        {
+            SetRuntimeRoomControlState(room, setTemperatureDegC, safeOperationMode, safeFanMode);
+            QueueRuntimeRoomControls(
+                room,
+                setTemperatureDegC,
+                safeOperationMode,
+                appliedFanMode,
+                true);
+        }
         SetRuntimeConstantReal("profile", "wind_direction_position", Mathf.Clamp(windDirectionPosition, 1, 6));
         SetRuntimeConstantReal("profile", "discharge_angle_deg", dischargeAngleDeg);
 
-        runtimeSetTemperatureDegC = setTemperatureDegC;
-        runtimeOperationMode = safeOperationMode;
-        runtimeIndoorFanMode = safeFanMode;
         runtimeWindDirectionPosition = Mathf.Clamp(windDirectionPosition, 1, 6);
         runtimeDischargeAngleDeg = Mathf.Clamp(dischargeAngleDeg, 0.0f, 90.0f);
         runtimeIndoorUnitPowerOn = powerOn;
@@ -204,6 +239,135 @@ public class CoSimulationOrchestrator : MonoBehaviour
         int windDirectionPosition,
         out string message)
     {
+        if (!TryValidateRuntimeControls(
+                setTemperatureDegC,
+                operationMode,
+                indoorFanMode,
+                windDirectionPosition,
+                out message))
+        {
+            return false;
+        }
+
+        EnsureRuntimeRoomControlState();
+        for (int room = 1; room <= RuntimeIndoorUnitCount; room++)
+        {
+            SetRuntimeRoomControlState(room, setTemperatureDegC, operationMode, indoorFanMode);
+            QueueRuntimeRoomControls(
+                room,
+                setTemperatureDegC,
+                operationMode,
+                indoorFanMode,
+                false);
+        }
+        bool windDirectionChanged = runtimeWindDirectionPosition != windDirectionPosition;
+        runtimeWindDirectionPosition = windDirectionPosition;
+        runtimeDischargeAngleDeg = windDirectionPosition * 15.0f;
+        runtimeControlRevision++;
+
+        // Do not publish directly to the current signal bus. If an asynchronous
+        // sequential FMU step is active, direct publication could make only the
+        // later FMUs observe the new command. PublishProfileConstantSignals will
+        // apply both overrides together at the beginning of the next step.
+        if (windDirectionChanged)
+        {
+            runtimeLbmBoundaryDirty = true;
+            SetRuntimeConstantReal(
+                "profile", "wind_direction_position", windDirectionPosition, false);
+            SetRuntimeConstantReal(
+                "profile", "discharge_angle_deg", runtimeDischargeAngleDeg, false);
+        }
+
+        string powerNote = IsAnyRuntimeIndoorUnitPowerOn()
+            ? string.Empty
+            : " All indoor units are Off, so the fan command is staged until a unit is On.";
+        message =
+            $"Runtime controls queued: setTemperature={setTemperatureDegC:F1}C, " +
+            $"mode={operationMode}, indoorFanMode={indoorFanMode}, " +
+            $"direction=P{windDirectionPosition} ({runtimeDischargeAngleDeg:F0} deg); " +
+            $"effective from the next co-simulation step.{powerNote}";
+        lastStatus = message;
+        string experimentTag = simulationController != null
+            ? simulationController.ActiveCaseName
+            : activeProfileName;
+        Debug.Log($"[CoSimulation][{experimentTag}] {message}", this);
+        return true;
+    }
+
+    /// <summary>
+    /// Queues one room's controller inputs without resetting the FMUs or LBM.
+    /// R1 additionally owns the LBM inlet direction; R2-R5 retain R1's direction.
+    /// </summary>
+    public bool TryApplyRuntimeControlsForRoom(
+        int room,
+        float setTemperatureDegC,
+        int operationMode,
+        int indoorFanMode,
+        int windDirectionPosition,
+        out string message)
+    {
+        if (room < 1 || room > RuntimeIndoorUnitCount)
+        {
+            message = "Runtime room control is available for R1 through R5.";
+            return false;
+        }
+
+        if (!TryValidateRuntimeControls(
+                setTemperatureDegC,
+                operationMode,
+                indoorFanMode,
+                windDirectionPosition,
+                out message))
+        {
+            return false;
+        }
+
+        EnsureRuntimeRoomControlState();
+        SetRuntimeRoomControlState(room, setTemperatureDegC, operationMode, indoorFanMode);
+        QueueRuntimeRoomControls(
+            room,
+            setTemperatureDegC,
+            operationMode,
+            indoorFanMode,
+            false);
+
+        if (room == 1 && runtimeWindDirectionPosition != windDirectionPosition)
+        {
+            runtimeWindDirectionPosition = windDirectionPosition;
+            runtimeDischargeAngleDeg = windDirectionPosition * 15.0f;
+            runtimeLbmBoundaryDirty = true;
+            SetRuntimeConstantReal(
+                "profile", "wind_direction_position", windDirectionPosition, false);
+            SetRuntimeConstantReal(
+                "profile", "discharge_angle_deg", runtimeDischargeAngleDeg, false);
+        }
+
+        runtimeControlRevision++;
+        string powerNote = IsRuntimeIndoorUnitPowerOn(room)
+            ? string.Empty
+            : $" R{room} is Off, so the fan command is staged until it is On.";
+        string directionNote = room == 1
+            ? $", direction=P{windDirectionPosition} ({runtimeDischargeAngleDeg:F0} deg)"
+            : string.Empty;
+        message =
+            $"R{room} runtime controls queued: setTemperature={setTemperatureDegC:F1}C, " +
+            $"mode={operationMode}, indoorFanMode={indoorFanMode}{directionNote}; " +
+            $"effective from the next co-simulation step.{powerNote}";
+        lastStatus = message;
+        string experimentTag = simulationController != null
+            ? simulationController.ActiveCaseName
+            : activeProfileName;
+        Debug.Log($"[CoSimulation][{experimentTag}] {message}", this);
+        return true;
+    }
+
+    private static bool TryValidateRuntimeControls(
+        float setTemperatureDegC,
+        int operationMode,
+        int indoorFanMode,
+        int windDirectionPosition,
+        out string message)
+    {
         if (float.IsNaN(setTemperatureDegC) || float.IsInfinity(setTemperatureDegC) ||
             setTemperatureDegC < -30.0f || setTemperatureDegC > 60.0f)
         {
@@ -229,38 +393,78 @@ public class CoSimulationOrchestrator : MonoBehaviour
             return false;
         }
 
+        message = string.Empty;
+        return true;
+    }
+
+    private void EnsureRuntimeRoomControlState()
+    {
+        if (runtimeRoomSetTemperaturesDegC != null &&
+            runtimeRoomSetTemperaturesDegC.Length == RuntimeIndoorUnitCount &&
+            runtimeRoomOperationModes != null &&
+            runtimeRoomOperationModes.Length == RuntimeIndoorUnitCount &&
+            runtimeRoomIndoorFanModes != null &&
+            runtimeRoomIndoorFanModes.Length == RuntimeIndoorUnitCount)
+        {
+            return;
+        }
+
+        float[] previousTemperatures = runtimeRoomSetTemperaturesDegC;
+        int[] previousModes = runtimeRoomOperationModes;
+        int[] previousFans = runtimeRoomIndoorFanModes;
+        runtimeRoomSetTemperaturesDegC = new float[RuntimeIndoorUnitCount];
+        runtimeRoomOperationModes = new int[RuntimeIndoorUnitCount];
+        runtimeRoomIndoorFanModes = new int[RuntimeIndoorUnitCount];
+        for (int index = 0; index < RuntimeIndoorUnitCount; index++)
+        {
+            runtimeRoomSetTemperaturesDegC[index] =
+                previousTemperatures != null && index < previousTemperatures.Length
+                    ? previousTemperatures[index]
+                    : runtimeSetTemperatureDegC;
+            runtimeRoomOperationModes[index] =
+                previousModes != null && index < previousModes.Length
+                    ? previousModes[index]
+                    : runtimeOperationMode;
+            runtimeRoomIndoorFanModes[index] =
+                previousFans != null && index < previousFans.Length
+                    ? previousFans[index]
+                    : runtimeIndoorFanMode;
+        }
+    }
+
+    private void SetRuntimeRoomControlState(
+        int room,
+        float setTemperatureDegC,
+        int operationMode,
+        int indoorFanMode)
+    {
+        int index = room - 1;
+        runtimeRoomSetTemperaturesDegC[index] = setTemperatureDegC;
+        runtimeRoomOperationModes[index] = operationMode;
+        runtimeRoomIndoorFanModes[index] = indoorFanMode;
+        if (room != 1)
+            return;
+
+        // Preserve the original public properties as the R1 compatibility view.
         runtimeSetTemperatureDegC = setTemperatureDegC;
         runtimeOperationMode = operationMode;
         runtimeIndoorFanMode = indoorFanMode;
-        runtimeWindDirectionPosition = windDirectionPosition;
-        runtimeDischargeAngleDeg = windDirectionPosition * 15.0f;
-        runtimeLbmBoundaryDirty = true;
-        runtimeControlRevision++;
+    }
 
-        // Do not publish directly to the current signal bus. If an asynchronous
-        // sequential FMU step is active, direct publication could make only the
-        // later FMUs observe the new command. PublishProfileConstantSignals will
-        // apply both overrides together at the beginning of the next step.
-        SetRuntimeConstantReal("profile", "set_temp", setTemperatureDegC, false);
-        SetRuntimeConstantReal("profile", "set_mode", operationMode, false);
-        SetRuntimeConstantReal("profile", "set_fan", indoorFanMode, false);
-        SetRuntimeConstantReal("profile", "wind_direction_position", windDirectionPosition, false);
-        SetRuntimeConstantReal("profile", "discharge_angle_deg", runtimeDischargeAngleDeg, false);
-
-        string powerNote = IsAnyRuntimeIndoorUnitPowerOn()
-            ? string.Empty
-            : " All indoor units are Off, so the fan command is staged until a unit is On.";
-        message =
-            $"Runtime controls queued: setTemperature={setTemperatureDegC:F1}C, " +
-            $"mode={operationMode}, indoorFanMode={indoorFanMode}, " +
-            $"direction=P{windDirectionPosition} ({runtimeDischargeAngleDeg:F0} deg); " +
-            $"effective from the next co-simulation step.{powerNote}";
-        lastStatus = message;
-        string experimentTag = simulationController != null
-            ? simulationController.ActiveCaseName
-            : activeProfileName;
-        Debug.Log($"[CoSimulation][{experimentTag}] {message}", this);
-        return true;
+    private void QueueRuntimeRoomControls(
+        int room,
+        float setTemperatureDegC,
+        int operationMode,
+        int indoorFanMode,
+        bool publishImmediately)
+    {
+        string roomPrefix = room == 1 ? string.Empty : $"idu_{room:00}_";
+        SetRuntimeConstantReal(
+            "profile", $"{roomPrefix}set_temp", setTemperatureDegC, publishImmediately);
+        SetRuntimeConstantReal(
+            "profile", $"{roomPrefix}set_mode", operationMode, publishImmediately);
+        SetRuntimeConstantReal(
+            "profile", $"{roomPrefix}set_fan", indoorFanMode, publishImmediately);
     }
 
     public bool IsRuntimeIndoorUnitPowerOn(int room)
@@ -344,6 +548,8 @@ public class CoSimulationOrchestrator : MonoBehaviour
 
     private void Awake()
     {
+        EnsureRuntimeRoomControlState();
+
         if (coSimulationProfile != null)
             ApplyProfile(coSimulationProfile);
 

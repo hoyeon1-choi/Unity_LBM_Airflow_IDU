@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Template name="ResultsTemplate" src="../Results.uxml" />
+    <ui:Instance template="ResultsTemplate" style="flex-grow: 1; flex-shrink: 1; min-width: 0; min-height: 0;" />
+</ui:UXML>

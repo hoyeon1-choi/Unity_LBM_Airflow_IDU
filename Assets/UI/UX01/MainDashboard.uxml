@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="MainDashboard.uss" />
+    <ui:Template name="KpiCardTemplate" src="Components/KpiCard.uxml" />
+    <ui:Template name="SystemMonitorTemplate" src="../UX04/SystemMonitor.uxml" />
+    <ui:Template name="TimeHistoryTemplate" src="../UX05/TimeHistory.uxml" />
+    <ui:VisualElement name="MainDashboard" class="main-dashboard">
+        <ui:VisualElement name="TopBar" class="main-dashboard__top-bar dashboard-surface">
+            <ui:VisualElement class="top-bar__brand">
+                <ui:Label text="LBM" class="top-bar__brand-mark" />
+                <ui:VisualElement class="top-bar__title-group">
+                    <ui:Label text="LBM/FMU Simulation Platform" class="top-bar__title" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="top-bar__metadata">
+                <ui:VisualElement class="top-bar__info-chip">
+                    <ui:Label text="PROJECT" class="top-bar__info-caption" />
+                    <ui:Label name="TopBarProjectValue" text="Loading..." class="top-bar__info-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="top-bar__info-chip top-bar__info-chip--case">
+                    <ui:Label text="CASE" class="top-bar__info-caption" />
+                    <ui:Label name="TopBarCaseValue" text="Waiting" class="top-bar__info-value" />
+                </ui:VisualElement>
+                <ui:Label name="TopBarClockValue" text="---- -- --  --:--:--" class="top-bar__clock" />
+                <ui:VisualElement name="TopBarState" class="top-bar__state top-bar__state--idle">
+                    <ui:VisualElement class="top-bar__state-indicator" />
+                    <ui:Label name="TopBarStateValue" text="IDLE" class="top-bar__state-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="NavigationPanel" class="main-dashboard__navigation-panel dashboard-surface">
+            <ui:Button name="NavHomeButton" text="Home" class="navigation-button" />
+            <ui:Button name="NavSimulationButton" text="Simulation Setup" class="navigation-button" />
+            <ui:Button name="NavResultsButton" text="Flow Visualization" class="navigation-button" />
+            <ui:Button name="NavFmuMonitorButton" text="System Monitor" class="navigation-button" />
+            <ui:Button name="NavReportButton" text="Time History" class="navigation-button" />
+            <!-- Keep the Settings route bound while removing only its Navigation entry. -->
+            <ui:Button name="NavSettingsButton" text="Settings" class="navigation-button" style="display: none;" />
+            <ui:Button name="NavCompareButton" text="Compare" class="navigation-button" />
+        </ui:VisualElement>
+        <ui:VisualElement name="PageHost" class="main-dashboard__page-host">
+            <ui:VisualElement name="HomePage" class="main-dashboard__home-page">
+                <ui:VisualElement name="MainContent" class="main-dashboard__main-content">
+                    <ui:VisualElement name="KPIContainer" class="main-dashboard__kpi-container dashboard-panel">
+                        <ui:Instance name="RoomAverageKpiCard" template="KpiCardTemplate" class="kpi-card-slot kpi-card-slot--temperature">
+                            <AttributeOverrides element-name="KpiIcon" text="T" />
+                            <AttributeOverrides element-name="KpiLabel" text="Room Avg" />
+                            <AttributeOverrides element-name="KpiValue" text="24.8" />
+                            <AttributeOverrides element-name="KpiUnit" text="°C" />
+                        </ui:Instance>
+                        <ui:Instance name="TemperatureDeltaKpiCard" template="KpiCardTemplate" class="kpi-card-slot kpi-card-slot--delta">
+                            <AttributeOverrides element-name="KpiIcon" text="ΔT" />
+                            <AttributeOverrides element-name="KpiLabel" text="ΔT" />
+                            <AttributeOverrides element-name="KpiValue" text="6.2" />
+                            <AttributeOverrides element-name="KpiUnit" text="°C" />
+                        </ui:Instance>
+                        <ui:Instance name="MaxVelocityKpiCard" template="KpiCardTemplate" class="kpi-card-slot kpi-card-slot--velocity">
+                            <AttributeOverrides element-name="KpiIcon" text="V" />
+                            <AttributeOverrides element-name="KpiLabel" text="Max Velocity" />
+                            <AttributeOverrides element-name="KpiValue" text="3.8" />
+                            <AttributeOverrides element-name="KpiUnit" text="m/s" />
+                        </ui:Instance>
+                        <ui:Instance name="MassErrorKpiCard" template="KpiCardTemplate" class="kpi-card-slot kpi-card-slot--mass">
+                            <AttributeOverrides element-name="KpiIcon" text="M" />
+                            <AttributeOverrides element-name="KpiLabel" text="Mass Error" />
+                            <AttributeOverrides element-name="KpiValue" text="0.02" />
+                            <AttributeOverrides element-name="KpiUnit" text="%" />
+                        </ui:Instance>
+                        <ui:Instance name="GpuUsageKpiCard" template="KpiCardTemplate" class="kpi-card-slot kpi-card-slot--gpu">
+                            <AttributeOverrides element-name="KpiIcon" text="GPU" />
+                            <AttributeOverrides element-name="KpiLabel" text="GPU Usage" />
+                            <AttributeOverrides element-name="KpiValue" text="92" />
+                            <AttributeOverrides element-name="KpiUnit" text="%" />
+                        </ui:Instance>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="main-dashboard__visualization-row">
+                        <ui:VisualElement name="ViewPanel" class="main-dashboard__view-panel">
+                            <ui:VisualElement name="SceneContainer" class="main-dashboard__scene-container dashboard-panel">
+                                <ui:VisualElement name="SceneViewport" class="scene-view__viewport">
+                                    <ui:Image name="SceneViewImage" class="scene-view__image" />
+                                    <ui:Label name="SceneSourceStatus" text="Waiting for ThermalDisplayCamera..." class="scene-view__source-status" />
+                                    <ui:VisualElement name="SceneToolbar" class="scene-view__toolbar">
+                                        <ui:Button name="SceneFitButton" text="Fit" class="scene-toolbar-button" />
+                                        <ui:Button name="SceneResetViewButton" text="Reset View" class="scene-toolbar-button" />
+                                        <ui:Button name="SceneVariableButton" text="Temperature" class="scene-toolbar-button scene-toolbar-button--wide" />
+                                        <ui:Button name="SceneRealtimeButton" text="Real-time" class="scene-toolbar-button" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                            <ui:VisualElement name="ResultLegendContainer" class="main-dashboard__result-legend-container dashboard-panel">
+                                <ui:Label name="TemperatureLegendTitle" text="Temperature" class="result-legend__title" />
+                                <ui:Label name="ResultLegendUnit" text="(°C)" class="result-legend__unit" />
+                                <ui:VisualElement name="TemperatureLegendScale" class="result-legend__scale">
+                                    <ui:VisualElement name="TemperatureLegendBar" class="result-legend__bar">
+                                        <ui:VisualElement class="result-legend__color result-legend__color--red" />
+                                        <ui:VisualElement class="result-legend__color result-legend__color--orange" />
+                                        <ui:VisualElement class="result-legend__color result-legend__color--yellow" />
+                                        <ui:VisualElement class="result-legend__color result-legend__color--green" />
+                                        <ui:VisualElement class="result-legend__color result-legend__color--cyan" />
+                                        <ui:VisualElement class="result-legend__color result-legend__color--blue" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="result-legend__labels">
+                                        <ui:Label name="LegendMaxLabel" text="35" class="result-legend__label" />
+                                        <ui:Label name="LegendUpperMidLabel" text="32" class="result-legend__label" />
+                                        <ui:Label name="LegendMiddleHighLabel" text="29" class="result-legend__label" />
+                                        <ui:Label name="LegendMiddleLowLabel" text="26" class="result-legend__label" />
+                                        <ui:Label name="LegendLowerMidLabel" text="23" class="result-legend__label" />
+                                        <ui:Label name="LegendMinLabel" text="20" class="result-legend__label" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="UserControlPanel" class="main-dashboard__user-control-panel dashboard-panel">
+                            <ui:Label text="User Control" class="user-control__title" />
+                            <ui:VisualElement class="user-control__fields">
+                                <ui:VisualElement class="user-control__field-row user-control__room-row">
+                                    <ui:Label text="Indoor Unit" class="user-control__label" />
+                                    <ui:Label text="R1 (LBM)" class="user-control__room-header" />
+                                    <ui:Label text="R2 (FMU)" class="user-control__room-header" />
+                                    <ui:Label text="R3 (FMU)" class="user-control__room-header" />
+                                    <ui:Label text="R4 (FMU)" class="user-control__room-header" />
+                                    <ui:Label text="R5 (FMU)" class="user-control__room-header" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="user-control__field-row">
+                                    <ui:Label text="Power" class="user-control__label" />
+                                    <ui:Button name="UserControlPowerButtonR1" text="Off" class="user-control__cell user-control__power-button" />
+                                    <ui:Button name="UserControlPowerButtonR2" text="Off" class="user-control__cell user-control__power-button" />
+                                    <ui:Button name="UserControlPowerButtonR3" text="Off" class="user-control__cell user-control__power-button" />
+                                    <ui:Button name="UserControlPowerButtonR4" text="Off" class="user-control__cell user-control__power-button" />
+                                    <ui:Button name="UserControlPowerButtonR5" text="Off" class="user-control__cell user-control__power-button" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="user-control__field-row">
+                                    <ui:Label text="Operation Mode" class="user-control__label" />
+                                    <ui:DropdownField name="UserControlOperationModeFieldR1" value="Cooling" class="user-control__cell user-control__dropdown" />
+                                    <ui:DropdownField name="UserControlOperationModeFieldR2" value="Cooling" class="user-control__cell user-control__dropdown" />
+                                    <ui:DropdownField name="UserControlOperationModeFieldR3" value="Cooling" class="user-control__cell user-control__dropdown" />
+                                    <ui:DropdownField name="UserControlOperationModeFieldR4" value="Cooling" class="user-control__cell user-control__dropdown" />
+                                    <ui:DropdownField name="UserControlOperationModeFieldR5" value="Cooling" class="user-control__cell user-control__dropdown" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="user-control__field-row">
+                                    <ui:Label text="Target Temp. (°C)" class="user-control__label" />
+                                    <ui:VisualElement class="user-control__cell user-control__input-with-unit">
+                                        <ui:FloatField name="UserControlTargetTemperatureFieldR1" value="28" class="user-control__temperature-input" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="user-control__cell user-control__input-with-unit">
+                                        <ui:FloatField name="UserControlTargetTemperatureFieldR2" value="28" class="user-control__temperature-input" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="user-control__cell user-control__input-with-unit">
+                                        <ui:FloatField name="UserControlTargetTemperatureFieldR3" value="28" class="user-control__temperature-input" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="user-control__cell user-control__input-with-unit">
+                                        <ui:FloatField name="UserControlTargetTemperatureFieldR4" value="28" class="user-control__temperature-input" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="user-control__cell user-control__input-with-unit">
+                                        <ui:FloatField name="UserControlTargetTemperatureFieldR5" value="28" class="user-control__temperature-input" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="user-control__field-row">
+                                    <ui:Label text="Fan Speed" class="user-control__label" />
+                                    <ui:VisualElement class="user-control__cell user-control__stepper">
+                                        <ui:Button name="UserControlFanDecreaseButtonR1" text="−" class="user-control__step-button" />
+                                        <ui:Label name="UserControlFanValueR1" text="L4" class="user-control__step-value" />
+                                        <ui:Button name="UserControlFanIncreaseButtonR1" text="+" class="user-control__step-button" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="user-control__cell user-control__stepper">
+                                        <ui:Button name="UserControlFanDecreaseButtonR2" text="−" class="user-control__step-button" />
+                                        <ui:Label name="UserControlFanValueR2" text="L4" class="user-control__step-value" />
+                                        <ui:Button name="UserControlFanIncreaseButtonR2" text="+" class="user-control__step-button" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="user-control__cell user-control__stepper">
+                                        <ui:Button name="UserControlFanDecreaseButtonR3" text="−" class="user-control__step-button" />
+                                        <ui:Label name="UserControlFanValueR3" text="L4" class="user-control__step-value" />
+                                        <ui:Button name="UserControlFanIncreaseButtonR3" text="+" class="user-control__step-button" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="user-control__cell user-control__stepper">
+                                        <ui:Button name="UserControlFanDecreaseButtonR4" text="−" class="user-control__step-button" />
+                                        <ui:Label name="UserControlFanValueR4" text="L4" class="user-control__step-value" />
+                                        <ui:Button name="UserControlFanIncreaseButtonR4" text="+" class="user-control__step-button" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="user-control__cell user-control__stepper">
+                                        <ui:Button name="UserControlFanDecreaseButtonR5" text="−" class="user-control__step-button" />
+                                        <ui:Label name="UserControlFanValueR5" text="L4" class="user-control__step-value" />
+                                        <ui:Button name="UserControlFanIncreaseButtonR5" text="+" class="user-control__step-button" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="user-control__field-row user-control__field-row--last">
+                                    <ui:Label text="Airflow Direction" class="user-control__label" />
+                                    <ui:VisualElement class="user-control__cell user-control__stepper">
+                                        <ui:Button name="UserControlAirflowDecreaseButtonR1" text="−" class="user-control__step-button" />
+                                        <ui:Label name="UserControlAirflowValueR1" text="P3 45°" class="user-control__step-value" />
+                                        <ui:Button name="UserControlAirflowIncreaseButtonR1" text="+" class="user-control__step-button" />
+                                    </ui:VisualElement>
+                                    <ui:Label text="—" class="user-control__cell user-control__not-applicable" tooltip="Airflow direction is controlled only by the R1 LBM inlet." />
+                                    <ui:Label text="—" class="user-control__cell user-control__not-applicable" tooltip="Airflow direction is controlled only by the R1 LBM inlet." />
+                                    <ui:Label text="—" class="user-control__cell user-control__not-applicable" tooltip="Airflow direction is controlled only by the R1 LBM inlet." />
+                                    <ui:Label text="—" class="user-control__cell user-control__not-applicable" tooltip="Airflow direction is controlled only by the R1 LBM inlet." />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="BottomContentRow" class="main-dashboard__bottom-content-row">
+                    <ui:VisualElement name="BottomAnalyticsPanel" class="main-dashboard__bottom-analytics-panel dashboard-panel">
+                    <ui:VisualElement class="trend-panel__header">
+                        <ui:Button name="TemperatureTrendTab" text="Temperature Trend" class="trend-tab trend-tab--selected" />
+                        <ui:Button name="GpuPerformanceTrendTab" text="GPU Performance" class="trend-tab" />
+                        <ui:Label name="TrendSamplingNote" text="2 s metrics samples · 300 points · 60 s window" class="trend-panel__sampling-note" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="TemperatureTrendPanel" class="trend-panel__page">
+                        <ui:VisualElement class="trend-panel__legend-row">
+                            <ui:VisualElement class="trend-legend__swatch trend-legend__swatch--room" />
+                            <ui:Label name="RoomAverageTrendLegend" text="Room Avg —" class="trend-legend__label" />
+                            <ui:VisualElement class="trend-legend__swatch trend-legend__swatch--inlet" />
+                            <ui:Label name="InletTrendLegend" text="Inlet —" class="trend-legend__label" />
+                            <ui:VisualElement class="trend-legend__swatch trend-legend__swatch--outlet" />
+                            <ui:Label name="OutletTrendLegend" text="Outlet —" class="trend-legend__label" />
+                            <ui:VisualElement class="trend-legend__swatch trend-legend__swatch--target" />
+                            <ui:Label name="TargetTrendLegend" text="Target —" class="trend-legend__label" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="trend-chart__body">
+                            <ui:VisualElement class="trend-chart__y-axis">
+                                <ui:Label text="35" class="trend-chart__axis-value" />
+                                <ui:Label text="25" class="trend-chart__axis-value" />
+                                <ui:Label text="15" class="trend-chart__axis-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement name="TemperatureTrendChartHost" class="trend-chart__host" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="trend-chart__x-axis">
+                            <ui:Label name="TemperatureTrendTimeMin" text="0" class="trend-chart__axis-value" />
+                            <ui:Label text="Simulation Time (s)" class="trend-chart__axis-title" />
+                            <ui:Label name="TemperatureTrendTimeMax" text="60" class="trend-chart__axis-value" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="GpuPerformanceTrendPanel" class="trend-panel__page trend-panel__page--hidden">
+                        <ui:VisualElement class="trend-panel__legend-row">
+                            <ui:VisualElement class="trend-legend__swatch trend-legend__swatch--gpu" />
+                            <ui:Label name="GpuUsageTrendLegend" text="GPU Usage — Unavailable" class="trend-legend__label" />
+                            <ui:VisualElement class="trend-legend__swatch trend-legend__swatch--fps" />
+                            <ui:Label name="FpsTrendLegend" text="FPS —" class="trend-legend__label" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="trend-chart__body">
+                            <ui:VisualElement class="trend-chart__y-axis">
+                                <ui:Label text="100" class="trend-chart__axis-value" />
+                                <ui:Label text="50" class="trend-chart__axis-value" />
+                                <ui:Label text="0" class="trend-chart__axis-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement name="GpuPerformanceTrendChartHost" class="trend-chart__host" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="trend-chart__x-axis">
+                            <ui:Label name="PerformanceTrendTimeMin" text="0" class="trend-chart__axis-value" />
+                            <ui:Label text="Runtime (s)" class="trend-chart__axis-title" />
+                            <ui:Label name="PerformanceTrendTimeMax" text="60" class="trend-chart__axis-value" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="SimulationStatusPanel" class="main-dashboard__simulation-status-panel dashboard-panel simulation-status--idle">
+                        <ui:Label text="Simulation Status" class="simulation-status__title" />
+                        <ui:VisualElement class="simulation-status__state-row">
+                            <ui:VisualElement name="SimulationStatusIndicator" class="simulation-status__indicator" />
+                            <ui:Label name="SimulationStatusValue" text="Idle" class="simulation-status__state-value" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="simulation-status__metrics">
+                            <ui:VisualElement class="simulation-status__metric-row">
+                                <ui:Label text="Time" class="simulation-status__metric-label" />
+                                <ui:Label name="SimulationTimeValue" text="—" class="simulation-status__metric-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="simulation-status__metric-row">
+                                <ui:Label text="Time Step" class="simulation-status__metric-label" />
+                                <ui:Label name="SimulationTimeStepValue" text="—" class="simulation-status__metric-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="simulation-status__metric-row">
+                                <ui:Label text="Grid" class="simulation-status__metric-label" />
+                                <ui:Label name="SimulationGridValue" text="—" class="simulation-status__metric-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="simulation-status__metric-row">
+                                <ui:Label text="FPS" class="simulation-status__metric-label" />
+                                <ui:Label name="SimulationFpsValue" text="—" class="simulation-status__metric-value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="simulation-status__metric-row">
+                                <ui:Label text="GPU" class="simulation-status__metric-label" />
+                                <ui:Label name="SimulationGpuValue" text="—" class="simulation-status__metric-value simulation-status__metric-value--truncate" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="simulation-status__metric-row">
+                                <ui:Label text="Memory" class="simulation-status__metric-label" />
+                                <ui:Label name="SimulationMemoryValue" text="—" class="simulation-status__metric-value" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Instance name="SystemMonitorPage" template="SystemMonitorTemplate" style="display: none; flex-grow: 1; flex-shrink: 1; min-width: 0; min-height: 0;" />
+            <ui:Instance name="TimeHistoryPage" template="TimeHistoryTemplate" style="display: none; flex-grow: 1; flex-shrink: 1; min-width: 0; min-height: 0;" />
+            <ui:VisualElement name="PlaceholderPage" class="main-dashboard__placeholder-page dashboard-panel">
+                <ui:Label name="PlaceholderPageTitle" text="Page" class="main-dashboard__placeholder-title" />
+                <ui:Label name="PlaceholderPageMessage" text="This screen is ready for its UX implementation." class="main-dashboard__placeholder-message" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

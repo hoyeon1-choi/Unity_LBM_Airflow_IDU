@@ -24,9 +24,23 @@ public class ThermalVisualizer : MonoBehaviour
 
     private float _currentTempMinDegC = 0.0f;
     private float _currentTempMaxDegC = 40.0f;
+    private bool _useExternalDisplayRange;
+    private float _externalTempMinDegC;
+    private float _externalTempMaxDegC = 40.0f;
 
     public float CurrentTempMinDegC => _currentTempMinDegC;
     public float CurrentTempMaxDegC => _currentTempMaxDegC;
+
+    public void SetDisplayRangeOverride(bool enabled, float minimumDegC, float maximumDegC)
+    {
+        _useExternalDisplayRange = enabled;
+        _externalTempMinDegC = minimumDegC;
+        _externalTempMaxDegC = Mathf.Max(maximumDegC, minimumDegC + 0.01f);
+
+        SimulationController controller = SimulationController.Instance;
+        if (_sliceMaterial != null && controller != null)
+            ApplyTemperatureScale(controller);
+    }
 
     private IEnumerator Start()
     {
@@ -86,8 +100,14 @@ public class ThermalVisualizer : MonoBehaviour
 
     private void ApplyTemperatureScale(SimulationController sc)
     {
-        float minDegC = useSimulationTemperatureRange ? sc.TempPhysMinDegC : tempMinDegC;
-        float maxDegC = useSimulationTemperatureRange ? sc.TempPhysMaxDegC : tempMaxDegC;
+        float dataMinDegC = sc.TempPhysMinDegC;
+        float dataMaxDegC = Mathf.Max(sc.TempPhysMaxDegC, dataMinDegC + 0.01f);
+        float minDegC = _useExternalDisplayRange
+            ? _externalTempMinDegC
+            : useSimulationTemperatureRange ? sc.TempPhysMinDegC : tempMinDegC;
+        float maxDegC = _useExternalDisplayRange
+            ? _externalTempMaxDegC
+            : useSimulationTemperatureRange ? sc.TempPhysMaxDegC : tempMaxDegC;
 
         if (maxDegC <= minDegC)
             maxDegC = minDegC + 0.01f;
@@ -95,6 +115,8 @@ public class ThermalVisualizer : MonoBehaviour
         _currentTempMinDegC = minDegC;
         _currentTempMaxDegC = maxDegC;
 
+        _sliceMaterial.SetFloat("_DataTempMinDegC", dataMinDegC);
+        _sliceMaterial.SetFloat("_DataTempMaxDegC", dataMaxDegC);
         _sliceMaterial.SetFloat("_TempMinDegC", _currentTempMinDegC);
         _sliceMaterial.SetFloat("_TempMaxDegC", _currentTempMaxDegC);
     }

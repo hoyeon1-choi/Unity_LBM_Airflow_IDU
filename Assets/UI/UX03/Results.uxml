@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="Results.uss" />
+    <ui:VisualElement name="ResultsDashboard" class="results-dashboard">
+        <ui:VisualElement name="ResultsTopBar" class="results-dashboard__top-bar results-surface">
+            <ui:VisualElement class="results-header__brand">
+                <ui:Label text="LBM" class="results-header__brand-mark" />
+                <ui:VisualElement class="top-bar__title-group">
+                    <ui:Label text="LBM/FMU Simulation Platform" class="results-header__title" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="results-header__metadata">
+                <ui:VisualElement class="top-bar__info-chip">
+                    <ui:Label text="PROJECT" class="top-bar__info-caption" />
+                    <ui:Label name="ResultsProjectValue" text="—" class="top-bar__info-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="top-bar__info-chip top-bar__info-chip--case">
+                    <ui:Label text="CASE" class="top-bar__info-caption" />
+                    <ui:Label name="ResultsCaseValue" text="Waiting" class="top-bar__info-value" />
+                </ui:VisualElement>
+                <ui:Label name="ResultsClockValue" text="---- -- --  --:--:--" class="top-bar__clock" />
+                <ui:VisualElement name="ResultsTopBarState" class="top-bar__state top-bar__state--idle">
+                    <ui:VisualElement class="top-bar__state-indicator" />
+                    <ui:Label name="ResultsStateValue" text="IDLE" class="top-bar__state-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="ResultsNavigation" class="results-dashboard__navigation results-surface">
+            <ui:Label name="ResultsNavHome" text="Home" class="results-navigation__item" />
+            <ui:Label name="ResultsNavSimulation" text="Simulation Setup" class="results-navigation__item" />
+            <ui:Label name="ResultsNavResults" text="Flow Visualization" class="results-navigation__item results-navigation__item--selected" />
+            <ui:Label name="ResultsNavFmuMonitor" text="System Monitor" class="results-navigation__item" />
+            <ui:Label name="ResultsNavReport" text="Time History" class="results-navigation__item" />
+            <!-- Keep the Settings route bound while removing only its Navigation entry. -->
+            <ui:Label name="ResultsNavSettings" text="Settings" class="results-navigation__item" style="display: none;" />
+            <ui:Label name="ResultsNavCompare" text="Compare" class="results-navigation__item" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="ResultsPage" class="results-page">
+            <ui:VisualElement name="ResultVariableTabs" class="result-variable-tabs results-surface">
+                <ui:Button name="TemperatureVariableButton" text="Temperature" class="result-variable-tab result-variable-tab--selected" />
+                <ui:Button name="VelocityVariableButton" text="Velocity" class="result-variable-tab" />
+                <ui:Button name="PressureVariableButton" text="Pressure" tooltip="Unavailable: no spatial pressure result is exposed by the current solver." class="result-variable-tab result-variable-tab--unsupported" />
+                <ui:Button name="StreamlineVariableButton" text="Streamline" tooltip="Unavailable: no streamline result renderer is present." class="result-variable-tab result-variable-tab--unsupported" />
+                <ui:Button name="ComfortVariableButton" text="Comfort" tooltip="Unavailable: no comfort field is calculated." class="result-variable-tab result-variable-tab--unsupported" />
+                <ui:Button name="MassFluxVariableButton" text="Mass Flux" tooltip="Unavailable: only aggregate inlet/outlet flow metrics exist." class="result-variable-tab result-variable-tab--unsupported" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="ResultsWorkspace" class="results-workspace">
+                <ui:VisualElement name="ResultsMainColumn" class="results-workspace__main-column">
+                    <ui:VisualElement name="SceneArea" class="results-scene-area">
+                        <ui:VisualElement name="ScenePanel" class="results-scene-panel results-panel">
+                            <ui:VisualElement name="SceneViewport" class="results-scene-viewport">
+                                <ui:Image name="SceneViewImage" class="results-scene-viewport__image" />
+                                <ui:VisualElement name="ScenePlaceholder" class="results-scene-viewport__placeholder">
+                                    <ui:Label text="3D RESULT VIEW" class="results-scene-viewport__placeholder-title" />
+                                    <ui:Label name="SceneSourceStatus" text="Visualization source is connected in a later feature." class="results-scene-viewport__placeholder-status" />
+                                </ui:VisualElement>
+
+                                <ui:VisualElement name="SceneControlPanel" class="scene-control-panel results-surface">
+                                    <ui:Label text="Slice Planes" class="scene-control-panel__title" />
+                                    <ui:VisualElement name="SliceXRow" class="slice-plane-row">
+                                        <ui:Toggle name="SliceXToggle" text="X (YZ)" value="true" tooltip="Show the YZ slice plane and move it along X." class="slice-plane-toggle" />
+                                        <ui:Slider name="SliceXPositionSlider" low-value="0" high-value="1" value="0.5" class="slice-plane-slider" />
+                                        <ui:Label name="SliceXPositionValue" text="0.50" class="slice-plane-value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement name="SliceYRow" class="slice-plane-row">
+                                        <ui:Toggle name="SliceYToggle" text="Y (XZ)" value="true" tooltip="Show the XZ slice plane and move it along Y." class="slice-plane-toggle" />
+                                        <ui:Slider name="SliceYPositionSlider" low-value="0" high-value="1" value="0.5" class="slice-plane-slider" />
+                                        <ui:Label name="SliceYPositionValue" text="0.50" class="slice-plane-value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement name="SliceZRow" class="slice-plane-row">
+                                        <ui:Toggle name="SliceZToggle" text="Z (XY)" tooltip="Show the XY slice plane and move it along Z." class="slice-plane-toggle" />
+                                        <ui:Slider name="SliceZPositionSlider" low-value="0" high-value="1" value="0.5" class="slice-plane-slider" />
+                                        <ui:Label name="SliceZPositionValue" text="0.50" class="slice-plane-value" />
+                                    </ui:VisualElement>
+                                    <ui:Label name="SliceControlStatus" text="Waiting for the existing slice controller." class="scene-control-panel__status" />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+
+                            <ui:VisualElement name="SceneToolbar" class="scene-toolbar">
+                                <ui:VisualElement name="SceneCameraToolbar" class="scene-toolbar__group">
+                                    <ui:Button name="SceneFitButton" text="Fit" tooltip="Fit the simulation domain in the current camera." class="scene-toolbar-button" />
+                                    <ui:Button name="SceneOrbitButton" text="Orbit" tooltip="Drag the result view to orbit." class="scene-toolbar-button scene-toolbar-button--selected" />
+                                    <ui:Button name="ScenePanButton" text="Pan" class="scene-toolbar-button" />
+                                    <ui:Button name="SceneResetButton" text="Reset" class="scene-toolbar-button" />
+                                </ui:VisualElement>
+                                <ui:Label text="Drag to orbit/pan · Wheel to zoom" class="scene-toolbar__hint" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="ResultsAnalyticsSidebar" class="results-analytics-sidebar">
+                    <ui:VisualElement name="ResultLegendPanel" class="result-legend-panel results-panel">
+                        <ui:VisualElement class="results-panel__heading-row">
+                            <ui:Label name="ResultLegendTitle" text="Temperature" class="results-panel__title" />
+                            <ui:Label name="ResultLegendUnit" text="(°C)" class="results-panel__unit" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="ResultVariableMetadata" class="result-variable-metadata">
+                            <ui:VisualElement class="result-variable-metadata__item">
+                                <ui:Label text="Unit" class="result-variable-metadata__caption" />
+                                <ui:Label name="ResultMetadataUnitValue" text="°C" class="result-variable-metadata__value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="result-variable-metadata__item">
+                                <ui:Label text="Min" class="result-variable-metadata__caption" />
+                                <ui:Label name="ResultMetadataMinValue" text="20.0" class="result-variable-metadata__value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="result-variable-metadata__item">
+                                <ui:Label text="Max" class="result-variable-metadata__caption" />
+                                <ui:Label name="ResultMetadataMaxValue" text="35.0" class="result-variable-metadata__value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="result-variable-metadata__item result-variable-metadata__item--range">
+                                <ui:Label text="Data Range" class="result-variable-metadata__caption" />
+                                <ui:Label name="ResultMetadataRangeValue" text="20.0 — 35.0 °C" class="result-variable-metadata__value" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="ColorMapControls" class="color-map-controls">
+                            <ui:VisualElement class="color-map-controls__row">
+                                <ui:Label text="Color Map" class="color-map-controls__label" />
+                                <ui:DropdownField name="ColorMapPresetField" class="color-map-controls__preset" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="color-map-controls__row color-map-controls__row--range">
+                                <ui:Label text="Range" class="color-map-controls__label" />
+                                <ui:VisualElement name="ColorRangeModeToolbar" class="color-range-mode-toolbar">
+                                    <ui:Button name="ColorRangeAutoButton" text="Auto" class="color-range-mode-button color-range-mode-button--selected" />
+                                    <ui:Button name="ColorRangeManualButton" text="Manual" class="color-range-mode-button" />
+                                </ui:VisualElement>
+                                <ui:FloatField name="ColorRangeMinField" label="Min" value="20" class="color-range-field" />
+                                <ui:FloatField name="ColorRangeMaxField" label="Max" value="35" class="color-range-field" />
+                            </ui:VisualElement>
+                            <ui:Label name="ColorMapStatus" text="Auto uses the configured display range." class="color-map-status" />
+                        </ui:VisualElement>
+                        <ui:Label name="ResultVariableStatus" text="Temperature · waiting for ThermalDisplayCamera" class="result-variable-status" />
+                        <ui:VisualElement class="result-legend__body">
+                            <ui:VisualElement name="ResultLegendBar" class="result-legend__bar">
+                                <ui:VisualElement name="ResultLegendColor0" class="result-legend__segment result-legend__segment--red" />
+                                <ui:VisualElement name="ResultLegendColor1" class="result-legend__segment result-legend__segment--orange" />
+                                <ui:VisualElement name="ResultLegendColor2" class="result-legend__segment result-legend__segment--yellow" />
+                                <ui:VisualElement name="ResultLegendColor3" class="result-legend__segment result-legend__segment--green" />
+                                <ui:VisualElement name="ResultLegendColor4" class="result-legend__segment result-legend__segment--cyan" />
+                                <ui:VisualElement name="ResultLegendColor5" class="result-legend__segment result-legend__segment--blue" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="result-legend__labels">
+                                <ui:Label name="ResultLegendMaxValue" text="35" class="result-legend__label" />
+                                <ui:Label name="ResultLegendUpperMidValue" text="32" class="result-legend__label" />
+                                <ui:Label name="ResultLegendMiddleHighValue" text="29" class="result-legend__label" />
+                                <ui:Label name="ResultLegendMiddleLowValue" text="26" class="result-legend__label" />
+                                <ui:Label name="ResultLegendLowerMidValue" text="23" class="result-legend__label" />
+                                <ui:Label name="ResultLegendMinValue" text="20" class="result-legend__label" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

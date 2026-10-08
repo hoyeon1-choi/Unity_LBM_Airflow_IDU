@@ -1,0 +1,660 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="SimulationSetup.uss" />
+    <ui:VisualElement name="SimulationSetup" class="simulation-setup">
+        <ui:VisualElement name="SimulationSetupTopBar" class="simulation-setup__top-bar">
+            <ui:VisualElement class="simulation-setup__brand">
+                <ui:Label text="LBM" class="simulation-setup__brand-mark" />
+                <ui:VisualElement class="top-bar__title-group">
+                    <ui:Label text="LBM/FMU Simulation Platform" class="simulation-setup__title" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="SimulationSetupHeaderMetadata" class="simulation-setup__header-metadata">
+                <ui:VisualElement class="top-bar__info-chip">
+                    <ui:Label text="PROJECT" class="top-bar__info-caption" />
+                    <ui:Label name="SimulationSetupProjectValue" text="—" class="top-bar__info-value" />
+                </ui:VisualElement>
+                <ui:VisualElement class="top-bar__info-chip top-bar__info-chip--case">
+                    <ui:Label text="CASE" class="top-bar__info-caption" />
+                    <ui:Label name="SimulationSetupCaseValue" text="Waiting" class="top-bar__info-value" />
+                </ui:VisualElement>
+                <ui:Label name="SimulationSetupClockValue" text="---- -- --  --:--:--" class="top-bar__clock" />
+                <ui:VisualElement name="SimulationSetupTopBarState" class="top-bar__state top-bar__state--idle">
+                    <ui:VisualElement class="top-bar__state-indicator" />
+                    <ui:Label name="SimulationSetupStateValue" text="IDLE" class="top-bar__state-value" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="SimulationSetupNavigation" class="simulation-setup__navigation">
+            <ui:Label name="SimulationNavHome" text="Home" class="simulation-navigation__item" />
+            <ui:Label name="SimulationNavSimulation" text="Simulation Setup" class="simulation-navigation__item simulation-navigation__item--selected" />
+            <ui:Label name="SimulationNavResults" text="Flow Visualization" class="simulation-navigation__item" />
+            <ui:Label name="SimulationNavFmuMonitor" text="System Monitor" class="simulation-navigation__item" />
+            <ui:Label name="SimulationNavReport" text="Time History" class="simulation-navigation__item" />
+            <!-- Keep the Settings route bound while removing only its Navigation entry. -->
+            <ui:Label name="SimulationNavSettings" text="Settings" class="simulation-navigation__item" style="display: none;" />
+            <ui:Label name="SimulationNavCompare" text="Compare" class="simulation-navigation__item" />
+        </ui:VisualElement>
+
+        <ui:VisualElement name="SimulationPage" class="simulation-page">
+            <ui:VisualElement name="SimulationWorkspace" class="simulation-page__workspace">
+                <ui:VisualElement name="SimulationStepRail" class="simulation-page__step-rail">
+                    <ui:Button name="CaseStepItem" class="simulation-step-item simulation-step-item--selected">
+                        <ui:Label text="1" class="simulation-step-item__number" />
+                        <ui:Label text="Case" class="simulation-step-item__label" />
+                    </ui:Button>
+                    <ui:Button name="ModelStepItem" class="simulation-step-item">
+                        <ui:Label text="2" class="simulation-step-item__number" />
+                        <ui:Label text="Model" class="simulation-step-item__label" />
+                    </ui:Button>
+                    <ui:Button name="MeshStepItem" class="simulation-step-item">
+                        <ui:Label text="3" class="simulation-step-item__number" />
+                        <ui:Label text="Mesh" class="simulation-step-item__label" />
+                    </ui:Button>
+                    <ui:Button name="PhysicsStepItem" class="simulation-step-item">
+                        <ui:Label text="4" class="simulation-step-item__number" />
+                        <ui:Label text="Physics" class="simulation-step-item__label" />
+                    </ui:Button>
+                    <ui:Button name="BoundaryStepItem" class="simulation-step-item">
+                        <ui:Label text="5" class="simulation-step-item__number" />
+                        <ui:Label text="Boundary" class="simulation-step-item__label" />
+                    </ui:Button>
+                    <ui:Button name="RunStepItem" class="simulation-step-item">
+                        <ui:Label text="6" class="simulation-step-item__number" />
+                        <ui:Label text="Run" class="simulation-step-item__label" />
+                    </ui:Button>
+                </ui:VisualElement>
+
+                <ui:VisualElement name="SimulationStepContent" class="simulation-page__step-content">
+                    <ui:VisualElement name="CasePanel" class="simulation-step-panel simulation-step-panel--selected">
+                        <ui:VisualElement class="case-selection__header">
+                            <ui:VisualElement class="case-selection__heading">
+                                <ui:Label text="Case Selection" class="simulation-step-panel__title case-selection__title" />
+                                <ui:Label text="Choose a built-in case before solver initialization." class="case-selection__subtitle" />
+                            </ui:VisualElement>
+                            <ui:VisualElement name="CaseActionBar" class="case-selection__actions">
+                                <ui:Button name="NewCaseButton" text="+ New Case" class="case-action-button case-action-button--primary" />
+                                <ui:Button name="DuplicateCaseButton" text="Duplicate" class="case-action-button" />
+                                <ui:Button name="DeleteCaseButton" text="Delete" class="case-action-button case-action-button--danger" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="case-selection__body">
+                            <ui:VisualElement name="CaseListPanel" class="case-selection__list-panel">
+                                <ui:VisualElement class="case-selection__section-header">
+                                    <ui:Label text="Built-in Cases" class="case-selection__section-title" />
+                                    <ui:Label name="CaseCountValue" text="0 cases" class="case-selection__section-value" />
+                                </ui:VisualElement>
+                                <ui:ScrollView name="CaseListScrollView" class="case-selection__list" />
+                            </ui:VisualElement>
+                            <ui:ScrollView name="SelectedCasePanel" class="case-selection__metadata-panel">
+                                <ui:VisualElement class="case-selection__section-header">
+                                    <ui:Label text="Selected Case" class="case-selection__section-title" />
+                                    <ui:Label name="SelectedCaseSourceValue" text="Built-in" class="case-selection__badge" />
+                                </ui:VisualElement>
+                                <ui:Label name="SelectedCaseNameValue" text="A0_Baseline" class="case-selection__selected-name" />
+                                <ui:Label name="SelectedCaseDescriptionValue" text="Current conservative clamp baseline." class="case-selection__description" />
+                                <ui:VisualElement name="SelectedCaseMetadata" class="case-selection__metadata">
+                                    <ui:VisualElement class="case-metadata__row">
+                                        <ui:Label text="dxPhys" class="case-metadata__label" />
+                                        <ui:Label name="SelectedCaseDxValue" text="0.040 m" class="case-metadata__value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="case-metadata__row">
+                                        <ui:Label text="Fluid tau min" class="case-metadata__label" />
+                                        <ui:Label name="SelectedCaseFluidTauValue" text="0.560" class="case-metadata__value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="case-metadata__row">
+                                        <ui:Label text="Thermal tau min" class="case-metadata__label" />
+                                        <ui:Label name="SelectedCaseThermalTauValue" text="0.560" class="case-metadata__value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="case-metadata__row">
+                                        <ui:Label text="Turbulence" class="case-metadata__label" />
+                                        <ui:Label name="SelectedCaseTurbulenceValue" text="Smagorinsky (0.03)" class="case-metadata__value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="case-metadata__row">
+                                        <ui:Label text="Storage" class="case-metadata__label" />
+                                        <ui:Label name="SelectedCaseStorageValue" text="Built-in / read-only" class="case-metadata__value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="case-metadata__row">
+                                        <ui:Label text="Created" class="case-metadata__label" />
+                                        <ui:Label name="SelectedCaseCreatedValue" text="Project preset" class="case-metadata__value" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:Label text="Initial Conditions" class="case-condition__section-title" />
+                                <ui:VisualElement name="CaseInitialConditions" class="case-condition__group">
+                                    <ui:VisualElement class="case-condition__row">
+                                        <ui:Label text="Indoor temperature" class="case-condition__label" />
+                                        <ui:FloatField name="CaseIndoorTemperatureField" class="case-condition__number" />
+                                        <ui:Label text="°C" class="case-condition__unit" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="case-condition__row">
+                                        <ui:Label text="Indoor humidity" class="case-condition__label" />
+                                        <ui:FloatField name="CaseIndoorHumidityField" class="case-condition__number" />
+                                        <ui:Label text="%" class="case-condition__unit" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="case-condition__row">
+                                        <ui:Label text="Outdoor temperature" class="case-condition__label" />
+                                        <ui:FloatField name="CaseOutdoorTemperatureField" class="case-condition__number" />
+                                        <ui:Label text="°C" class="case-condition__unit" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="case-condition__row">
+                                        <ui:Label text="Outdoor humidity" class="case-condition__label" />
+                                        <ui:FloatField name="CaseOutdoorHumidityField" class="case-condition__number" />
+                                        <ui:Label text="%" class="case-condition__unit" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="case-condition__row">
+                                        <ui:Label text="Set temperature" class="case-condition__label" />
+                                        <ui:FloatField name="CaseSetTemperatureField" class="case-condition__number" />
+                                        <ui:Label text="°C" class="case-condition__unit" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="case-condition__row">
+                                        <ui:Label text="Target simulation time" class="case-condition__label" />
+                                        <ui:FloatField name="CaseTargetSimulationTimeField" class="case-condition__number" />
+                                        <ui:Label text="s" class="case-condition__unit" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:Label name="CaseSelectionStatus" text="User cases are stored as JSON. Solver application is deferred to F10." class="case-selection__status" />
+                            </ui:ScrollView>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="ModelPanel" class="simulation-step-panel">
+                        <ui:VisualElement class="model-selection__header">
+                            <ui:VisualElement class="model-selection__heading">
+                                <ui:Label text="Model Selection" class="simulation-step-panel__title model-selection__title" />
+                                <ui:Label text="Select geometry already loaded by the Unity simulation scene loader." class="model-selection__subtitle" />
+                            </ui:VisualElement>
+                            <ui:Button name="RefreshModelListButton" text="Refresh Loaded Models" class="model-selection__refresh-button" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="model-selection__body">
+                            <ui:VisualElement name="ModelListPanel" class="model-selection__list-panel">
+                                <ui:VisualElement class="model-selection__section-header">
+                                    <ui:Label text="Loaded Models" class="model-selection__section-title" />
+                                    <ui:Label name="ModelCountValue" text="0 models" class="model-selection__section-value" />
+                                </ui:VisualElement>
+                                <ui:ScrollView name="ModelListScrollView" class="model-selection__list" />
+                            </ui:VisualElement>
+                            <ui:VisualElement name="SelectedModelPanel" class="model-selection__metadata-panel">
+                                <ui:VisualElement class="model-selection__section-header">
+                                    <ui:Label text="Current Model" class="model-selection__section-title" />
+                                    <ui:Label name="SelectedModelStateValue" text="Waiting" class="model-selection__badge" />
+                                </ui:VisualElement>
+                                <ui:Label name="SelectedModelNameValue" text="No loaded model" class="model-selection__selected-name" />
+                                <ui:Label name="SelectedModelDescriptionValue" text="Open the Model step after the Bootstrap scene loads the LBM scene." class="model-selection__description" />
+                                <ui:ScrollView name="SelectedModelMetadataScrollView" class="model-selection__metadata-scroll">
+                                    <ui:VisualElement name="SelectedModelMetadata" class="model-selection__metadata">
+                                        <ui:VisualElement class="model-metadata__row">
+                                            <ui:Label text="Scene" class="model-metadata__label" />
+                                            <ui:Label name="SelectedModelSceneValue" text="—" class="model-metadata__value" />
+                                        </ui:VisualElement>
+                                        <ui:VisualElement class="model-metadata__row">
+                                            <ui:Label text="Loader source" class="model-metadata__label" />
+                                            <ui:Label name="SelectedModelSourceValue" text="Unity Scene" class="model-metadata__value" />
+                                        </ui:VisualElement>
+                                        <ui:VisualElement class="model-metadata__row">
+                                            <ui:Label text="Domain object" class="model-metadata__label" />
+                                            <ui:Label name="SelectedModelDomainValue" text="—" class="model-metadata__value" />
+                                        </ui:VisualElement>
+                                        <ui:VisualElement class="model-metadata__row">
+                                            <ui:Label text="Domain size" class="model-metadata__label" />
+                                            <ui:Label name="SelectedModelSizeValue" text="—" class="model-metadata__value" />
+                                        </ui:VisualElement>
+                                        <ui:VisualElement class="model-metadata__row">
+                                            <ui:Label text="Domain center" class="model-metadata__label" />
+                                            <ui:Label name="SelectedModelCenterValue" text="—" class="model-metadata__value" />
+                                        </ui:VisualElement>
+                                        <ui:VisualElement class="model-metadata__row">
+                                            <ui:Label text="Current grid" class="model-metadata__label" />
+                                            <ui:Label name="SelectedModelGridValue" text="—" class="model-metadata__value" />
+                                        </ui:VisualElement>
+                                        <ui:VisualElement class="model-metadata__row">
+                                            <ui:Label text="Scene geometry" class="model-metadata__label" />
+                                            <ui:Label name="SelectedModelGeometryValue" text="—" class="model-metadata__value" />
+                                        </ui:VisualElement>
+                                        <ui:VisualElement class="model-metadata__row">
+                                            <ui:Label text="Mesh topology" class="model-metadata__label" />
+                                            <ui:Label name="SelectedModelTopologyValue" text="—" class="model-metadata__value" />
+                                        </ui:VisualElement>
+                                        <ui:VisualElement class="model-metadata__row">
+                                            <ui:Label text="LBM components" class="model-metadata__label" />
+                                            <ui:Label name="SelectedModelComponentsValue" text="—" class="model-metadata__value" />
+                                        </ui:VisualElement>
+                                    </ui:VisualElement>
+                                </ui:ScrollView>
+                                <ui:Label name="ModelSelectionStatus" text="Model metadata is collected only when this step is opened." class="model-selection__status" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="MeshPanel" class="simulation-step-panel">
+                        <ui:VisualElement class="mesh-setup__header">
+                            <ui:VisualElement class="mesh-setup__heading">
+                                <ui:Label text="LBM Grid" class="simulation-step-panel__title mesh-setup__title" />
+                                <ui:Label text="Review the grid generated from the selected model at fixed dxPhys." class="mesh-setup__subtitle" />
+                            </ui:VisualElement>
+                            <ui:Label text="D3Q19 + D3Q7" class="mesh-setup__scheme-badge" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="mesh-setup__body">
+                            <ui:VisualElement name="MeshGridPanel" class="mesh-setup__grid-panel">
+                                <ui:Label text="Grid Configuration" class="mesh-setup__section-title" />
+                                <ui:VisualElement class="mesh-config__row">
+                                    <ui:Label text="Selected model" class="mesh-config__label" />
+                                    <ui:Label name="MeshModelNameValue" text="No loaded model" class="mesh-config__value" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="mesh-config__row">
+                                    <ui:Label text="Domain size" class="mesh-config__label" />
+                                    <ui:Label name="MeshDomainSizeValue" text="—" class="mesh-config__value" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="mesh-config__cell-size-row">
+                                    <ui:Label text="Cell size (dxPhys)" class="mesh-config__label" />
+                                    <ui:VisualElement class="mesh-config__cell-size-control">
+                                        <ui:FloatField name="MeshCellSizeField" value="0.04" class="mesh-config__float-field" />
+                                        <ui:Label text="m" class="mesh-config__unit" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:Label name="MeshCellSizeSourceValue" text="Case locked" class="mesh-config__lock-badge" />
+                                <ui:Label text="Case Study resolution is fixed at 0.040 m and cannot be changed in this step." class="mesh-config__hint" />
+                                <ui:Label text="Estimated Grid Size" class="mesh-setup__section-title mesh-setup__section-title--spaced" />
+                                <ui:VisualElement class="mesh-grid__axis-row">
+                                    <ui:VisualElement class="mesh-grid__axis-card">
+                                        <ui:Label text="Nx" class="mesh-grid__axis-label" />
+                                        <ui:Label name="MeshNxValue" text="—" class="mesh-grid__axis-value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="mesh-grid__axis-card">
+                                        <ui:Label text="Ny" class="mesh-grid__axis-label" />
+                                        <ui:Label name="MeshNyValue" text="—" class="mesh-grid__axis-value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="mesh-grid__axis-card mesh-grid__axis-card--last">
+                                        <ui:Label text="Nz" class="mesh-grid__axis-label" />
+                                        <ui:Label name="MeshNzValue" text="—" class="mesh-grid__axis-value" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="mesh-grid__total-row">
+                                    <ui:Label text="Total cells" class="mesh-config__label" />
+                                    <ui:Label name="MeshTotalCellsValue" text="—" class="mesh-grid__total-value" />
+                                </ui:VisualElement>
+                            </ui:VisualElement>
+                            <ui:VisualElement name="MeshMemoryPanel" class="mesh-setup__memory-panel">
+                                <ui:VisualElement class="mesh-setup__section-header">
+                                    <ui:Label text="GPU Memory Estimate" class="mesh-setup__section-title" />
+                                    <ui:Label name="MeshMemoryStatusValue" text="Waiting" class="mesh-memory__state" />
+                                </ui:VisualElement>
+                                <ui:Label text="Volume allocations used by ThermalSolver" class="mesh-memory__subtitle" />
+                                <ui:VisualElement class="mesh-memory__row">
+                                    <ui:VisualElement>
+                                        <ui:Label text="Distribution buffers" class="mesh-memory__label" />
+                                        <ui:Label text="26 directions × prev/current × float" class="mesh-memory__detail" />
+                                    </ui:VisualElement>
+                                    <ui:Label name="MeshDistributionMemoryValue" text="—" class="mesh-memory__value" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="mesh-memory__row">
+                                    <ui:VisualElement>
+                                        <ui:Label text="State buffers" class="mesh-memory__label" />
+                                        <ui:Label text="velocity/rho + temperature + field" class="mesh-memory__detail" />
+                                    </ui:VisualElement>
+                                    <ui:Label name="MeshStateMemoryValue" text="—" class="mesh-memory__value" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="mesh-memory__row">
+                                    <ui:VisualElement>
+                                        <ui:Label text="3D textures" class="mesh-memory__label" />
+                                        <ui:Label text="ARGBFloat velocity + RFloat thermal" class="mesh-memory__detail" />
+                                    </ui:VisualElement>
+                                    <ui:Label name="MeshTextureMemoryValue" text="—" class="mesh-memory__value" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="mesh-memory__total-row">
+                                    <ui:Label text="Estimated total" class="mesh-memory__total-label" />
+                                    <ui:Label name="MeshTotalMemoryValue" text="—" class="mesh-memory__total-value" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="mesh-memory__limit-row">
+                                    <ui:Label text="Largest group buffer (6 dirs)" class="mesh-memory__detail" />
+                                    <ui:Label name="MeshLargestBufferMemoryValue" text="—" class="mesh-memory__limit-value" />
+                                    <ui:Label text="/ limit" class="mesh-memory__detail mesh-memory__detail--separator" />
+                                    <ui:Label name="MeshBufferLimitValue" text="2,048.0 MiB" class="mesh-memory__limit-value" />
+                                </ui:VisualElement>
+                                <ui:Label name="MeshEstimateStatus" text="Select a loaded model before estimating the LBM grid." class="mesh-estimate__status" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement name="PhysicsPanel" class="simulation-step-panel">
+                        <ui:VisualElement class="physics-setup__header">
+                            <ui:VisualElement class="physics-setup__heading">
+                                <ui:Label text="Physics" class="simulation-step-panel__title physics-setup__title" />
+                                <ui:Label text="Configure only the models implemented by the current LBM compute solver." class="physics-setup__subtitle" />
+                            </ui:VisualElement>
+                            <ui:Label text="Staged until Run" class="physics-setup__badge" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="physics-setup__body">
+                            <ui:ScrollView name="PhysicsFlowPanel" class="physics-setup__panel">
+                                <ui:Label text="LBM Models" class="physics-setup__section-title" />
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Collision model" class="physics-field__label" />
+                                    <ui:DropdownField name="PhysicsCollisionModelField" class="physics-field__dropdown" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Fluid lattice" class="physics-field__label" />
+                                    <ui:Label name="PhysicsFluidLatticeValue" text="D3Q19 MRT" class="physics-field__value" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Thermal lattice" class="physics-field__label" />
+                                    <ui:Label name="PhysicsThermalLatticeValue" text="D3Q7 MRT" class="physics-field__value" />
+                                </ui:VisualElement>
+                                <ui:Label text="Turbulence" class="physics-setup__section-title physics-setup__section-title--spaced" />
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="SGS model" class="physics-field__label" />
+                                    <ui:DropdownField name="PhysicsTurbulenceModelField" class="physics-field__dropdown" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Model constant" class="physics-field__label" />
+                                    <ui:FloatField name="PhysicsTurbulenceConstantField" value="0.03" class="physics-field__number" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Turbulent Prandtl" class="physics-field__label" />
+                                    <ui:FloatField name="PhysicsTurbulentPrandtlField" value="0.7" class="physics-field__number" />
+                                </ui:VisualElement>
+                                <ui:Label text="Available: Off, Smagorinsky, WALE. BGK is not implemented." class="physics-field__hint" />
+                            </ui:ScrollView>
+                            <ui:ScrollView name="PhysicsThermalPanel" class="physics-setup__panel physics-setup__panel--last">
+                                <ui:VisualElement class="physics-setup__section-header">
+                                    <ui:Label text="Thermal" class="physics-setup__section-title" />
+                                    <ui:Toggle name="PhysicsThermalEnabledToggle" text="Enabled" value="true" class="physics-field__toggle" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Temperature range" class="physics-field__label" />
+                                    <ui:VisualElement class="physics-field__range">
+                                        <ui:FloatField name="PhysicsTemperatureMinField" value="0" class="physics-field__number physics-field__number--compact" />
+                                        <ui:Label text="to" class="physics-field__separator" />
+                                        <ui:FloatField name="PhysicsTemperatureMaxField" value="30" class="physics-field__number physics-field__number--compact" />
+                                        <ui:Label text="°C" class="physics-field__unit" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Reference temp" class="physics-field__label" />
+                                    <ui:VisualElement class="physics-field__number-unit">
+                                        <ui:FloatField name="PhysicsReferenceTemperatureField" value="30" class="physics-field__number" />
+                                        <ui:Label text="°C" class="physics-field__unit" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Target Prandtl" class="physics-field__label" />
+                                    <ui:FloatField name="PhysicsPrandtlTargetField" value="0.71" class="physics-field__number" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Thermal tau min" class="physics-field__label" />
+                                    <ui:Label name="PhysicsTauThermalMinValue" text="0.560" class="physics-field__value" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-setup__section-header physics-setup__section-header--spaced">
+                                    <ui:Label text="Buoyancy" class="physics-setup__section-title" />
+                                    <ui:Toggle name="PhysicsBuoyancyEnabledToggle" text="Enabled" value="true" class="physics-field__toggle" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Model" class="physics-field__label" />
+                                    <ui:DropdownField name="PhysicsBuoyancyModelField" class="physics-field__dropdown" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Expansion beta [1/K]" class="physics-field__label" />
+                                    <ui:FloatField name="PhysicsThermalExpansionBetaField" value="0.05" class="physics-field__number" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Gravity (physical)" class="physics-field__label" />
+                                    <ui:Label name="PhysicsGravityPhysicalValue" text="(0, -9.81, 0) m/s²" class="physics-field__value" />
+                                </ui:VisualElement>
+                                <ui:VisualElement class="physics-field__row">
+                                    <ui:Label text="Gravity (lattice)" class="physics-field__label" />
+                                    <ui:Label name="PhysicsGravityLatticeValue" text="Pending scaling" class="physics-field__value" />
+                                </ui:VisualElement>
+                            </ui:ScrollView>
+                        </ui:VisualElement>
+                        <ui:Label name="PhysicsConfigurationStatus" text="Physics settings are staged and will be applied in F10." class="physics-status" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="BoundaryPanel" class="simulation-step-panel">
+                        <ui:VisualElement class="boundary-setup__header">
+                            <ui:VisualElement class="boundary-setup__heading">
+                                <ui:Label text="Boundary" class="simulation-step-panel__title boundary-setup__title" />
+                                <ui:Label text="Review and stage parameters from the selected model's actual solver boundary components." class="boundary-setup__subtitle" />
+                            </ui:VisualElement>
+                            <ui:Label text="Staged until Run" class="boundary-setup__badge" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="boundary-summary">
+                            <ui:Button name="BoundaryInletTabButton" class="boundary-summary__card boundary-summary__card--selected">
+                                <ui:Label text="INLET" class="boundary-summary__label" />
+                                <ui:Label name="BoundaryInletCountValue" text="0" class="boundary-summary__count" />
+                            </ui:Button>
+                            <ui:Button name="BoundaryOutletTabButton" class="boundary-summary__card">
+                                <ui:Label text="OUTLET" class="boundary-summary__label" />
+                                <ui:Label name="BoundaryOutletCountValue" text="0" class="boundary-summary__count" />
+                            </ui:Button>
+                            <ui:Button name="BoundaryWallTabButton" class="boundary-summary__card boundary-summary__card--last">
+                                <ui:Label text="WALL" class="boundary-summary__label" />
+                                <ui:Label name="BoundaryWallCountValue" text="0" class="boundary-summary__count" />
+                            </ui:Button>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="boundary-setup__body">
+                            <ui:VisualElement name="BoundaryListPanel" class="boundary-setup__list-panel">
+                                <ui:VisualElement class="boundary-setup__section-header">
+                                    <ui:Label name="BoundaryListTitle" text="Inlet patches" class="boundary-setup__section-title" />
+                                    <ui:Label name="BoundaryListCountValue" text="0 items" class="boundary-setup__section-value" />
+                                </ui:VisualElement>
+                                <ui:ScrollView name="BoundaryItemListScrollView" class="boundary-setup__list" />
+                            </ui:VisualElement>
+                            <ui:ScrollView name="BoundaryParameterPanel" class="boundary-setup__parameter-panel">
+                                <ui:VisualElement class="boundary-parameter__header">
+                                    <ui:VisualElement class="boundary-parameter__heading">
+                                        <ui:Label name="SelectedBoundaryNameValue" text="No boundary selected" class="boundary-parameter__name" />
+                                        <ui:Label name="SelectedBoundarySourceValue" text="Select a loaded model first." class="boundary-parameter__source" />
+                                    </ui:VisualElement>
+                                    <ui:Label name="SelectedBoundaryTypeValue" text="Waiting" class="boundary-parameter__badge" />
+                                </ui:VisualElement>
+                                <ui:VisualElement name="BoundaryCommonFields" class="boundary-parameter__group">
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Patch role" class="boundary-field__label" />
+                                        <ui:DropdownField name="BoundaryPatchTypeField" class="boundary-field__control" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Enabled" class="boundary-field__label" />
+                                        <ui:Toggle name="BoundaryEnabledToggle" class="boundary-field__toggle" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Grid patch" class="boundary-field__label" />
+                                        <ui:Label name="BoundaryGridPatchValue" text="-" class="boundary-field__value" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:VisualElement name="BoundaryInletFields" class="boundary-parameter__group">
+                                    <ui:Label text="Inlet - Zou/He velocity + fixed temperature" class="boundary-parameter__group-title" />
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Input mode" class="boundary-field__label" />
+                                        <ui:DropdownField name="BoundaryInletModeField" class="boundary-field__control" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Velocity [m/s]" class="boundary-field__label" />
+                                        <ui:Vector3Field name="BoundaryInletVelocityField" class="boundary-field__vector" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Volume flow [m3/s]" class="boundary-field__label" />
+                                        <ui:FloatField name="BoundaryInletFlowRateField" class="boundary-field__number" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Temperature [degC]" class="boundary-field__label" />
+                                        <ui:FloatField name="BoundaryInletTemperatureField" class="boundary-field__number" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Discharge angle [deg]" class="boundary-field__label" />
+                                        <ui:FloatField name="BoundaryInletDischargeAngleField" class="boundary-field__number" />
+                                    </ui:VisualElement>
+                                    <ui:Label text="0 deg = tangential, 90 deg = inward normal." class="boundary-field__hint" />
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Normal / area" class="boundary-field__label" />
+                                        <ui:Label name="BoundaryInletGeometryValue" text="-" class="boundary-field__value" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:VisualElement name="BoundaryOutletFields" class="boundary-parameter__group">
+                                    <ui:Label text="Outlet - Zou/He pressure / mass balance" class="boundary-parameter__group-title" />
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Input mode" class="boundary-field__label" />
+                                        <ui:Label name="BoundaryOutletModeValue" text="-" class="boundary-field__value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Mass-flux correction" class="boundary-field__label" />
+                                        <ui:Toggle name="BoundaryMassFluxToggle" class="boundary-field__toggle" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Density target" class="boundary-field__label" />
+                                        <ui:FloatField name="BoundaryOutletDensityField" class="boundary-field__number" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Normal velocity blend" class="boundary-field__label" />
+                                        <ui:FloatField name="BoundaryOutletBlendField" class="boundary-field__number" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Density anchor" class="boundary-field__label" />
+                                        <ui:FloatField name="BoundaryOutletAnchorField" class="boundary-field__number" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Target flow" class="boundary-field__label" />
+                                        <ui:Label name="BoundaryOutletFlowValue" text="-" class="boundary-field__value" />
+                                    </ui:VisualElement>
+                                </ui:VisualElement>
+                                <ui:VisualElement name="BoundaryWallFields" class="boundary-parameter__group">
+                                    <ui:Label text="Wall - resting half-way bounce-back" class="boundary-parameter__group-title" />
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Momentum boundary" class="boundary-field__label" />
+                                        <ui:Label name="BoundaryWallMomentumValue" text="No-slip bounce-back" class="boundary-field__value" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Thermal boundary" class="boundary-field__label" />
+                                        <ui:DropdownField name="BoundaryWallThermalField" class="boundary-field__control" />
+                                    </ui:VisualElement>
+                                    <ui:VisualElement class="boundary-field__row">
+                                        <ui:Label text="Temperature [degC]" class="boundary-field__label" />
+                                        <ui:FloatField name="BoundaryWallTemperatureField" class="boundary-field__number" />
+                                    </ui:VisualElement>
+                                    <ui:Label name="BoundaryWallHintValue" text="Domain shell behavior is fixed by the compute shader." class="boundary-field__hint" />
+                                </ui:VisualElement>
+                            </ui:ScrollView>
+                        </ui:VisualElement>
+                        <ui:Label name="BoundaryConfigurationStatus" text="Boundary components are scanned only when this step is opened." class="boundary-status" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="RunPanel" class="simulation-step-panel">
+                        <ui:VisualElement class="run-review__header">
+                            <ui:VisualElement class="run-review__heading">
+                                <ui:Label text="Review &amp; Run" class="simulation-step-panel__title run-review__title" />
+                                <ui:Label text="Confirm the staged setup before creating a new solver run." class="run-review__subtitle" />
+                            </ui:VisualElement>
+                            <ui:Label name="RunReviewReadinessValue" text="Review required" class="run-review__badge" />
+                        </ui:VisualElement>
+                        <ui:ScrollView name="RunReviewPanel" class="run-review__panel">
+                            <ui:VisualElement class="run-review__row">
+                                <ui:Label text="Case" class="run-review__label" />
+                                <ui:Label name="RunReviewCaseValue" text="Not selected" class="run-review__value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="run-review__row">
+                                <ui:Label text="Model" class="run-review__label" />
+                                <ui:Label name="RunReviewModelValue" text="Not selected" class="run-review__value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="run-review__row">
+                                <ui:Label text="Mesh" class="run-review__label" />
+                                <ui:Label name="RunReviewGridValue" text="Not estimated" class="run-review__value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="run-review__row">
+                                <ui:Label text="Physics" class="run-review__label" />
+                                <ui:Label name="RunReviewPhysicsValue" text="Not configured" class="run-review__value" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="run-review__row">
+                                <ui:Label text="Boundary" class="run-review__label" />
+                                <ui:Label name="RunReviewBoundaryValue" text="Not scanned" class="run-review__value" />
+                            </ui:VisualElement>
+                            <ui:Label text="Start creates a new run after solver reinitialization. Pause and Stop preserve current results and physical time; Resume continues only a paused run." class="run-review__hint" />
+                        </ui:ScrollView>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:ScrollView name="SimulationOperations" class="simulation-page__operations">
+                    <ui:VisualElement name="RunControlPanel" class="simulation-operation-panel run-control-panel">
+                        <ui:VisualElement class="run-control__header">
+                            <ui:Label text="Run Control" class="simulation-operation-panel__title run-control__title" />
+                            <ui:Label name="SimulationRunStateValue" text="Idle" class="run-control__state run-state--idle" />
+                        </ui:VisualElement>
+                        <ui:Label name="SimulationRunStateDetail" text="Waiting for a solver binding." class="run-control__detail" />
+                        <ui:Button name="SimulationStartButton" text="Start New Run" class="run-control__button run-control__button--primary" />
+                        <ui:VisualElement class="run-control__button-row">
+                            <ui:Button name="SimulationPauseButton" text="Pause" class="run-control__button run-control__button--half" />
+                            <ui:Button name="SimulationResumeButton" text="Resume" class="run-control__button run-control__button--half run-control__button--last" />
+                        </ui:VisualElement>
+                        <ui:Button name="SimulationStopButton" text="Stop (preserve results)" class="run-control__button run-control__button--danger" />
+                        <ui:Label name="SimulationRunCommandStatus" text="Start reinitializes; Stop does not reset." class="run-control__status" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="SimulationProgressPanel" class="simulation-operation-panel">
+                        <ui:VisualElement class="simulation-progress__header">
+                            <ui:Label text="Simulation Progress" class="simulation-operation-panel__title simulation-progress__title" />
+                            <ui:Label name="SimulationProgressPercentValue" text="Manual" class="simulation-progress__percent" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="simulation-progress__track">
+                            <ui:VisualElement name="SimulationProgressFill" class="simulation-progress__fill" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="simulation-progress__row">
+                            <ui:Label text="Simulation time" class="simulation-progress__label" />
+                            <ui:Label name="SimulationTimeValue" text="-" class="simulation-progress__value" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="simulation-progress__row">
+                            <ui:Label text="Target time" class="simulation-progress__label" />
+                            <ui:Label name="SimulationTargetTimeValue" text="Manual" class="simulation-progress__value" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="simulation-progress__row">
+                            <ui:Label text="Time step" class="simulation-progress__label" />
+                            <ui:Label name="SimulationTimeStepValue" text="-" class="simulation-progress__value" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="simulation-progress__row">
+                            <ui:Label text="Step count" class="simulation-progress__label" />
+                            <ui:Label name="SimulationStepCountValue" text="-" class="simulation-progress__value" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="simulation-progress__row">
+                            <ui:Label text="Estimated remaining" class="simulation-progress__label" />
+                            <ui:Label name="SimulationEstimatedRemainingValue" text="Not defined" class="simulation-progress__value" />
+                        </ui:VisualElement>
+                        <ui:Label name="SimulationProgressStatus" text="Waiting for simulation data." class="simulation-progress__status" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="GpuSystemMonitorPanel" class="simulation-operation-panel simulation-operation-panel--last">
+                        <ui:VisualElement class="system-monitor__header">
+                            <ui:Label text="GPU / System Monitor" class="simulation-operation-panel__title system-monitor__title" />
+                            <ui:Label name="SystemMonitorStateValue" text="Live" class="system-monitor__badge" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="system-monitor__row">
+                            <ui:Label text="GPU" class="system-monitor__label" />
+                            <ui:Label name="SystemMonitorGpuNameValue" text="-" class="system-monitor__value" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="system-monitor__row">
+                            <ui:Label text="Graphics API" class="system-monitor__label" />
+                            <ui:Label name="SystemMonitorGraphicsApiValue" text="-" class="system-monitor__value" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="system-monitor__row">
+                            <ui:Label text="GPU usage" class="system-monitor__label" />
+                            <ui:Label name="SystemMonitorGpuUsageValue" text="Unavailable" class="system-monitor__value system-monitor__value--unavailable" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="system-monitor__row">
+                            <ui:Label text="GPU memory" class="system-monitor__label" />
+                            <ui:Label name="SystemMonitorGpuMemoryValue" text="-" class="system-monitor__value" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="system-monitor__row">
+                            <ui:Label text="System memory" class="system-monitor__label" />
+                            <ui:Label name="SystemMonitorSystemMemoryValue" text="-" class="system-monitor__value" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="system-monitor__row">
+                            <ui:Label text="FPS" class="system-monitor__label" />
+                            <ui:Label name="SystemMonitorFpsValue" text="-" class="system-monitor__value" />
+                        </ui:VisualElement>
+                        <ui:Label name="SystemMonitorStatus" text="GPU utilization requires an optional platform-specific provider." class="system-monitor__status" />
+                    </ui:VisualElement>
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="SimulationConsolePanel" class="simulation-page__console">
+                <ui:VisualElement name="SimulationConsoleTabs" class="simulation-console__tabs">
+                    <ui:Label text="Console" class="simulation-console__tab simulation-console__tab--selected" />
+                    <ui:Label text="Log" class="simulation-console__tab" />
+                    <ui:Label text="Warnings" class="simulation-console__tab" />
+                    <ui:Label text="Errors" class="simulation-console__tab" />
+                </ui:VisualElement>
+                <ui:ScrollView name="SimulationConsoleScrollView" class="simulation-console__scroll-view">
+                    <ui:Label name="SimulationConsolePlaceholder" text="Simulation messages will appear here." />
+                </ui:ScrollView>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

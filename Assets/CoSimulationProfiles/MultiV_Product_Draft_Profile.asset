@@ -505,7 +505,7 @@ MonoBehaviour:
     description: Indoor unit on command.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_mode
+    sourceVariableName: idu_02_set_mode
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_02.SetMode
     scale: 1
@@ -517,7 +517,7 @@ MonoBehaviour:
     description: Indoor unit mode command.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_temp
+    sourceVariableName: idu_02_set_temp
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_02.SetTemp
     scale: 1
@@ -529,7 +529,7 @@ MonoBehaviour:
     description: Indoor unit set temperature.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_fan
+    sourceVariableName: idu_02_set_fan
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_02.SetFan
     scale: 1
@@ -697,7 +697,7 @@ MonoBehaviour:
     description: Indoor unit on command.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_mode
+    sourceVariableName: idu_03_set_mode
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_03.SetMode
     scale: 1
@@ -709,7 +709,7 @@ MonoBehaviour:
     description: Indoor unit mode command.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_temp
+    sourceVariableName: idu_03_set_temp
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_03.SetTemp
     scale: 1
@@ -721,7 +721,7 @@ MonoBehaviour:
     description: Indoor unit set temperature.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_fan
+    sourceVariableName: idu_03_set_fan
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_03.SetFan
     scale: 1
@@ -889,7 +889,7 @@ MonoBehaviour:
     description: Indoor unit on command.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_mode
+    sourceVariableName: idu_04_set_mode
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_04.SetMode
     scale: 1
@@ -901,7 +901,7 @@ MonoBehaviour:
     description: Indoor unit mode command.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_temp
+    sourceVariableName: idu_04_set_temp
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_04.SetTemp
     scale: 1
@@ -913,7 +913,7 @@ MonoBehaviour:
     description: Indoor unit set temperature.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_fan
+    sourceVariableName: idu_04_set_fan
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_04.SetFan
     scale: 1
@@ -1081,7 +1081,7 @@ MonoBehaviour:
     description: Indoor unit on command.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_mode
+    sourceVariableName: idu_05_set_mode
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_05.SetMode
     scale: 1
@@ -1093,7 +1093,7 @@ MonoBehaviour:
     description: Indoor unit mode command.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_temp
+    sourceVariableName: idu_05_set_temp
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_05.SetTemp
     scale: 1
@@ -1105,7 +1105,7 @@ MonoBehaviour:
     description: Indoor unit set temperature.
   - enabled: 1
     sourceModelId: profile
-    sourceVariableName: set_fan
+    sourceVariableName: idu_05_set_fan
     targetModelId: Multi_V_S__Set_CFMU
     targetVariableName: IDU_05.SetFan
     scale: 1
@@ -1480,6 +1480,102 @@ MonoBehaviour:
     intValue: 0
     boolValue: 0
     stringValue: 
+  - enabled: 1
+    modelId: profile
+    variableName: idu_02_set_mode
+    valueType: 0
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_02_set_temp
+    valueType: 0
+    realValue: 28
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_02_set_fan
+    valueType: 0
+    realValue: 4
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_03_set_mode
+    valueType: 0
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_03_set_temp
+    valueType: 0
+    realValue: 28
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_03_set_fan
+    valueType: 0
+    realValue: 4
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_04_set_mode
+    valueType: 0
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_04_set_temp
+    valueType: 0
+    realValue: 28
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_04_set_fan
+    valueType: 0
+    realValue: 4
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_05_set_mode
+    valueType: 0
+    realValue: 0
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_05_set_temp
+    valueType: 0
+    realValue: 28
+    intValue: 0
+    boolValue: 0
+    stringValue:
+  - enabled: 1
+    modelId: profile
+    variableName: idu_05_set_fan
+    valueType: 0
+    realValue: 4
+    intValue: 0
+    boolValue: 0
+    stringValue:
   - enabled: 1
     modelId: profile
     variableName: room_humidity_percent

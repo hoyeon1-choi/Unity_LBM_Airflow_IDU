@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="SystemMonitor.uss" />
+    <ui:VisualElement name="SystemMonitorContent" class="ux04-system-monitor">
+        <ui:VisualElement name="SystemMonitorTopRow" class="ux04-system-monitor__top-row">
+            <ui:VisualElement name="ActuatorInformationPanel" class="ux04-monitor-panel ux04-monitor-panel--actuator dashboard-panel">
+                <ui:VisualElement class="ux04-section-heading">
+                    <ui:Label text="&#xC561;&#xCE04;&#xC5D0;&#xC774;&#xD130; &#xC815;&#xBCF4;" class="ux04-section-heading__title" />
+                    <ui:Label text="PRODUCT FMU" class="ux04-section-heading__source" />
+                </ui:VisualElement>
+                <ui:VisualElement class="ux04-data-table">
+                    <ui:VisualElement class="ux04-data-table__row ux04-data-table__header">
+                        <ui:Label text="&#xD56D;&#xBAA9;" class="ux04-data-table__cell ux04-data-table__item" />
+                        <ui:Label text="&#xD604;&#xC7AC;&#xAC12;" class="ux04-data-table__cell ux04-data-table__value" />
+                        <ui:Label text="&#xB2E8;&#xC704;" class="ux04-data-table__cell ux04-data-table__unit" />
+                        <ui:Label text="&#xC0C1;&#xD0DC;" class="ux04-data-table__cell ux04-data-table__status" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ux04-data-table__row">
+                        <ui:Label text="Compressor" class="ux04-data-table__cell ux04-data-table__item" />
+                        <ui:Label name="CompressorCurrentValue" text="N/A" class="ux04-data-table__cell ux04-data-table__value ux04-data-table__value--unavailable" />
+                        <ui:Label text="Hz" class="ux04-data-table__cell ux04-data-table__unit" />
+                        <ui:Label name="CompressorCurrentStatus" text="N/A" class="ux04-data-table__cell ux04-data-table__status ux04-data-table__status--unavailable" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ux04-data-table__row ux04-data-table__row--alternate">
+                        <ui:Label text="Outdoor Fan" class="ux04-data-table__cell ux04-data-table__item" />
+                        <ui:Label name="OutdoorFanCurrentValue" text="N/A" class="ux04-data-table__cell ux04-data-table__value ux04-data-table__value--unavailable" />
+                        <ui:Label text="rpm" class="ux04-data-table__cell ux04-data-table__unit" />
+                        <ui:Label name="OutdoorFanCurrentStatus" text="N/A" class="ux04-data-table__cell ux04-data-table__status ux04-data-table__status--unavailable" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ux04-data-table__row">
+                        <ui:Label text="Main EEV" class="ux04-data-table__cell ux04-data-table__item" />
+                        <ui:Label name="MainEevCurrentValue" text="N/A" class="ux04-data-table__cell ux04-data-table__value ux04-data-table__value--unavailable" />
+                        <ui:Label text="pulse" class="ux04-data-table__cell ux04-data-table__unit" />
+                        <ui:Label name="MainEevCurrentStatus" text="N/A" class="ux04-data-table__cell ux04-data-table__status ux04-data-table__status--unavailable" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ux04-data-table__row ux04-data-table__row--alternate ux04-data-table__row--last">
+                        <ui:Label text="Reversing Valve" class="ux04-data-table__cell ux04-data-table__item" />
+                        <ui:Label name="ReversingValveCurrentValue" text="N/A" class="ux04-data-table__cell ux04-data-table__value ux04-data-table__value--unavailable" />
+                        <ui:Label text="flag" class="ux04-data-table__cell ux04-data-table__unit" />
+                        <ui:Label name="ReversingValveCurrentStatus" text="N/A" class="ux04-data-table__cell ux04-data-table__status ux04-data-table__status--unavailable" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:Label text="Current values are read from Product FMU inputs." class="ux04-panel-note" />
+            </ui:VisualElement>
+
+            <ui:VisualElement name="SensorInformationPanel" class="ux04-monitor-panel ux04-monitor-panel--sensor dashboard-panel">
+                <ui:VisualElement class="ux04-section-heading">
+                    <ui:Label text="&#xC13C;&#xC11C; &#xC815;&#xBCF4;" class="ux04-section-heading__title" />
+                    <ui:Label text="PRODUCT / AIRFLOW" class="ux04-section-heading__source" />
+                </ui:VisualElement>
+                <ui:VisualElement class="ux04-sensor-tabs">
+                    <ui:Button name="SensorTemperatureTab" text="&#xC628;&#xB3C4;" class="ux04-sensor-tab ux04-sensor-tab--selected" />
+                    <ui:Button name="SensorPressureTab" text="&#xC555;&#xB825;" class="ux04-sensor-tab" />
+                    <ui:Button name="SensorFlowTab" text="&#xC720;&#xB7C9;" class="ux04-sensor-tab" />
+                    <ui:Button name="SensorHumidityTab" text="&#xC2B5;&#xB3C4;" class="ux04-sensor-tab" />
+                    <ui:Button name="SensorOtherTab" text="&#xAE30;&#xD0C0;" class="ux04-sensor-tab ux04-sensor-tab--last" />
+                </ui:VisualElement>
+                <ui:VisualElement class="ux04-data-table ux04-data-table--fill">
+                    <ui:VisualElement class="ux04-data-table__row ux04-data-table__header">
+                        <ui:Label text="&#xD56D;&#xBAA9;" class="ux04-data-table__cell ux04-data-table__item" />
+                        <ui:Label text="&#xD604;&#xC7AC;&#xAC12;" class="ux04-data-table__cell ux04-data-table__value" />
+                        <ui:Label text="&#xB2E8;&#xC704;" class="ux04-data-table__cell ux04-data-table__unit" />
+                        <ui:Label text="&#xC0C1;&#xD0DC;" class="ux04-data-table__cell ux04-data-table__status" />
+                    </ui:VisualElement>
+                    <ui:ScrollView name="SensorTableScrollView" class="ux04-data-table__scroll">
+                        <ui:VisualElement name="SensorTableBody" class="ux04-data-table__body" />
+                        <ui:Label name="SensorEmptyState" text="N/A - no verified signal in this category" class="ux04-data-table__empty" style="display: none;" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="ElectricalInformationPanel" class="ux04-monitor-panel ux04-monitor-panel--electrical dashboard-panel">
+                <ui:VisualElement class="ux04-section-heading">
+                    <ui:Label text="&#xC804;&#xC7A5; &#xC815;&#xBCF4;" class="ux04-section-heading__title" />
+                    <ui:Label text="CONTROLLER FMU" class="ux04-section-heading__source" />
+                </ui:VisualElement>
+                <ui:VisualElement class="ux04-data-table ux04-data-table--fill">
+                    <ui:VisualElement class="ux04-data-table__row ux04-data-table__header">
+                        <ui:Label text="&#xD56D;&#xBAA9;" class="ux04-data-table__cell ux04-data-table__item" />
+                        <ui:Label text="&#xD604;&#xC7AC;&#xAC12;" class="ux04-data-table__cell ux04-data-table__value" />
+                        <ui:Label text="&#xB2E8;&#xC704;" class="ux04-data-table__cell ux04-data-table__unit" />
+                        <ui:Label text="&#xC0C1;&#xD0DC;" class="ux04-data-table__cell ux04-data-table__status" />
+                    </ui:VisualElement>
+                    <ui:ScrollView name="ElectricalTableScrollView" class="ux04-data-table__scroll">
+                        <ui:VisualElement name="ElectricalTableBody" class="ux04-data-table__body" />
+                    </ui:ScrollView>
+                </ui:VisualElement>
+                <ui:Label text="Power and limit rows are omitted because no verified FMU signal is available." class="ux04-panel-note" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="SystemMonitorBottomRow" class="ux04-system-monitor__bottom-row">
+            <ui:VisualElement name="PrimaryGraphPanel" class="ux04-primary-graph dashboard-panel">
+                <ui:VisualElement class="ux04-primary-graph__header">
+                    <ui:VisualElement class="ux04-primary-graph__tabs">
+                        <ui:Button name="PrimaryGraphHzTab" text="Hz" class="ux04-graph-tab ux04-graph-tab--selected" />
+                        <ui:Button name="PrimaryGraphShTab" text="SH" class="ux04-graph-tab" />
+                        <ui:Button name="PrimaryGraphScTab" text="SC" class="ux04-graph-tab" />
+                        <ui:Button name="PrimaryGraphIdu1Tab" text="IDU1" class="ux04-graph-tab ux04-graph-tab--last" />
+                    </ui:VisualElement>
+                    <ui:Label name="PrimaryGraphStatus" text="Waiting for Co-Simulation" class="ux04-graph-status" />
+                </ui:VisualElement>
+                <ui:VisualElement class="ux04-primary-graph__body">
+                    <ui:VisualElement name="PrimaryGraphAxes" class="ux04-graph-y-axes">
+                        <ui:VisualElement name="PrimaryGraphAxis0" class="ux04-graph-y-axis">
+                            <ui:Label name="PrimaryGraphAxisUnit0" text="Hz" class="ux04-graph-axis-unit" />
+                            <ui:VisualElement class="ux04-graph-axis-ticks">
+                                <ui:Label name="PrimaryGraphValue0_0" text="1.0" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue0_1" text="0.75" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue0_2" text="0.5" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue0_3" text="0.25" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue0_4" text="0.0" class="ux04-graph-axis-value" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="PrimaryGraphAxis1" class="ux04-graph-y-axis">
+                            <ui:Label name="PrimaryGraphAxisUnit1" text="rpm" class="ux04-graph-axis-unit" />
+                            <ui:VisualElement class="ux04-graph-axis-ticks">
+                                <ui:Label name="PrimaryGraphValue1_0" text="1.0" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue1_1" text="0.75" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue1_2" text="0.5" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue1_3" text="0.25" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue1_4" text="0.0" class="ux04-graph-axis-value" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="PrimaryGraphAxis2" class="ux04-graph-y-axis">
+                            <ui:Label name="PrimaryGraphAxisUnit2" text="kPa" class="ux04-graph-axis-unit" />
+                            <ui:VisualElement class="ux04-graph-axis-ticks">
+                                <ui:Label name="PrimaryGraphValue2_0" text="1.0" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue2_1" text="0.75" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue2_2" text="0.5" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue2_3" text="0.25" class="ux04-graph-axis-value" />
+                                <ui:Label name="PrimaryGraphValue2_4" text="0.0" class="ux04-graph-axis-value" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ux04-primary-graph__plot-column">
+                        <ui:VisualElement name="PrimaryGraphChartHost" class="ux04-primary-graph__chart-host" />
+                        <ui:VisualElement class="ux04-primary-graph__time-axis">
+                            <ui:VisualElement class="ux04-graph-time-ticks">
+                                <ui:Label name="PrimaryGraphTimeMin" text="0.0" class="ux04-graph-time-value" />
+                                <ui:Label name="PrimaryGraphTimeQuarter" text="30.0" class="ux04-graph-time-value ux04-graph-time-value--center" />
+                                <ui:Label name="PrimaryGraphTimeMiddle" text="60.0" class="ux04-graph-time-value ux04-graph-time-value--center" />
+                                <ui:Label name="PrimaryGraphTimeThreeQuarter" text="90.0" class="ux04-graph-time-value ux04-graph-time-value--center" />
+                                <ui:Label name="PrimaryGraphTimeMax" text="120.0" class="ux04-graph-time-value ux04-graph-time-value--right" />
+                            </ui:VisualElement>
+                            <ui:Label text="Simulation Time (s)" class="ux04-graph-time-title" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement name="PrimaryGraphLegend" class="ux04-graph-legend" />
+                <ui:VisualElement name="PrimaryGraphFooter" class="ux04-primary-graph__footer">
+                    <ui:Label text="Completed communication-point samples | 300 points | 120 s window" class="ux04-primary-graph__sampling-note" />
+                    <ui:Label text="SH = suction - evaporation; SC = liquid - condensation" class="ux04-primary-graph__formula-note" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="IndoorUnitInformationPanel" class="ux04-indoor-panel dashboard-panel">
+                <ui:VisualElement class="ux04-indoor-tabs">
+                    <ui:Button name="IndoorUnitInfoTab" text="&#xC2E4;&#xB0B4;&#xAE30; &#xC815;&#xBCF4;" class="ux04-indoor-tab ux04-indoor-tab--selected ux04-indoor-tab--last" />
+                </ui:VisualElement>
+                <ui:VisualElement class="ux04-indoor-table">
+                    <ui:VisualElement class="ux04-indoor-table__row ux04-indoor-table__header">
+                        <ui:Label text="IDU" class="ux04-indoor-table__cell ux04-indoor-table__idu" />
+                        <ui:Label text="State" class="ux04-indoor-table__cell ux04-indoor-table__state" />
+                        <ui:Label text="Suction T (degC)" class="ux04-indoor-table__cell ux04-indoor-table__wide" />
+                        <ui:Label text="Suction RH (%)" class="ux04-indoor-table__cell ux04-indoor-table__wide" />
+                        <ui:Label text="Disch. T (degC)" class="ux04-indoor-table__cell ux04-indoor-table__wide" />
+                        <ui:Label text="Disch. RH (%)" class="ux04-indoor-table__cell ux04-indoor-table__wide" />
+                        <ui:Label text="Air Flow (kg/s)" class="ux04-indoor-table__cell ux04-indoor-table__wide" />
+                        <ui:Label text="Fan" class="ux04-indoor-table__cell ux04-indoor-table__compact" />
+                        <ui:Label text="EEV" class="ux04-indoor-table__cell ux04-indoor-table__eev" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="IndoorUnitTableBody" class="ux04-indoor-table__body" />
+                </ui:VisualElement>
+                <ui:Label text="R1 suction: LBM airflow | R2-R5 suction: Chamber FMU | discharge: Product FMU" class="ux04-indoor-panel__note" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

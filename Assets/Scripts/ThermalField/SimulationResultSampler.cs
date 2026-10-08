@@ -1,3 +1,4 @@
+using System;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
@@ -50,6 +51,7 @@ public class SimulationResultSampler : MonoBehaviour
     private float _previousMassResidualNormalized = -1.0f;
 
     public SimulationResultMetrics LatestMetrics => latestMetrics;
+    public event Action<SimulationResultMetrics> MetricsUpdated;
 
     private void Awake()
     {
@@ -432,6 +434,7 @@ public class SimulationResultSampler : MonoBehaviour
 
             lastCompletedSampleSimTimeSeconds = pending.sampleTimeSeconds;
             LogMetricsIfRequested(pending.clampData);
+            NotifyMetricsUpdated();
         }
         finally
         {
@@ -456,6 +459,7 @@ public class SimulationResultSampler : MonoBehaviour
 
             lastCompletedSampleSimTimeSeconds = pending.sampleTimeSeconds;
             LogMetricsIfRequested(pending.clampData);
+            NotifyMetricsUpdated();
         }
         finally
         {
@@ -475,6 +479,26 @@ public class SimulationResultSampler : MonoBehaviour
             Debug.Log(
                 $"[ClampCounter] thermal_in={clampData[0]}, thermal_out={clampData[1]}, " +
                 $"fluid_in={clampData[2]}, fluid_out={clampData[3]}");
+        }
+    }
+
+    private void NotifyMetricsUpdated()
+    {
+        Action<SimulationResultMetrics> handlers = MetricsUpdated;
+        if (handlers == null)
+            return;
+
+        Delegate[] invocationList = handlers.GetInvocationList();
+        for (int i = 0; i < invocationList.Length; i++)
+        {
+            try
+            {
+                ((Action<SimulationResultMetrics>)invocationList[i]).Invoke(latestMetrics);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError($"[UX01][F07] MetricsUpdated subscriber failed: {exception}", this);
+            }
         }
     }
 

@@ -132,10 +132,43 @@ public class LBMZouHeBox : MonoBehaviour
     public float TargetFlowRateM3psCached => targetFlowRateM3psCached;
     public float TargetFlowRateCMMCached => targetFlowRateCMMCached;
     public string BoundarySummary => boundarySummary;
+    public float DischargeAngleDeg => CalculateDischargeAngleDeg(windSpeedPhys);
+
+    public float CalculateDischargeAngleDeg(Vector3 velocityPhys)
+    {
+        if (velocityPhys.sqrMagnitude < 1e-12f)
+            return 0.0f;
+
+        Vector3 direction = velocityPhys.normalized;
+        float inwardComponent = Mathf.Clamp01(Vector3.Dot(direction, GetInwardNormalWorld()));
+        return Mathf.Asin(inwardComponent) * Mathf.Rad2Deg;
+    }
     public float OutletNormalVelocityBlend =>
         forceFullTargetNormalBlendForDebug ? 1.0f : outletNormalVelocityBlend;
     public float OutletRhoAnchor =>
         forceZeroRhoAnchorForDebug ? 0.0f : outletRhoAnchor;
+
+    public void SetKind(Kind value, bool notifySceneCache = true)
+    {
+        if (kind == value)
+            return;
+
+        kind = value;
+        if (kind == Kind.Outlet)
+        {
+            boundaryInputMode = BoundaryInputMode.AutoMassBalancedOutlet;
+            enableMassFluxCorrection = true;
+        }
+        else if (boundaryInputMode == BoundaryInputMode.AutoMassBalancedOutlet ||
+                 boundaryInputMode == BoundaryInputMode.PressureDensity)
+        {
+            boundaryInputMode = BoundaryInputMode.Velocity;
+        }
+
+        Refresh();
+        if (notifySceneCache)
+            NotifySceneCacheDirty();
+    }
 
     public void SetInletTemperatureDegC(float value, bool notifySceneCache = true)
     {
@@ -146,6 +179,23 @@ public class LBMZouHeBox : MonoBehaviour
         }
 
         inletTemperatureDegC = value;
+        Refresh();
+
+        if (notifySceneCache)
+            NotifySceneCacheDirty();
+    }
+
+    public void SetInletVelocityPhys(Vector3 value, bool notifySceneCache = true)
+    {
+        if (kind != Kind.Inlet)
+        {
+            Debug.LogWarning(
+                $"[UX02][F10][Case=BoundaryApply] SetInletVelocityPhys ignored for non-inlet patch: {name}");
+            return;
+        }
+
+        boundaryInputMode = BoundaryInputMode.Velocity;
+        windSpeedPhys = value;
         Refresh();
 
         if (notifySceneCache)
@@ -225,6 +275,32 @@ public class LBMZouHeBox : MonoBehaviour
         volumeFlowRateUnit = FlowRateInputUnit.CubicMetersPerSecond;
         volumeFlowRateM3ps = Mathf.Max(0.0f, value);
         volumeFlowRateCMM = volumeFlowRateM3ps * 60.0f;
+        Refresh();
+
+        if (notifySceneCache)
+            NotifySceneCacheDirty();
+    }
+
+    /// <summary>
+    /// Applies editable outlet values while deliberately preserving the existing
+    /// Mass-Flux Corrected Outlet enablement and input mode.
+    /// </summary>
+    public void SetOutletParameters(
+        float densityTarget,
+        float normalVelocityBlend,
+        float densityAnchor,
+        bool notifySceneCache = true)
+    {
+        if (kind != Kind.Outlet)
+        {
+            Debug.LogWarning(
+                $"[UX02][F10][Case=BoundaryApply] SetOutletParameters ignored for non-outlet patch: {name}");
+            return;
+        }
+
+        rhoOut = Mathf.Clamp(densityTarget, 0.90f, 1.10f);
+        outletNormalVelocityBlend = Mathf.Clamp01(normalVelocityBlend);
+        outletRhoAnchor = Mathf.Clamp01(densityAnchor);
         Refresh();
 
         if (notifySceneCache)

@@ -27,9 +27,23 @@ public class VelocityVisualizer : MonoBehaviour
 
     private float _currentDisplayMin = 0.0f;
     private float _currentDisplayMax = 1.0f;
+    private bool _useExternalDisplayRange;
+    private float _externalDisplayMin;
+    private float _externalDisplayMax = 2.0f;
 
     public float CurrentDisplayMin => _currentDisplayMin;
     public float CurrentDisplayMax => _currentDisplayMax;
+
+    public void SetDisplayRangeOverride(bool enabled, float minimum, float maximum)
+    {
+        _useExternalDisplayRange = enabled;
+        _externalDisplayMin = minimum;
+        _externalDisplayMax = Mathf.Max(maximum, minimum + 1e-6f);
+
+        SimulationController controller = SimulationController.Instance;
+        if (_sliceMaterial != null && controller != null)
+            ApplyPhysicalScale(controller);
+    }
 
     private IEnumerator Start()
     {
@@ -89,6 +103,16 @@ public class VelocityVisualizer : MonoBehaviour
 
     private void ApplyPhysicalScale(SimulationController sc)
     {
+        if (_useExternalDisplayRange)
+        {
+            _currentDisplayMin = _externalDisplayMin;
+            _currentDisplayMax = _externalDisplayMax;
+            _sliceMaterial.SetFloat("_VelocityLatToPhys", sc.LatticeSpeedToPhysicalScale);
+            _sliceMaterial.SetFloat("_SpeedMin", _currentDisplayMin);
+            _sliceMaterial.SetFloat("_SpeedMax", _currentDisplayMax);
+            return;
+        }
+
         float displayMax = speedMax;
 
         if (useSimulationMaxSpeed)

@@ -6,13 +6,21 @@ using UnityEngine.SceneManagement;
 public static class CoSimulationStartupGate
 {
     private static bool waitingForConfirmation = true;
+    private static bool toolkitSetupActive;
 
     public static bool IsWaitingForConfirmation =>
         !Application.isBatchMode && waitingForConfirmation;
+    public static bool IsToolkitSetupActive => toolkitSetupActive;
 
     public static void Reset()
     {
         waitingForConfirmation = !Application.isBatchMode;
+        toolkitSetupActive = false;
+    }
+
+    public static void SetToolkitSetupActive(bool active)
+    {
+        toolkitSetupActive = active;
     }
 
     public static void Confirm()
@@ -91,7 +99,10 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
     private void Update()
     {
         if (!CoSimulationStartupGate.IsWaitingForConfirmation)
+        {
+            Destroy(gameObject);
             return;
+        }
 
         if (!relevantSceneFound)
         {
@@ -105,6 +116,7 @@ public sealed class CoSimulationInitialConditionsPanel : MonoBehaviour
     private void OnGUI()
     {
         if (!CoSimulationStartupGate.IsWaitingForConfirmation ||
+            CoSimulationStartupGate.IsToolkitSetupActive ||
             (!applicationStartupScene && !relevantSceneFound))
             return;
 

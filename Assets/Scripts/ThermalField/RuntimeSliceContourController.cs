@@ -9,7 +9,8 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
     public enum SliceOrientation
     {
         Horizontal,
-        VerticalYZ
+        VerticalYZ,
+        DepthXY
     }
 
     [Header("Domain and Existing Planes")]
@@ -18,6 +19,8 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
     [SerializeField] private Renderer velocityVerticalRenderer;
     [SerializeField] private Renderer temperatureHorizontalRenderer;
     [SerializeField] private Renderer temperatureVerticalRenderer;
+    [SerializeField] private Renderer velocityDepthRenderer;
+    [SerializeField] private Renderer temperatureDepthRenderer;
 
     [Header("Existing Color Bars")]
     [SerializeField] private GameObject velocityColorBar;
@@ -33,6 +36,7 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
     [SerializeField] private bool showTemperature = true;
     [SerializeField] private bool showHorizontal = true;
     [SerializeField] private bool showVertical = true;
+    [SerializeField] private bool showDepth;
 
     [Header("Overlay Layout")]
     [SerializeField] private Vector2 overlaySize = new Vector2(440f, 74f);
@@ -49,14 +53,23 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
 
     private float horizontalPositionNormalized;
     private float verticalPositionNormalized;
+    private float depthPositionNormalized = 0.5f;
+    private GameObject runtimeVelocityDepthPlane;
+    private GameObject runtimeTemperatureDepthPlane;
 
     public bool ShowVelocity => showVelocity;
     public bool ShowTemperature => showTemperature;
     public bool ShowHorizontal => showHorizontal;
     public bool ShowVertical => showVertical;
+    public bool ShowDepth => showDepth;
+    public bool IsInitialized { get; private set; }
+    public float HorizontalPositionNormalized => horizontalPositionNormalized;
+    public float VerticalPositionNormalized => verticalPositionNormalized;
+    public float DepthPositionNormalized => depthPositionNormalized;
 
     private void Start()
     {
+        EnsureDepthRenderers();
         if (!HasRequiredReferences())
         {
             Debug.LogWarning(
@@ -68,9 +81,11 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
 
         horizontalPositionNormalized = ReadNormalizedPosition(velocityHorizontalRenderer, SliceOrientation.Horizontal);
         verticalPositionNormalized = ReadNormalizedPosition(velocityVerticalRenderer, SliceOrientation.VerticalYZ);
+        depthPositionNormalized = ReadNormalizedPosition(velocityDepthRenderer, SliceOrientation.DepthXY);
 
         ApplyPlanePosition(SliceOrientation.Horizontal, horizontalPositionNormalized);
         ApplyPlanePosition(SliceOrientation.VerticalYZ, verticalPositionNormalized);
+        ApplyPlanePosition(SliceOrientation.DepthXY, depthPositionNormalized);
 
         if (buildRuntimeOverlays)
         {
@@ -81,6 +96,7 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
 
         ApplyVisibility();
         RefreshOverlays();
+        IsInitialized = true;
     }
 
     public void ToggleVelocity()
@@ -139,6 +155,13 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
         RefreshOverlays();
     }
 
+    public void SetDepthVisible(bool visible)
+    {
+        showDepth = visible;
+        ApplyVisibility();
+        RefreshOverlays();
+    }
+
     public void SetHorizontalPositionNormalized(float normalizedPosition)
     {
         horizontalPositionNormalized = Mathf.Clamp01(normalizedPosition);
@@ -153,21 +176,34 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
         RefreshOverlays();
     }
 
+    public void SetDepthPositionNormalized(float normalizedPosition)
+    {
+        depthPositionNormalized = Mathf.Clamp01(normalizedPosition);
+        ApplyPlanePosition(SliceOrientation.DepthXY, depthPositionNormalized);
+        RefreshOverlays();
+    }
+
     private bool HasRequiredReferences()
     {
         return domainTransform != null
             && velocityHorizontalRenderer != null
             && velocityVerticalRenderer != null
             && temperatureHorizontalRenderer != null
-            && temperatureVerticalRenderer != null;
+            && temperatureVerticalRenderer != null
+            && velocityDepthRenderer != null
+            && temperatureDepthRenderer != null;
     }
 
     private float ReadNormalizedPosition(Renderer planeRenderer, SliceOrientation orientation)
     {
         Vector3 domainLocalPosition = domainTransform.InverseTransformPoint(planeRenderer.transform.position);
-        float coordinate = orientation == SliceOrientation.Horizontal
-            ? domainLocalPosition.y
-            : domainLocalPosition.x;
+        float coordinate = orientation switch
+        {
+            SliceOrientation.Horizontal => domainLocalPosition.y,
+            SliceOrientation.VerticalYZ => domainLocalPosition.x,
+            SliceOrientation.DepthXY => domainLocalPosition.z,
+            _ => 0.0f
+        };
         return Mathf.Clamp01(coordinate + 0.5f);
     }
 
@@ -180,10 +216,15 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
             SetPlaneDomainCoordinate(velocityHorizontalRenderer.transform, orientation, domainLocalCoordinate);
             SetPlaneDomainCoordinate(temperatureHorizontalRenderer.transform, orientation, domainLocalCoordinate);
         }
-        else
+        else if (orientation == SliceOrientation.VerticalYZ)
         {
             SetPlaneDomainCoordinate(velocityVerticalRenderer.transform, orientation, domainLocalCoordinate);
             SetPlaneDomainCoordinate(temperatureVerticalRenderer.transform, orientation, domainLocalCoordinate);
+        }
+        else
+        {
+            SetPlaneDomainCoordinate(velocityDepthRenderer.transform, orientation, domainLocalCoordinate);
+            SetPlaneDomainCoordinate(temperatureDepthRenderer.transform, orientation, domainLocalCoordinate);
         }
     }
 
@@ -195,8 +236,16 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
         Vector3 domainLocalPosition = domainTransform.InverseTransformPoint(planeTransform.position);
         if (orientation == SliceOrientation.Horizontal)
             domainLocalPosition.y = domainLocalCoordinate;
-        else
+        else if (orientation == SliceOrientation.VerticalYZ)
             domainLocalPosition.x = domainLocalCoordinate;
+        else
+        {
+            // The XY plane is cloned from the horizontal XZ plane. Do not retain
+            // that source plane's floor-height Y offset when moving along Z.
+            domainLocalPosition.x = 0.0f;
+            domainLocalPosition.y = 0.0f;
+            domainLocalPosition.z = domainLocalCoordinate;
+        }
 
         planeTransform.position = domainTransform.TransformPoint(domainLocalPosition);
     }
@@ -205,13 +254,63 @@ public sealed class RuntimeSliceContourController : MonoBehaviour
     {
         velocityHorizontalRenderer.enabled = showVelocity && showHorizontal;
         velocityVerticalRenderer.enabled = showVelocity && showVertical;
+        velocityDepthRenderer.enabled = showVelocity && showDepth;
         temperatureHorizontalRenderer.enabled = showTemperature && showHorizontal;
         temperatureVerticalRenderer.enabled = showTemperature && showVertical;
+        temperatureDepthRenderer.enabled = showTemperature && showDepth;
 
         if (velocityColorBar != null)
-            velocityColorBar.SetActive(showVelocity && (showHorizontal || showVertical));
+            velocityColorBar.SetActive(showVelocity && (showHorizontal || showVertical || showDepth));
         if (temperatureColorBar != null)
-            temperatureColorBar.SetActive(showTemperature && (showHorizontal || showVertical));
+            temperatureColorBar.SetActive(showTemperature && (showHorizontal || showVertical || showDepth));
+    }
+
+    private void EnsureDepthRenderers()
+    {
+        if (velocityDepthRenderer == null)
+        {
+            runtimeVelocityDepthPlane = CreateDepthPlane(
+                velocityHorizontalRenderer,
+                "VelocityPlaneXY_Runtime");
+            velocityDepthRenderer = runtimeVelocityDepthPlane != null
+                ? runtimeVelocityDepthPlane.GetComponent<Renderer>()
+                : null;
+        }
+
+        if (temperatureDepthRenderer == null)
+        {
+            runtimeTemperatureDepthPlane = CreateDepthPlane(
+                temperatureHorizontalRenderer,
+                "TempPlaneXY_Runtime");
+            temperatureDepthRenderer = runtimeTemperatureDepthPlane != null
+                ? runtimeTemperatureDepthPlane.GetComponent<Renderer>()
+                : null;
+        }
+    }
+
+    private GameObject CreateDepthPlane(Renderer source, string objectName)
+    {
+        if (source == null || domainTransform == null)
+            return null;
+
+        GameObject clone = Instantiate(source.gameObject, source.transform.parent);
+        clone.name = objectName;
+        clone.transform.localRotation = Quaternion.identity;
+
+        clone.transform.position = domainTransform.TransformPoint(Vector3.zero);
+
+        Collider cloneCollider = clone.GetComponent<Collider>();
+        if (cloneCollider != null)
+            cloneCollider.enabled = false;
+        return clone;
+    }
+
+    private void OnDestroy()
+    {
+        if (runtimeVelocityDepthPlane != null)
+            Destroy(runtimeVelocityDepthPlane);
+        if (runtimeTemperatureDepthPlane != null)
+            Destroy(runtimeTemperatureDepthPlane);
     }
 
     private void BuildOverlay(RectTransform parent)

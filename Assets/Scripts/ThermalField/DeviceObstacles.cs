@@ -29,6 +29,12 @@ public class DeviceObstacles : MonoBehaviour
     public uint3 MaxIdx => _maxIdx;
     public Collider SourceCollider => _obstacleCollider;
 
+    public void SetThermalBoundary(ThermalBoundaryType type, float temperatureDegC)
+    {
+        boundaryType = type;
+        temperature = temperatureDegC;
+    }
+
     private void Awake()
     {
         _obstacleCollider = GetComponent<Collider>();

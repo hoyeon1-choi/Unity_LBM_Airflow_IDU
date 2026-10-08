@@ -3,6 +3,10 @@ Shader "Unlit/ThermalSliceShader"
     Properties
     {
         _ColormapTex ("Colormap (LUT)", 2D) = "white" {}
+        [HideInInspector] _DataTempMinDegC ("Data Temperature Min (degC)", Float) = 0
+        [HideInInspector] _DataTempMaxDegC ("Data Temperature Max (degC)", Float) = 40
+        [HideInInspector] _TempMinDegC ("Display Temperature Min (degC)", Float) = 0
+        [HideInInspector] _TempMaxDegC ("Display Temperature Max (degC)", Float) = 40
     }
     SubShader
     {
@@ -26,6 +30,8 @@ Shader "Unlit/ThermalSliceShader"
 
             CBUFFER_START(UnityPerMaterial)
                 float4x4 _WorldToVolume;
+                float _DataTempMinDegC;
+                float _DataTempMaxDegC;
                 float _TempMinDegC;
                 float _TempMaxDegC;
             CBUFFER_END
@@ -54,7 +60,7 @@ Shader "Unlit/ThermalSliceShader"
                 float3 uvw = mul(_WorldToVolume, float4(IN.worldPos, 1.0)).xyz;
 
                 float thermalLBM = SAMPLE_TEXTURE3D(_VolumeTex, sampler_VolumeTex, uvw).r;
-                float tempDegC = lerp(_TempMinDegC, _TempMaxDegC, saturate(thermalLBM));
+                float tempDegC = lerp(_DataTempMinDegC, _DataTempMaxDegC, saturate(thermalLBM));
 
                 float denom = max(_TempMaxDegC - _TempMinDegC, 1e-6);
                 float ratio = (tempDegC - _TempMinDegC) / denom;

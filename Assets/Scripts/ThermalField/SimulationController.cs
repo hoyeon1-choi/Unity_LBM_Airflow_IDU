@@ -260,6 +260,7 @@ public class SimulationController : Singleton<SimulationController>
     [SerializeField, ReadOnly] private float estimatedCoreBuffersMB = 0.0f;
     [SerializeField, ReadOnly] private float estimatedTexturesMB = 0.0f;
     [SerializeField, ReadOnly] private float estimatedTotalGpuMemoryMB = 0.0f;
+    [Tooltip("Largest grouped distribution GraphicsBuffer (6 directions). The field name is retained for scene compatibility.")]
     [SerializeField, ReadOnly] private float perDirectionBufferMB = 0.0f;
     [SerializeField, ReadOnly] private bool estimatedSingleBufferSafe = true;
 
@@ -313,15 +314,6 @@ public class SimulationController : Singleton<SimulationController>
     private bool summaryDirty = true;
 
     const float eps = 1e-6f;
-    private const long MaxGraphicsBufferBytes = 2147483648L;
-    private const int Q_f = 19;
-    private const int Q_t = 7;
-    private const int Q_total = Q_f + Q_t;
-    private const long BytesPerFloat = 4L;
-    private const long BytesPerUint = 4L;
-    private const long BytesPerFloat4 = 16L;
-    private const long BytesPerVelocityTextureVoxel = 16L;
-    private const long BytesPerThermalTextureVoxel = 4L;
 
     private ThermalSolver _lbmSolver;
     public ThermalSolver LBMSolver => _lbmSolver;
@@ -341,6 +333,11 @@ public class SimulationController : Singleton<SimulationController>
     public float SimulatedTimeSeconds => runtimeSimulatedTimeSeconds;
     public float TempPhysMinDegC => tempPhysMinDegC;
     public float TempPhysMaxDegC => tempPhysMaxDegC;
+    public float ReferenceTemperatureDegC => referenceTemperatureDegCInput;
+    public float PrandtlTarget => prandtlTarget;
+    public float ThermalExpansionBeta => beta;
+    public float GravityPhysicalY => gravity_y;
+    public float GravityLatticeY => gravityLat;
     public bool IsSimulationRunning => runSimulation;
     public bool IsExternallyPaused => externalStepPause;
     public SolverEasePreset SolverPreset => solverPreset;
@@ -378,6 +375,12 @@ public class SimulationController : Singleton<SimulationController>
     public bool UseTargetSimulationTime => useTargetSimulationTime;
     public float TargetSimulationTimeSeconds => targetSimulationTimeSeconds;
     public bool TargetTimeReached => targetTimeReached;
+    public float EstimatedTotalGpuMemoryMB => estimatedTotalGpuMemoryMB;
+    public float EstimatedDistributionBuffersMB => estimatedDistributionBuffersMB;
+    public float EstimatedCoreBuffersMB => estimatedCoreBuffersMB;
+    public float EstimatedTexturesMB => estimatedTexturesMB;
+    public float EstimatedLargestDistributionBufferMB => perDirectionBufferMB;
+    public bool EstimatedSingleBufferSafe => estimatedSingleBufferSafe;
     public bool CaseStudyExecutionEnabled => enableCaseStudyExecution;
     public CaseStudyPreset SelectedCaseStudy => selectedCaseStudy;
     public bool IsSolverReadyForReadback
@@ -446,6 +449,111 @@ public class SimulationController : Singleton<SimulationController>
         targetSimulationTimeSeconds = Mathf.Max(0.0f, seconds);
         targetTimeReached = false;
         MarkSummaryDirty();
+    }
+
+    /// <summary>
+    /// Narrow configuration entry point used by the UX-02 solver command adapter.
+    /// It stages values only; callers rebuild the solver after scene boundary values
+    /// have also been applied.
+    /// </summary>
+    public bool TryApplySetupConfiguration(
+        string experimentTag,
+        CaseStudyPreset basedOnPreset,
+        float requestedDxPhys,
+        float requestedTauFluidMin,
+        float requestedTauThermalMin,
+        TurbulenceModel requestedTurbulenceModel,
+        float requestedTurbulenceConstant,
+        float requestedTurbulentPrandtl,
+        float requestedTemperatureMinDegC,
+        float requestedTemperatureMaxDegC,
+        float requestedReferenceTemperatureDegC,
+        float requestedPrandtlTarget,
+        float requestedThermalExpansionBeta,
+        float requestedGravityPhysicalY,
+        out string issue)
+    {
+        const float requiredCaseStudyDx = 0.04f;
+        if (!IsFiniteSetupValue(requestedDxPhys) ||
+            Mathf.Abs(requestedDxPhys - requiredCaseStudyDx) > 0.00001f)
+        {
+            issue = $"UX-02 Case Study requires dxPhys={requiredCaseStudyDx:F2} m.";
+            return false;
+        }
+
+        if (!IsFiniteSetupValue(requestedTauFluidMin) ||
+            requestedTauFluidMin < 0.5001f || requestedTauFluidMin > 1.0f)
+        {
+            issue = "tauFluidMin must be between 0.5001 and 1.0.";
+            return false;
+        }
+
+        if (!IsFiniteSetupValue(requestedTauThermalMin) ||
+            requestedTauThermalMin < 0.5001f || requestedTauThermalMin > 1.0f)
+        {
+            issue = "tauThermalMin must be between 0.5001 and 1.0.";
+            return false;
+        }
+
+        if (!IsFiniteSetupValue(requestedTurbulenceConstant) || requestedTurbulenceConstant < 0f ||
+            !IsFiniteSetupValue(requestedTurbulentPrandtl) || requestedTurbulentPrandtl <= 0f ||
+            !IsFiniteSetupValue(requestedTemperatureMinDegC) ||
+            !IsFiniteSetupValue(requestedTemperatureMaxDegC) ||
+            !IsFiniteSetupValue(requestedReferenceTemperatureDegC) ||
+            !IsFiniteSetupValue(requestedPrandtlTarget) || requestedPrandtlTarget <= 0f ||
+            !IsFiniteSetupValue(requestedThermalExpansionBeta) || requestedThermalExpansionBeta < 0f ||
+            !IsFiniteSetupValue(requestedGravityPhysicalY))
+        {
+            issue = "One or more UX-02 physics values are outside the supported finite range.";
+            return false;
+        }
+
+        if (requestedTemperatureMaxDegC <= requestedTemperatureMinDegC ||
+            requestedReferenceTemperatureDegC < requestedTemperatureMinDegC ||
+            requestedReferenceTemperatureDegC > requestedTemperatureMaxDegC)
+        {
+            issue = "The reference temperature must be inside a valid min/max temperature range.";
+            return false;
+        }
+
+        SetSimulationRunning(false);
+        selectedCaseStudy = basedOnPreset;
+        solverPreset = SolverEasePreset.Custom;
+        activeCaseName = string.IsNullOrWhiteSpace(experimentTag) ? "Manual" : experimentTag.Trim();
+        dxPhys = requiredCaseStudyDx;
+        tauFluidMin = requestedTauFluidMin;
+        tauThermalMin = requestedTauThermalMin;
+        turbulenceModel = requestedTurbulenceModel;
+        turbulenceModelConstant = requestedTurbulenceConstant;
+        turbulentPrandtl = requestedTurbulentPrandtl;
+        tempPhysMinDegC = requestedTemperatureMinDegC;
+        tempPhysMaxDegC = requestedTemperatureMaxDegC;
+        referenceTemperatureDegCInput = requestedReferenceTemperatureDegC;
+        prandtlTarget = requestedPrandtlTarget;
+        beta = requestedThermalExpansionBeta;
+        gravity_y = requestedGravityPhysicalY;
+
+        SyncLegacyTauClampFields();
+        scalingDirty = true;
+        solverRebuildRequired = true;
+        targetTimeReached = false;
+        caseStudySummary =
+            "=== UX-02 Setup ===\n" +
+            $"Active Case      : {activeCaseName}\n" +
+            $"dxPhys           : {dxPhys:F4} m\n" +
+            $"tauFluidMin      : {tauFluidMin:F4}\n" +
+            $"tauThermalMin    : {tauThermalMin:F4}\n" +
+            $"Turbulence       : {turbulenceModel}, C={turbulenceModelConstant:F3}";
+        TryApplyExperimentTagToLogger(activeCaseName);
+        MarkSummaryDirty();
+        RefreshReadOnlyInspectorNow();
+        issue = string.Empty;
+        return true;
+    }
+
+    private static bool IsFiniteSetupValue(float value)
+    {
+        return !float.IsNaN(value) && !float.IsInfinity(value);
     }
 
     public void SetExternalStepPause(bool paused, string reason = null)
@@ -2279,43 +2387,36 @@ public class SimulationController : Singleton<SimulationController>
 
     private void UpdateMemoryEstimateReadOnly()
     {
-        long cellCount = GetCellCount64();
-        long perDirBytes = cellCount * BytesPerFloat;
-        long distributionBytes = cellCount * Q_total * 2L * BytesPerFloat;
-        long coreBytes = distributionBytes
-                       + cellCount * BytesPerFloat4
-                       + cellCount * BytesPerFloat
-                       + cellCount * BytesPerUint;
-        long textureBytes = cellCount * (BytesPerVelocityTextureVoxel + BytesPerThermalTextureVoxel);
-        long totalBytes = coreBytes + textureBytes;
+        if (!LbmGridMemoryEstimator.TryEstimate(nx, ny, nz, out LbmGridMemoryEstimate estimate, out _))
+        {
+            perDirectionBufferMB = 0f;
+            estimatedDistributionBuffersMB = 0f;
+            estimatedCoreBuffersMB = 0f;
+            estimatedTexturesMB = 0f;
+            estimatedTotalGpuMemoryMB = 0f;
+            estimatedSingleBufferSafe = false;
+            return;
+        }
 
-        perDirectionBufferMB = BytesToMiB(perDirBytes);
-        estimatedDistributionBuffersMB = BytesToMiB(distributionBytes);
-        estimatedCoreBuffersMB = BytesToMiB(coreBytes);
-        estimatedTexturesMB = BytesToMiB(textureBytes);
-        estimatedTotalGpuMemoryMB = BytesToMiB(totalBytes);
-        estimatedSingleBufferSafe = perDirBytes <= MaxGraphicsBufferBytes;
+        perDirectionBufferMB = LbmGridMemoryEstimator.BytesToMiB(
+            estimate.LargestDistributionBufferBytes);
+        estimatedDistributionBuffersMB = LbmGridMemoryEstimator.BytesToMiB(
+            estimate.DistributionBytes);
+        estimatedCoreBuffersMB = LbmGridMemoryEstimator.BytesToMiB(estimate.CoreBufferBytes);
+        estimatedTexturesMB = LbmGridMemoryEstimator.BytesToMiB(estimate.TextureBytes);
+        estimatedTotalGpuMemoryMB = LbmGridMemoryEstimator.BytesToMiB(estimate.TotalBytes);
+        estimatedSingleBufferSafe = estimate.IsSingleBufferSafe;
     }
 
     private void ValidateAndLogMemoryEstimate()
     {
-        long cellCount = GetCellCount64();
-        if (cellCount <= 0)
+        string caseTag = string.IsNullOrWhiteSpace(activeCaseName) ? "Manual" : activeCaseName;
+        if (!LbmGridMemoryEstimator.TryEstimate(
+                nx, ny, nz, out LbmGridMemoryEstimate estimate, out string estimateIssue))
         {
-            Debug.LogError("[LBM Memory Check] Invalid cell count. Check domain scale and dxPhys.");
+            Debug.LogError($"[LBM Memory Check][Case={caseTag}] {estimateIssue}");
             return;
         }
-
-        long perDirBytes = cellCount * BytesPerFloat;
-        long distributionBytes = cellCount * Q_total * 2L * BytesPerFloat;
-        long velocityRhoBytes = cellCount * BytesPerFloat4;
-        long temperatureBytes = cellCount * BytesPerFloat;
-        long fieldBytes = cellCount * BytesPerUint;
-        long coreBytes = distributionBytes + velocityRhoBytes + temperatureBytes + fieldBytes;
-        long velocityTextureBytes = cellCount * BytesPerVelocityTextureVoxel;
-        long thermalTextureBytes = cellCount * BytesPerThermalTextureVoxel;
-        long textureBytes = velocityTextureBytes + thermalTextureBytes;
-        long totalBytes = coreBytes + textureBytes;
 
         float vramBudgetGB = manualVramBudgetGB > 0f
             ? manualVramBudgetGB
@@ -2326,39 +2427,46 @@ public class SimulationController : Singleton<SimulationController>
         if (logMemoryEstimate)
         {
             Debug.Log(
-                "[LBM Memory Check] " +
-                $"Grid={nx} x {ny} x {nz} (N={cellCount:N0}), dxPhys={dxPhys:F4} m\n" +
-                $"Per-direction distribution buffer = {BytesToMiB(perDirBytes):F1} MiB " +
-                $"(limit {BytesToMiB(MaxGraphicsBufferBytes):F1} MiB)\n" +
-                $"Distribution buffers total (26 dirs x prev/cur) = {BytesToMiB(distributionBytes):F1} MiB\n" +
-                $"Core structured buffers total = {BytesToMiB(coreBytes):F1} MiB\n" +
-                $"3D textures total = {BytesToMiB(textureBytes):F1} MiB\n" +
-                $"Estimated total GPU memory = {BytesToMiB(totalBytes):F1} MiB\n" +
-                $"Graphics API VRAM budget(reference) = {vramBudgetGB:F1} GiB, warning threshold = {BytesToMiB(warnBudgetBytes):F1} MiB");
+                $"[LBM Memory Check][Case={caseTag}] " +
+                $"Grid={nx} x {ny} x {nz} (N={estimate.CellCount:N0}), dxPhys={dxPhys:F4} m\n" +
+                $"Largest grouped distribution buffer (6 dirs) = " +
+                $"{LbmGridMemoryEstimator.BytesToMiB(estimate.LargestDistributionBufferBytes):F1} MiB " +
+                $"(limit {LbmGridMemoryEstimator.BytesToMiB(LbmGridMemoryEstimator.MaxGraphicsBufferBytes):F1} MiB)\n" +
+                $"Distribution buffers total (26 dirs x prev/cur) = " +
+                $"{LbmGridMemoryEstimator.BytesToMiB(estimate.DistributionBytes):F1} MiB\n" +
+                $"Core structured buffers total = {LbmGridMemoryEstimator.BytesToMiB(estimate.CoreBufferBytes):F1} MiB\n" +
+                $"3D textures total = {LbmGridMemoryEstimator.BytesToMiB(estimate.TextureBytes):F1} MiB\n" +
+                $"Estimated total GPU memory = {LbmGridMemoryEstimator.BytesToMiB(estimate.TotalBytes):F1} MiB\n" +
+                $"Graphics API VRAM budget(reference) = {vramBudgetGB:F1} GiB, warning threshold = " +
+                $"{LbmGridMemoryEstimator.BytesToMiB(warnBudgetBytes):F1} MiB");
         }
 
-        if (perDirBytes > MaxGraphicsBufferBytes)
+        if (!estimate.IsSingleBufferSafe)
         {
             double recommendedDx = EstimateRecommendedDxForBufferLimit();
             Debug.LogError(
-                "[LBM Memory Check] A single split distribution buffer still exceeds Unity GraphicsBuffer limit. " +
-                $"Required per-direction buffer = {BytesToMiB(perDirBytes):F1} MiB, max = {BytesToMiB(MaxGraphicsBufferBytes):F1} MiB. " +
+                $"[LBM Memory Check][Case={caseTag}] A grouped distribution buffer exceeds the Unity GraphicsBuffer limit. " +
+                $"Required largest buffer (6 dirs) = " +
+                $"{LbmGridMemoryEstimator.BytesToMiB(estimate.LargestDistributionBufferBytes):F1} MiB, max = " +
+                $"{LbmGridMemoryEstimator.BytesToMiB(LbmGridMemoryEstimator.MaxGraphicsBufferBytes):F1} MiB. " +
                 $"Increase dxPhys above about {recommendedDx:F4} m or reduce the domain size.");
         }
 
-        if (vramBudgetBytes > 0 && totalBytes > warnBudgetBytes)
+        if (vramBudgetBytes > 0 && estimate.TotalBytes > warnBudgetBytes)
         {
             Debug.LogWarning(
-                "[LBM Memory Check] Estimated GPU memory usage is high. " +
-                $"Estimated total = {BytesToMiB(totalBytes):F1} MiB, warning threshold = {BytesToMiB(warnBudgetBytes):F1} MiB. " +
+                $"[LBM Memory Check][Case={caseTag}] Estimated GPU memory usage is high. " +
+                $"Estimated total = {LbmGridMemoryEstimator.BytesToMiB(estimate.TotalBytes):F1} MiB, " +
+                $"warning threshold = {LbmGridMemoryEstimator.BytesToMiB(warnBudgetBytes):F1} MiB. " +
                 "You may avoid the 2 GB single-buffer error, but overall VRAM pressure, 3D texture allocation failure, or severe slowdown can still occur.");
         }
 
-        if (vramBudgetBytes > 0 && totalBytes > vramBudgetBytes)
+        if (vramBudgetBytes > 0 && estimate.TotalBytes > vramBudgetBytes)
         {
             Debug.LogError(
-                "[LBM Memory Check] Estimated GPU memory usage exceeds the approximate VRAM budget. " +
-                $"Estimated total = {BytesToMiB(totalBytes):F1} MiB, VRAM budget = {BytesToMiB(vramBudgetBytes):F1} MiB. " +
+                $"[LBM Memory Check][Case={caseTag}] Estimated GPU memory usage exceeds the approximate VRAM budget. " +
+                $"Estimated total = {LbmGridMemoryEstimator.BytesToMiB(estimate.TotalBytes):F1} MiB, " +
+                $"VRAM budget = {LbmGridMemoryEstimator.BytesToMiB(vramBudgetBytes):F1} MiB. " +
                 "Reduce grid resolution or domain size before running.");
         }
     }
@@ -2368,18 +2476,16 @@ public class SimulationController : Singleton<SimulationController>
         return (long)nx * (long)ny * (long)nz;
     }
 
-    private float BytesToMiB(long bytes)
-    {
-        return bytes / (1024f * 1024f);
-    }
-
     private double EstimateRecommendedDxForBufferLimit()
     {
         double volume = (double)lx * (double)ly * (double)lz;
         if (volume <= 0.0)
             return dxPhys;
 
-        double maxCellCount = MaxGraphicsBufferBytes / (double)BytesPerFloat;
+        double bytesPerLargestGroupCell =
+            LbmGridMemoryEstimator.LargestDistributionGroupDirectionCount * sizeof(float);
+        double maxCellCount = LbmGridMemoryEstimator.MaxGraphicsBufferBytes /
+                              bytesPerLargestGroupCell;
         double dxRecommended = math.pow((float)(volume / maxCellCount), 1.0f / 3.0f);
         return math.max((float)dxRecommended, dxPhys);
     }

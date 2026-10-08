@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <Style src="TimeHistory.uss" />
+    <ui:VisualElement name="TimeHistoryContent" class="ux05-time-history">
+        <ui:VisualElement name="TimeHistoryVariablePanel" class="ux05-variable-panel dashboard-panel">
+            <ui:VisualElement class="ux05-panel-heading">
+                <ui:Label text="Variable Selection" class="ux05-panel-heading__title" />
+                <ui:Label name="TimeHistorySelectionCount" text="0 selected" class="ux05-panel-heading__meta" />
+            </ui:VisualElement>
+            <ui:TextField name="TimeHistorySearchField" class="ux05-search-field" />
+            <ui:Button name="TimeHistoryClearSelectionButton" text="Clear Selection" class="ux05-secondary-button" />
+            <ui:VisualElement class="ux05-variable-group">
+                <ui:Label name="TimeHistoryInputHeading" text="INPUT" class="ux05-variable-group__heading" />
+                <ui:ListView name="TimeHistoryInputList" class="ux05-variable-list" />
+            </ui:VisualElement>
+            <ui:VisualElement class="ux05-variable-group ux05-variable-group--last">
+                <ui:Label name="TimeHistoryOutputHeading" text="OUTPUT" class="ux05-variable-group__heading" />
+                <ui:ListView name="TimeHistoryOutputList" class="ux05-variable-list" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="TimeHistoryGraphPanel" class="ux05-graph-panel dashboard-panel">
+            <ui:VisualElement name="TimeHistoryToolbar" class="ux05-toolbar">
+                <ui:Button name="TimeHistoryGraph1Tab" text="1st Graph" class="ux05-graph-tab ux05-graph-tab--active" />
+                <ui:Button name="TimeHistoryGraph2Tab" text="2nd Graph" class="ux05-graph-tab" />
+                <ui:Button name="TimeHistoryGraph3Tab" text="3rd Graph" class="ux05-graph-tab" />
+                <ui:Label text="Hover: Values  |  Wheel: Zoom  |  Right drag: Horizontal  |  Left drag: Vertical  |  Middle click: Reset" class="ux05-interaction-hint" />
+                <ui:Button name="TimeHistoryExportButton" text="Export CSV" class="ux05-toolbar-button" />
+            </ui:VisualElement>
+            <ui:VisualElement class="ux05-graph-header">
+                <ui:Label text="Time History" class="ux05-graph-title" />
+                <ui:Label name="TimeHistoryStatus" text="Waiting for Co-Simulation" class="ux05-graph-status" />
+            </ui:VisualElement>
+            <ui:VisualElement class="ux05-graph-body">
+                <ui:VisualElement name="TimeHistoryYAxisHost" class="ux05-y-axes" />
+                <ui:VisualElement class="ux05-plot-column">
+                    <ui:VisualElement name="TimeHistoryChartHost" class="ux05-chart-host">
+                        <ui:VisualElement name="TimeHistoryHoverLine" class="ux05-hover-line" />
+                        <ui:VisualElement name="TimeHistoryHoverTooltip" class="ux05-hover-tooltip">
+                            <ui:Label name="TimeHistoryHoverTime" text="t=0.0 s" class="ux05-hover-time" />
+                            <ui:VisualElement name="TimeHistoryHoverValues" class="ux05-hover-values" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="ux05-time-axis">
+                        <ui:VisualElement class="ux05-time-ticks">
+                            <ui:Label name="TimeHistoryTimeMin" text="0" class="ux05-time-value" />
+                            <ui:Label name="TimeHistoryTimeQuarter" text="7.5" class="ux05-time-value ux05-time-value--center" />
+                            <ui:Label name="TimeHistoryTimeMiddle" text="15" class="ux05-time-value ux05-time-value--center" />
+                            <ui:Label name="TimeHistoryTimeThreeQuarter" text="22.5" class="ux05-time-value ux05-time-value--center" />
+                            <ui:Label name="TimeHistoryTimeMax" text="30" class="ux05-time-value ux05-time-value--right" />
+                        </ui:VisualElement>
+                        <ui:Label text="Simulation Time (s)" class="ux05-time-title" />
+                    </ui:VisualElement>
+                    <ui:ScrollView name="TimeHistoryLegend" mode="Horizontal" class="ux05-legend" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

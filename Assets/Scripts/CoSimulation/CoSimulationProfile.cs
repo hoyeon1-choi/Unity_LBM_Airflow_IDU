@@ -85,16 +85,15 @@ public class CoSimulationProfile : ScriptableObject
         CoSimConnectionMap map = CreateInstance<CoSimConnectionMap>();
         map.name = $"Runtime_{ProfileName}_ConnectionMap";
         map.SetConnections(connections);
-        NormalizeMultiVIndoorUnitPowerConnections(map);
+        NormalizeMultiVIndoorUnitControlConnections(map);
         return map;
     }
 
-    private void NormalizeMultiVIndoorUnitPowerConnections(CoSimConnectionMap map)
+    private void NormalizeMultiVIndoorUnitControlConnections(CoSimConnectionMap map)
     {
-        // Older authored scenes contain an embedded MultiV profile in which one
-        // profile.idu_on signal controls every room. Normalize only the runtime
-        // clone so those scenes gain independent R2-R5 power without rewriting
-        // their serialized profile object.
+        // Older authored scenes may contain one shared source for every room.
+        // Normalize only the runtime clone so serialized legacy profiles gain
+        // independent R2-R5 power, mode, temperature, and fan commands.
         if (map == null || ProfileName.IndexOf("MultiV", StringComparison.OrdinalIgnoreCase) < 0)
             return;
 
@@ -103,21 +102,41 @@ public class CoSimulationProfile : ScriptableObject
             string controllerTarget = $"IDU_{room:00}.FOnOff";
             string productTarget = $"idu_{room:00}_onoff";
             string roomPowerSignal = $"idu_{room:00}_on";
+            string controllerPrefix = $"IDU_{room:00}.";
+            string roomControlPrefix = $"idu_{room:00}_";
             for (int i = 0; i < map.Connections.Count; i++)
             {
                 CoSimConnection connection = map.Connections[i];
                 if (connection == null ||
-                    !string.Equals(connection.sourceModelId, "profile", StringComparison.Ordinal) ||
-                    !string.Equals(connection.sourceVariableName, "idu_on", StringComparison.Ordinal))
+                    !string.Equals(connection.sourceModelId, "profile", StringComparison.Ordinal))
                 {
                     continue;
                 }
 
-                if (string.Equals(connection.targetVariableName, controllerTarget, StringComparison.Ordinal) ||
-                    string.Equals(connection.targetVariableName, productTarget, StringComparison.Ordinal))
+                if (string.Equals(connection.sourceVariableName, "idu_on", StringComparison.Ordinal) &&
+                    (string.Equals(connection.targetVariableName, controllerTarget, StringComparison.Ordinal) ||
+                     string.Equals(connection.targetVariableName, productTarget, StringComparison.Ordinal)))
                 {
                     connection.sourceVariableName = roomPowerSignal;
+                    continue;
                 }
+
+                if (!connection.targetVariableName.StartsWith(
+                        controllerPrefix,
+                        StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (string.Equals(connection.sourceVariableName, "set_mode", StringComparison.Ordinal) &&
+                    string.Equals(connection.targetVariableName, $"{controllerPrefix}SetMode", StringComparison.Ordinal))
+                    connection.sourceVariableName = $"{roomControlPrefix}set_mode";
+                else if (string.Equals(connection.sourceVariableName, "set_temp", StringComparison.Ordinal) &&
+                         string.Equals(connection.targetVariableName, $"{controllerPrefix}SetTemp", StringComparison.Ordinal))
+                    connection.sourceVariableName = $"{roomControlPrefix}set_temp";
+                else if (string.Equals(connection.sourceVariableName, "set_fan", StringComparison.Ordinal) &&
+                         string.Equals(connection.targetVariableName, $"{controllerPrefix}SetFan", StringComparison.Ordinal))
+                    connection.sourceVariableName = $"{roomControlPrefix}set_fan";
             }
         }
     }
@@ -289,6 +308,18 @@ public class CoSimulationProfile : ScriptableObject
             NewRealConstant("profile", "set_mode", 0.0),
             NewRealConstant("profile", "set_temp", 28.0),
             NewRealConstant("profile", "set_fan", 4.0),
+            NewRealConstant("profile", "idu_02_set_mode", 0.0),
+            NewRealConstant("profile", "idu_02_set_temp", 28.0),
+            NewRealConstant("profile", "idu_02_set_fan", 4.0),
+            NewRealConstant("profile", "idu_03_set_mode", 0.0),
+            NewRealConstant("profile", "idu_03_set_temp", 28.0),
+            NewRealConstant("profile", "idu_03_set_fan", 4.0),
+            NewRealConstant("profile", "idu_04_set_mode", 0.0),
+            NewRealConstant("profile", "idu_04_set_temp", 28.0),
+            NewRealConstant("profile", "idu_04_set_fan", 4.0),
+            NewRealConstant("profile", "idu_05_set_mode", 0.0),
+            NewRealConstant("profile", "idu_05_set_temp", 28.0),
+            NewRealConstant("profile", "idu_05_set_fan", 4.0),
             NewRealConstant("profile", "room_humidity_percent", 40.0),
             NewRealConstant("profile", "outdoor_temp_c", 35.0),
             NewRealConstant("profile", "zero", 0.0)
@@ -360,11 +391,12 @@ public class CoSimulationProfile : ScriptableObject
         string suctionHumidityName = index == 1 ? "RH_suction" : "RH_air_suc";
         string pipeInOutput = index == 2 ? "IDU_02_Sensor_Temp_Pipe_In2" : $"IDU_{index:00}_Sensor_Temp_Pipe_In";
         string powerSignal = index == 1 ? "idu_on" : $"idu_{index:00}_on";
+        string controlPrefix = index == 1 ? string.Empty : $"idu_{index:00}_";
 
         connections.Add(NewConnection("profile", powerSignal, "Multi_V_S__Set_CFMU", $"{idu}.FOnOff", "Indoor unit on command."));
-        connections.Add(NewConnection("profile", "set_mode", "Multi_V_S__Set_CFMU", $"{idu}.SetMode", "Indoor unit mode command."));
-        connections.Add(NewConnection("profile", "set_temp", "Multi_V_S__Set_CFMU", $"{idu}.SetTemp", "Indoor unit set temperature."));
-        connections.Add(NewConnection("profile", "set_fan", "Multi_V_S__Set_CFMU", $"{idu}.SetFan", "Indoor unit fan command."));
+        connections.Add(NewConnection("profile", $"{controlPrefix}set_mode", "Multi_V_S__Set_CFMU", $"{idu}.SetMode", "Indoor unit mode command."));
+        connections.Add(NewConnection("profile", $"{controlPrefix}set_temp", "Multi_V_S__Set_CFMU", $"{idu}.SetTemp", "Indoor unit set temperature."));
+        connections.Add(NewConnection("profile", $"{controlPrefix}set_fan", "Multi_V_S__Set_CFMU", $"{idu}.SetFan", "Indoor unit fan command."));
         connections.Add(NewConnection(chamber, suctionTemperature, "Multi_V_S__Set_CFMU", $"{idu}.Room_Temp", "Indoor suction temperature to controller room sensor."));
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", pipeInOutput, "Multi_V_S__Set_CFMU", $"{idu}.Pipe_In_Temp", "Product pipe-in temperature to controller."));
         connections.Add(NewConnection("MULTIV_FMU_WARPPER", $"IDU_{index:00}_Sensor_Temp_Pipe_Out", "Multi_V_S__Set_CFMU", $"{idu}.Pipe_Out_Temp", "Product pipe-out temperature to controller."));

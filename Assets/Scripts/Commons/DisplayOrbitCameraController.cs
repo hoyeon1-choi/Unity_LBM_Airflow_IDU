@@ -21,7 +21,7 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
     [Header("Mouse Controls")]
     [SerializeField, Min(1f)] private float orbitDegreesPerViewport = 180f;
     [SerializeField, Min(0.01f)] private float panSpeedMultiplier = 1f;
-    [SerializeField, Range(0.01f, 1f)] private float zoomSensitivity = 0.75f;
+    [SerializeField, Range(0.01f, 1f)] private float zoomSensitivity = 0.15f;
     [SerializeField] private bool enableRKeyReset = true;
 
     [Header("View Limits")]
@@ -39,6 +39,8 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
 
     private readonly List<RaycastResult> raycastResults = new List<RaycastResult>(16);
     private readonly Vector3[] inputAreaWorldCorners = new Vector3[4];
+    private static readonly HashSet<int> ActivatedDisplays = new HashSet<int>();
+    private static readonly HashSet<int> MissingDisplayWarnings = new HashSet<int>();
 
     private Camera controlledCamera;
     private Canvas inputCanvas;
@@ -56,11 +58,13 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
     private Vector3 initialPivot;
     private float initialDistance;
     private float initialOrthographicSize;
+    private int targetDisplayIndex;
 
     private void Awake()
     {
         controlledCamera = GetComponent<Camera>();
         inputCanvas = inputArea != null ? inputArea.GetComponentInParent<Canvas>() : null;
+        ApplyTargetDisplay();
 
         ResolveDomainBounds();
         InitializeViewFromDomainCenter();
@@ -72,6 +76,16 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
         dragMode = DragMode.None;
     }
 
+    private void OnEnable()
+    {
+        if (controlledCamera == null)
+            controlledCamera = GetComponent<Camera>();
+        if (inputCanvas == null && inputArea != null)
+            inputCanvas = inputArea.GetComponentInParent<Canvas>();
+
+        ApplyTargetDisplay();
+    }
+
     private void Update()
     {
         Mouse mouse = Mouse.current;
@@ -80,8 +94,12 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
             return;
         }
 
-        Vector2 pointerPosition = mouse.position.ReadValue();
-        bool pointerCanControlCamera = CanUsePointer(pointerPosition);
+        Vector2 rawPointerPosition = mouse.position.ReadValue();
+        bool hasTargetDisplayPointer = TryGetTargetDisplayPointer(
+            mouse,
+            rawPointerPosition,
+            out Vector2 pointerPosition);
+        bool pointerCanControlCamera = hasTargetDisplayPointer && CanUsePointer(pointerPosition);
 
         if (mouse.leftButton.wasPressedThisFrame && pointerCanControlCamera)
         {
@@ -125,11 +143,110 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
 
     public void ResetView()
     {
+        if (controlledCamera == null)
+            return;
+
         pivot = initialPivot;
         distance = initialDistance;
         controlledCamera.orthographicSize = initialOrthographicSize;
         transform.SetPositionAndRotation(initialPosition, initialRotation);
         UpdateAnglesFromRotation(initialRotation);
+        dragMode = DragMode.None;
+    }
+
+    public void OrbitView(Vector2 pointerDelta, float viewportHeight)
+    {
+        if (controlledCamera == null)
+            controlledCamera = GetComponent<Camera>();
+        if (controlledCamera == null)
+            return;
+
+        Orbit(pointerDelta, Mathf.Max(1f, viewportHeight));
+    }
+
+    public void PanView(Vector2 pointerDelta, float viewportHeight)
+    {
+        if (controlledCamera == null)
+            controlledCamera = GetComponent<Camera>();
+        if (controlledCamera == null)
+            return;
+
+        Pan(pointerDelta, Mathf.Max(1f, viewportHeight));
+    }
+
+    public void ZoomView(float wheelNotches)
+    {
+        if (controlledCamera == null)
+            controlledCamera = GetComponent<Camera>();
+        if (controlledCamera == null || Mathf.Approximately(wheelNotches, 0f))
+            return;
+
+        ApplyZoom(wheelNotches);
+    }
+
+    public void CopyViewFrom(DisplayOrbitCameraController source)
+    {
+        if (source == null || source == this)
+            return;
+        if (controlledCamera == null)
+            controlledCamera = GetComponent<Camera>();
+        if (controlledCamera == null)
+            return;
+
+        pivot = source.pivot;
+        yaw = source.yaw;
+        pitch = source.pitch;
+        distance = source.distance;
+        transform.SetPositionAndRotation(source.transform.position, source.transform.rotation);
+
+        Camera sourceCamera = source.controlledCamera != null
+            ? source.controlledCamera
+            : source.GetComponent<Camera>();
+        if (sourceCamera != null)
+            controlledCamera.orthographicSize = sourceCamera.orthographicSize;
+
+        distance = ClampDistance(distance, transform.rotation);
+        transform.position = pivot - transform.forward * distance;
+        dragMode = DragMode.None;
+    }
+
+    public void FitView()
+    {
+        if (controlledCamera == null)
+            controlledCamera = GetComponent<Camera>();
+        if (controlledCamera == null)
+            return;
+
+        ResolveDomainBounds();
+        pivot = domainBounds.center;
+
+        Quaternion rotation = transform.rotation;
+        Vector3 extents = domainBounds.extents;
+        if (controlledCamera.orthographic)
+        {
+            Vector3 cameraRight = rotation * Vector3.right;
+            Vector3 cameraUp = rotation * Vector3.up;
+            float horizontalExtent = ProjectExtent(extents, cameraRight);
+            float verticalExtent = ProjectExtent(extents, cameraUp);
+            float safeAspect = Mathf.Max(0.01f, controlledCamera.aspect);
+            float fittedSize = Mathf.Max(verticalExtent, horizontalExtent / safeAspect) * 1.08f;
+            controlledCamera.orthographicSize = Mathf.Clamp(
+                fittedSize,
+                minimumOrthographicSize,
+                maximumOrthographicSize);
+        }
+        else
+        {
+            float radius = Mathf.Max(0.01f, extents.magnitude);
+            float verticalHalfFov = controlledCamera.fieldOfView * 0.5f * Mathf.Deg2Rad;
+            float horizontalHalfFov = Mathf.Atan(Mathf.Tan(verticalHalfFov) * controlledCamera.aspect);
+            float limitingHalfFov = Mathf.Max(0.01f, Mathf.Min(verticalHalfFov, horizontalHalfFov));
+            distance = radius / Mathf.Sin(limitingHalfFov) * 1.08f;
+        }
+
+        distance = ClampDistance(distance, rotation);
+        transform.position = pivot - transform.forward * distance;
+        UpdateAnglesFromRotation(rotation);
         dragMode = DragMode.None;
     }
 
@@ -206,7 +323,11 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
 
     private void Orbit(Vector2 pointerDelta)
     {
-        float viewportHeight = GetInputAreaHeight();
+        Orbit(pointerDelta, GetInputAreaHeight());
+    }
+
+    private void Orbit(Vector2 pointerDelta, float viewportHeight)
+    {
         float degreesPerPixel = orbitDegreesPerViewport / viewportHeight;
 
         yaw += pointerDelta.x * degreesPerPixel;
@@ -219,7 +340,11 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
 
     private void Pan(Vector2 pointerDelta)
     {
-        float viewportHeight = GetInputAreaHeight();
+        Pan(pointerDelta, GetInputAreaHeight());
+    }
+
+    private void Pan(Vector2 pointerDelta, float viewportHeight)
+    {
         float verticalSpan = controlledCamera.orthographic
             ? controlledCamera.orthographicSize * 2f
             : 2f * distance * Mathf.Tan(controlledCamera.fieldOfView * 0.5f * Mathf.Deg2Rad);
@@ -238,6 +363,11 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
     {
         // The Input System reports one Windows wheel notch as approximately 120 units.
         float wheelNotches = scrollDelta / 120f;
+        ApplyZoom(wheelNotches);
+    }
+
+    private void ApplyZoom(float wheelNotches)
+    {
         float zoomFactor = Mathf.Exp(-wheelNotches * zoomSensitivity);
 
         if (controlledCamera.orthographic)
@@ -282,6 +412,7 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
 
         pointerEventData.Reset();
         pointerEventData.position = screenPosition;
+        pointerEventData.displayIndex = targetDisplayIndex;
         raycastResults.Clear();
         currentEventSystem.RaycastAll(pointerEventData, raycastResults);
 
@@ -290,8 +421,66 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
             return true;
         }
 
-        Transform topHit = raycastResults[0].gameObject.transform;
-        return topHit == inputArea || topHit.IsChildOf(inputArea);
+        for (int i = 0; i < raycastResults.Count; i++)
+        {
+            GameObject hitObject = raycastResults[i].gameObject;
+            if (hitObject == null)
+                continue;
+
+            Canvas hitCanvas = hitObject.GetComponentInParent<Canvas>();
+            Canvas rootCanvas = hitCanvas != null ? hitCanvas.rootCanvas : null;
+            if (rootCanvas != null && rootCanvas.targetDisplay != targetDisplayIndex)
+                continue;
+
+            Transform hit = hitObject.transform;
+            return hit == inputArea || hit.IsChildOf(inputArea);
+        }
+
+        return true;
+    }
+
+    private void ApplyTargetDisplay()
+    {
+        if (controlledCamera == null)
+            return;
+
+        Canvas rootCanvas = inputCanvas != null ? inputCanvas.rootCanvas : null;
+        targetDisplayIndex = rootCanvas != null
+            ? rootCanvas.targetDisplay
+            : controlledCamera.targetDisplay;
+        controlledCamera.targetDisplay = targetDisplayIndex;
+
+#if !UNITY_EDITOR
+        if (targetDisplayIndex <= 0 || ActivatedDisplays.Contains(targetDisplayIndex))
+            return;
+
+        if (targetDisplayIndex < Display.displays.Length)
+        {
+            Display.displays[targetDisplayIndex].Activate();
+            ActivatedDisplays.Add(targetDisplayIndex);
+        }
+        else if (MissingDisplayWarnings.Add(targetDisplayIndex))
+        {
+            Debug.LogWarning(
+                $"[Simulation Display][Display {targetDisplayIndex + 1}] " +
+                $"요청한 디스플레이를 사용할 수 없습니다. detected={Display.displays.Length}.",
+                this);
+        }
+#endif
+    }
+
+    private bool TryGetTargetDisplayPointer(
+        Mouse mouse,
+        Vector2 rawPosition,
+        out Vector2 targetPosition)
+    {
+        // The new Input System reports the pointer position in coordinates local to
+        // the focused display window. Mouse.displayIndex identifies that window.
+        // Display.RelativeMouseAt expects desktop coordinates and is therefore not
+        // valid for these window-local coordinates.
+        targetPosition = rawPosition;
+        return mouse.displayIndex == null ||
+               mouse.displayIndex.ReadValue() == targetDisplayIndex;
     }
 
     private Vector3 ClampPointToDomain(Vector3 point)
@@ -350,6 +539,13 @@ public sealed class DisplayOrbitCameraController : MonoBehaviour
         {
             exitDistance = Mathf.Min(exitDistance, distanceToBoundary);
         }
+    }
+
+    private static float ProjectExtent(Vector3 extents, Vector3 axis)
+    {
+        return Mathf.Abs(axis.x) * extents.x +
+               Mathf.Abs(axis.y) * extents.y +
+               Mathf.Abs(axis.z) * extents.z;
     }
 
     private void UpdateAnglesFromRotation(Quaternion rotation)
